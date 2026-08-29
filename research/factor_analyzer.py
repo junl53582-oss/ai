@@ -599,11 +599,15 @@ class FactorResearchEngine:
         max_cs = int(cs_counts.max()) if not cs_counts.empty else 0
 
         # 真实父链哈希提取 (P1-1: 绝不伪造 None_manifest)
-        market_manifest_path = Path("data_storage/market/market_daily.manifest.json")
+        market_manifest_path = Path("data_storage/parquet/market_daily.manifest.json")
         if market_manifest_path.exists():
             market_manifest_hash = hashlib.sha256(market_manifest_path.read_bytes()).hexdigest()
         else:
-            market_manifest_hash = None
+            market_manifest_path_alt = Path("data_storage/market/market_daily.manifest.json")
+            if market_manifest_path_alt.exists():
+                market_manifest_hash = hashlib.sha256(market_manifest_path_alt.read_bytes()).hexdigest()
+            else:
+                market_manifest_hash = None
 
         factor_manifest_path = Path("data_storage/factors/factor_matrix.manifest.json")
         if factor_manifest_path.exists():
