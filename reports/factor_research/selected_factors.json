@@ -1,0 +1,982 @@
+{
+  "selected_strong_factors": [
+    "VSTD_60",
+    "STD60",
+    "STD10"
+  ],
+  "useful_factors": [
+    "MAX_RATIO_250",
+    "ROC_STD_20",
+    "STD120",
+    "STD20",
+    "STD30",
+    "MAX_RATIO_30",
+    "CORR_PV_20",
+    "VSTD_20",
+    "MA_RATIO_60",
+    "MIN_RATIO_120",
+    "ROC30",
+    "ATR_RATIO_60",
+    "MOM_ACC_20_60",
+    "MA_RATIO_30"
+  ],
+  "weak_factors": [
+    "WVMA_10",
+    "CORR_PV_10",
+    "ATR_RATIO_20",
+    "WVMA_5",
+    "ROC_STD_60",
+    "STD5",
+    "EFFICIENCY_RATIO_10",
+    "VSTD_10",
+    "MOM_ACC_60_120",
+    "INTRADAY_CLOSE_LOC",
+    "ROC_STD_120",
+    "KLOW",
+    "WVMA_20",
+    "MAX_RATIO_120",
+    "VMA_RATIO_10",
+    "STD250",
+    "AMOUNT_RATIO_5_20",
+    "MA_RATIO_5",
+    "KLEN",
+    "ENTITY_RATIO",
+    "LOWER_SHADOW_RATIO",
+    "MAX_RATIO_5",
+    "LIMIT_UP_SPACE",
+    "VSTD_5",
+    "ATR_RATIO_5",
+    "KMID2"
+  ],
+  "rejected_factors": [
+    "ROC20",
+    "MAX_RATIO_60",
+    "MA_RATIO_120",
+    "MA_RATIO_250",
+    "MIN_RATIO_60",
+    "MAX_RATIO_20",
+    "ROC60",
+    "MIN_RATIO_250",
+    "KSFT",
+    "ROC120",
+    "MA_RATIO_20",
+    "UPPER_SHADOW_RATIO",
+    "VMA_RATIO_5",
+    "MIN_RATIO_20",
+    "ROC5",
+    "MIN_RATIO_30",
+    "MAX_RATIO_10",
+    "ROC10",
+    "MA_RATIO_10",
+    "VMA_RATIO_60",
+    "MIN_RATIO_10",
+    "MIN_RATIO_5",
+    "CORR_PV_5",
+    "IS_LIMIT_UP_LAG1",
+    "IS_LIMIT_DOWN_LAG1",
+    "LOG_CIRC_MV",
+    "TURNOVER_SURGE_5",
+    "TURNOVER_STD_20",
+    "TURNOVER_SURGE_20",
+    "VMA_RATIO_20",
+    "AMIHUD_20_LN",
+    "AMIHUD_20",
+    "KUP",
+    "KMID",
+    "ROC250",
+    "ROC_STD_250"
+  ],
+  "factor_directions": {
+    "VSTD_60": 1,
+    "STD60": -1,
+    "MAX_RATIO_250": -1,
+    "STD10": -1,
+    "ROC_STD_20": 1,
+    "ROC20": 1,
+    "STD120": -1,
+    "STD20": -1,
+    "STD30": -1,
+    "MAX_RATIO_30": -1,
+    "CORR_PV_20": 1,
+    "VSTD_20": 1,
+    "MA_RATIO_60": -1,
+    "MIN_RATIO_120": -1,
+    "WVMA_10": -1,
+    "ROC30": 1,
+    "MAX_RATIO_60": -1,
+    "CORR_PV_10": 1,
+    "ATR_RATIO_60": -1,
+    "MA_RATIO_120": -1,
+    "MA_RATIO_250": -1,
+    "MOM_ACC_20_60": 1,
+    "MIN_RATIO_60": -1,
+    "ATR_RATIO_20": -1,
+    "WVMA_5": -1,
+    "MA_RATIO_30": -1,
+    "ROC_STD_60": 1,
+    "STD5": -1,
+    "MAX_RATIO_20": -1,
+    "ROC60": 1,
+    "EFFICIENCY_RATIO_10": -1,
+    "MIN_RATIO_250": -1,
+    "VSTD_10": 1,
+    "MOM_ACC_60_120": -1,
+    "INTRADAY_CLOSE_LOC": 1,
+    "ROC_STD_120": 1,
+    "KLOW": 1,
+    "KSFT": 1,
+    "ROC120": 1,
+    "WVMA_20": -1,
+    "MAX_RATIO_120": -1,
+    "VMA_RATIO_10": 1,
+    "STD250": -1,
+    "AMOUNT_RATIO_5_20": 1,
+    "MA_RATIO_5": 1,
+    "KLEN": 1,
+    "MA_RATIO_20": -1,
+    "ENTITY_RATIO": -1,
+    "LOWER_SHADOW_RATIO": 1,
+    "MAX_RATIO_5": 1,
+    "LIMIT_UP_SPACE": 1,
+    "VSTD_5": 1,
+    "UPPER_SHADOW_RATIO": -1,
+    "VMA_RATIO_5": 1,
+    "MIN_RATIO_20": -1,
+    "ATR_RATIO_5": 1,
+    "ROC5": -1,
+    "MIN_RATIO_30": -1,
+    "MAX_RATIO_10": 1,
+    "ROC10": 1,
+    "MA_RATIO_10": 1,
+    "VMA_RATIO_60": 1,
+    "MIN_RATIO_10": 1,
+    "MIN_RATIO_5": 1,
+    "CORR_PV_5": 1,
+    "IS_LIMIT_UP_LAG1": 1,
+    "IS_LIMIT_DOWN_LAG1": 1,
+    "LOG_CIRC_MV": 1,
+    "TURNOVER_SURGE_5": 1,
+    "TURNOVER_STD_20": 1,
+    "TURNOVER_SURGE_20": 1,
+    "KMID2": 1,
+    "VMA_RATIO_20": 1,
+    "AMIHUD_20_LN": 1,
+    "AMIHUD_20": 1,
+    "KUP": 1,
+    "KMID": -1,
+    "ROC250": -1,
+    "ROC_STD_250": -1
+  },
+  "best_horizons": {
+    "VSTD_60": "20D",
+    "STD60": "10D",
+    "MAX_RATIO_250": "20D",
+    "STD10": "20D",
+    "ROC_STD_20": "20D",
+    "ROC20": "20D",
+    "STD120": "10D",
+    "STD20": "10D",
+    "STD30": "10D",
+    "MAX_RATIO_30": "20D",
+    "CORR_PV_20": "10D",
+    "VSTD_20": "20D",
+    "MA_RATIO_60": "20D",
+    "MIN_RATIO_120": "20D",
+    "WVMA_10": "10D",
+    "ROC30": "20D",
+    "MAX_RATIO_60": "20D",
+    "CORR_PV_10": "10D",
+    "ATR_RATIO_60": "20D",
+    "MA_RATIO_120": "20D",
+    "MA_RATIO_250": "10D",
+    "MOM_ACC_20_60": "10D",
+    "MIN_RATIO_60": "20D",
+    "ATR_RATIO_20": "20D",
+    "WVMA_5": "10D",
+    "MA_RATIO_30": "20D",
+    "ROC_STD_60": "10D",
+    "STD5": "10D",
+    "MAX_RATIO_20": "20D",
+    "ROC60": "20D",
+    "EFFICIENCY_RATIO_10": "20D",
+    "MIN_RATIO_250": "20D",
+    "VSTD_10": "20D",
+    "MOM_ACC_60_120": "20D",
+    "INTRADAY_CLOSE_LOC": "20D",
+    "ROC_STD_120": "20D",
+    "KLOW": "10D",
+    "KSFT": "20D",
+    "ROC120": "20D",
+    "WVMA_20": "10D",
+    "MAX_RATIO_120": "20D",
+    "VMA_RATIO_10": "3D",
+    "STD250": "10D",
+    "AMOUNT_RATIO_5_20": "10D",
+    "MA_RATIO_5": "20D",
+    "KLEN": "20D",
+    "MA_RATIO_20": "20D",
+    "ENTITY_RATIO": "10D",
+    "LOWER_SHADOW_RATIO": "5D",
+    "MAX_RATIO_5": "20D",
+    "LIMIT_UP_SPACE": "20D",
+    "VSTD_5": "3D",
+    "UPPER_SHADOW_RATIO": "5D",
+    "VMA_RATIO_5": "1D",
+    "MIN_RATIO_20": "10D",
+    "ATR_RATIO_5": "20D",
+    "ROC5": "3D",
+    "MIN_RATIO_30": "10D",
+    "MAX_RATIO_10": "5D",
+    "ROC10": "10D",
+    "MA_RATIO_10": "3D",
+    "VMA_RATIO_60": "3D",
+    "MIN_RATIO_10": "3D",
+    "MIN_RATIO_5": "3D",
+    "CORR_PV_5": "10D",
+    "IS_LIMIT_UP_LAG1": "1D",
+    "IS_LIMIT_DOWN_LAG1": "1D",
+    "LOG_CIRC_MV": "1D",
+    "TURNOVER_SURGE_5": "1D",
+    "TURNOVER_STD_20": "1D",
+    "TURNOVER_SURGE_20": "1D",
+    "KMID2": "3D",
+    "VMA_RATIO_20": "20D",
+    "AMIHUD_20_LN": "10D",
+    "AMIHUD_20": "10D",
+    "KUP": "5D",
+    "KMID": "3D",
+    "ROC250": "10D",
+    "ROC_STD_250": "10D"
+  },
+  "rejection_reasons": {
+    "VSTD_60": [],
+    "STD60": [],
+    "MAX_RATIO_250": [],
+    "STD10": [],
+    "ROC_STD_20": [],
+    "ROC20": [
+      "high_redundancy_in_cluster_3"
+    ],
+    "STD120": [],
+    "STD20": [],
+    "STD30": [],
+    "MAX_RATIO_30": [],
+    "CORR_PV_20": [],
+    "VSTD_20": [],
+    "MA_RATIO_60": [],
+    "MIN_RATIO_120": [],
+    "WVMA_10": [],
+    "ROC30": [],
+    "MAX_RATIO_60": [
+      "high_redundancy_in_cluster_6"
+    ],
+    "CORR_PV_10": [],
+    "ATR_RATIO_60": [],
+    "MA_RATIO_120": [
+      "high_redundancy_in_cluster_8"
+    ],
+    "MA_RATIO_250": [
+      "high_redundancy_in_cluster_10"
+    ],
+    "MOM_ACC_20_60": [],
+    "MIN_RATIO_60": [
+      "high_redundancy_in_cluster_6"
+    ],
+    "ATR_RATIO_20": [],
+    "WVMA_5": [],
+    "MA_RATIO_30": [],
+    "ROC_STD_60": [],
+    "STD5": [],
+    "MAX_RATIO_20": [
+      "high_redundancy_in_cluster_4"
+    ],
+    "ROC60": [
+      "high_redundancy_in_cluster_5"
+    ],
+    "EFFICIENCY_RATIO_10": [],
+    "MIN_RATIO_250": [
+      "high_redundancy_in_cluster_10"
+    ],
+    "VSTD_10": [],
+    "MOM_ACC_60_120": [],
+    "INTRADAY_CLOSE_LOC": [],
+    "ROC_STD_120": [],
+    "KLOW": [],
+    "KSFT": [
+      "high_redundancy_in_cluster_2"
+    ],
+    "ROC120": [
+      "high_redundancy_in_cluster_7"
+    ],
+    "WVMA_20": [],
+    "MAX_RATIO_120": [],
+    "VMA_RATIO_10": [],
+    "STD250": [],
+    "AMOUNT_RATIO_5_20": [],
+    "MA_RATIO_5": [],
+    "KLEN": [],
+    "MA_RATIO_20": [
+      "high_redundancy_in_cluster_4"
+    ],
+    "ENTITY_RATIO": [],
+    "LOWER_SHADOW_RATIO": [],
+    "MAX_RATIO_5": [],
+    "LIMIT_UP_SPACE": [],
+    "VSTD_5": [],
+    "UPPER_SHADOW_RATIO": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "VMA_RATIO_5": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "MIN_RATIO_20": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "ATR_RATIO_5": [],
+    "ROC5": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "MIN_RATIO_30": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "MAX_RATIO_10": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "ROC10": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "MA_RATIO_10": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "VMA_RATIO_60": [
+      "high_redundancy_in_cluster_11"
+    ],
+    "MIN_RATIO_10": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "MIN_RATIO_5": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "CORR_PV_5": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "IS_LIMIT_UP_LAG1": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "IS_LIMIT_DOWN_LAG1": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "LOG_CIRC_MV": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "TURNOVER_SURGE_5": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "TURNOVER_STD_20": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "TURNOVER_SURGE_20": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "KMID2": [],
+    "VMA_RATIO_20": [
+      "high_redundancy_in_cluster_11"
+    ],
+    "AMIHUD_20_LN": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "AMIHUD_20": [
+      "high_redundancy_in_cluster_12"
+    ],
+    "KUP": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "KMID": [
+      "high_redundancy_in_cluster_1"
+    ],
+    "ROC250": [
+      "insignificant_rank_ic",
+      "low_icir_stability"
+    ],
+    "ROC_STD_250": [
+      "high_redundancy_in_cluster_9"
+    ]
+  },
+  "walk_forward_stability": {
+    "total_folds": 1,
+    "factor_summary": {
+      "KMID": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0555,
+        "oos_std_rank_ic": 0.0
+      },
+      "KLEN": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0503,
+        "oos_std_rank_ic": 0.0
+      },
+      "KMID2": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0752,
+        "oos_std_rank_ic": 0.0
+      },
+      "KUP": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0672,
+        "oos_std_rank_ic": 0.0
+      },
+      "KLOW": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0173,
+        "oos_std_rank_ic": 0.0
+      },
+      "KSFT": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0164,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0542,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0807,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0042,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.041,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC10": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0422,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_10": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0911,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_10": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0238,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_10": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0604,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC20": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0192,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_20": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0358,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0513,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0407,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC30": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.041,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_30": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0249,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_30": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0176,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_30": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0005,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0008,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0045,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0348,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0116,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC120": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0087,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_120": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0766,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_120": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0138,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_120": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0189,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC250": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0151,
+        "oos_std_rank_ic": 0.0
+      },
+      "MAX_RATIO_250": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0245,
+        "oos_std_rank_ic": 0.0
+      },
+      "MIN_RATIO_250": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0393,
+        "oos_std_rank_ic": 0.0
+      },
+      "MA_RATIO_250": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0083,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD5": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0933,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD10": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0847,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD20": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0718,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD30": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0384,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD60": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0437,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD120": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0083,
+        "oos_std_rank_ic": 0.0
+      },
+      "STD250": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1091,
+        "oos_std_rank_ic": 0.0
+      },
+      "ATR_RATIO_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1205,
+        "oos_std_rank_ic": 0.0
+      },
+      "ATR_RATIO_20": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1128,
+        "oos_std_rank_ic": 0.0
+      },
+      "ATR_RATIO_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0213,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC_STD_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0419,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC_STD_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC_STD_120": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0099,
+        "oos_std_rank_ic": 0.0
+      },
+      "ROC_STD_250": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0214,
+        "oos_std_rank_ic": 0.0
+      },
+      "MOM_ACC_20_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0214,
+        "oos_std_rank_ic": 0.0
+      },
+      "MOM_ACC_60_120": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0528,
+        "oos_std_rank_ic": 0.0
+      },
+      "VMA_RATIO_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0126,
+        "oos_std_rank_ic": 0.0
+      },
+      "VSTD_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.048,
+        "oos_std_rank_ic": 0.0
+      },
+      "VMA_RATIO_10": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0029,
+        "oos_std_rank_ic": 0.0
+      },
+      "VSTD_10": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.015,
+        "oos_std_rank_ic": 0.0
+      },
+      "VMA_RATIO_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0405,
+        "oos_std_rank_ic": 0.0
+      },
+      "VSTD_20": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1218,
+        "oos_std_rank_ic": 0.0
+      },
+      "VMA_RATIO_60": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0401,
+        "oos_std_rank_ic": 0.0
+      },
+      "VSTD_60": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1591,
+        "oos_std_rank_ic": 0.0
+      },
+      "CORR_PV_5": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0436,
+        "oos_std_rank_ic": 0.0
+      },
+      "WVMA_5": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.109,
+        "oos_std_rank_ic": 0.0
+      },
+      "CORR_PV_10": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0014,
+        "oos_std_rank_ic": 0.0
+      },
+      "WVMA_10": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1118,
+        "oos_std_rank_ic": 0.0
+      },
+      "CORR_PV_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.109,
+        "oos_std_rank_ic": 0.0
+      },
+      "WVMA_20": {
+        "selected_frequency": 1.0,
+        "selected_count": 1,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0751,
+        "oos_std_rank_ic": 0.0
+      },
+      "TURNOVER_SURGE_5": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "TURNOVER_SURGE_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "TURNOVER_STD_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "AMOUNT_RATIO_5_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0969,
+        "oos_std_rank_ic": 0.0
+      },
+      "LIMIT_UP_SPACE": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0575,
+        "oos_std_rank_ic": 0.0
+      },
+      "IS_LIMIT_UP_LAG1": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "IS_LIMIT_DOWN_LAG1": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "UPPER_SHADOW_RATIO": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0604,
+        "oos_std_rank_ic": 0.0
+      },
+      "LOWER_SHADOW_RATIO": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0372,
+        "oos_std_rank_ic": 0.0
+      },
+      "ENTITY_RATIO": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.0339,
+        "oos_std_rank_ic": 0.0
+      },
+      "INTRADAY_CLOSE_LOC": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0133,
+        "oos_std_rank_ic": 0.0
+      },
+      "LOG_CIRC_MV": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.0,
+        "oos_std_rank_ic": 0.0
+      },
+      "EFFICIENCY_RATIO_10": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": -0.1326,
+        "oos_std_rank_ic": 0.0
+      },
+      "AMIHUD_20": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1099,
+        "oos_std_rank_ic": 0.0
+      },
+      "AMIHUD_20_LN": {
+        "selected_frequency": 0.0,
+        "selected_count": 0,
+        "total_folds": 1,
+        "oos_mean_rank_ic": 0.1099,
+        "oos_std_rank_ic": 0.0
+      }
+    }
+  }
+}
