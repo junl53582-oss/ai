@@ -1,9 +1,9 @@
 """
 因子评分、等级划分与严格 Purged Walk-Forward 滚动筛选引擎 (research/factor_selection.py)
-Phase 1.3 核心硬化:
-1. P0-5: 每个 Train Fold 内部独立运行完整正式选择流水线 (HAC-FDR, Decay, Monotonicity, Stability, Redundancy, Scoring, Classify)
-2. P1-2: 组合多门禁认证 (最少 Fold 门禁 + 样本规模门禁 + 截面门禁)，小样本严格标记为 DEVELOPMENT_SAMPLE
-3. 验证折严格仅应用并评估冻结决策 (Frozen Direction, Frozen Horizon, Frozen Clusters)
+Phase 1.4 核心强化:
+1. P0-3: 每个 Train Fold 内部严格执行完整的 Factor x Horizon Global BH-FDR (395 假设)，仅允许通过 FDR 的视界入选
+2. 导出 walk_forward_factor_horizon_significance.csv 逐折全家族统计证据
+3. P1-2: 严密的多门禁认证 (最少 Fold + 标的数 + 截面数 + 基准完备性)，未达标者严格锁定 DEVELOPMENT_SAMPLE
 """
 import logging
 import json
@@ -37,6 +37,7 @@ class FactorSelectionResult:
     research_grade: Dict[str, str] = field(default_factory=dict)
     
     walk_forward_stability: Dict[str, Any] = field(default_factory=dict)
+    wf_horizon_significance: List[Dict[str, Any]] = field(default_factory=list)
 
 
 class FactorSelectionEngine:
@@ -56,7 +57,7 @@ class FactorSelectionEngine:
 
         for name, m in metrics_dict.items():
             stab = stability_dict.get(name)
-            sign_stab = stab.sign_consistency_ratio if stab else 0.5
+            sign_stab = stab.sign_consistency_ratio if (stab and stab.sign_consistency_ratio is not None) else 0.5
             is_redundant = (corr_result.factor_to_group_id.get(name, 0) > 0)
 
             rows.append({
@@ -66,8 +67,8 @@ class FactorSelectionEngine:
                 "rank_ic_ir": abs(m.annualized_rank_icir),
                 "monotonicity": abs(m.monotonicity_score),
                 "sign_stability": sign_stab,
-                "net_sharpe": max(m.net_sharpe_ratio, 0.0),
-                "turnover": m.mean_turnover,
+                "net_sharpe": max(m.long_only_sharpe, 0.0),
+                "turnover": m.long_turnover,
                 "missing_ratio": m.missing_ratio,
                 "coverage_ratio": m.coverage_ratio,
                 "is_redundant": 1.0 if is_redundant else 0.0,
@@ -146,7 +147,7 @@ class FactorSelectionEngine:
 
             abs_ic = abs(m.mean_rank_ic)
             effective_icir = max(abs(m.rank_ic_ir), abs(m.annualized_rank_icir))
-            sign_stab = stab.sign_consistency_ratio if stab else 0.5
+            sign_stab = stab.sign_consistency_ratio if (stab and stab.sign_consistency_ratio is not None) else 0.5
             cov = m.coverage_ratio
             gid = corr_result.factor_to_group_id.get(name, 0)
 
@@ -224,14 +225,18 @@ class FactorSelectionEngine:
         config: Optional[ResearchConfig] = None
     ) -> Dict[str, Any]:
         """
-        Phase 1.3 核心硬化: 完整 Purged Walk-Forward 样本外验证 (P0-5 / P1-2)
+        Phase 1.4 核心硬化:
+        1. 严格基于有序交易日日历索引确定 Purge 与 Embargo 边界
+        2. 每个 Train Fold 内部严格执行 Factor x Horizon Global BH-FDR
+        3. 仅允许通过 FDR 的视界入选，并在 Validation Fold 严格评估冻结决策
         """
         cfg = config or default_research_config
         dates = sorted(pd.to_datetime(df["date"].unique()))
         
         train_days = int(cfg.WF_TRAIN_YEARS * 252)
         val_days = int(cfg.WF_VALIDATION_YEARS * 252)
-        purge_gap = max(cfg.WF_PURGE_DAYS, max(cfg.HORIZONS))
+        # Purge Gap 必须覆盖真实最大 label lookahead (max(HORIZONS) + 1 交易日)
+        purge_gap = max(cfg.WF_PURGE_DAYS, max(cfg.HORIZONS) + 1)
         embargo = cfg.WF_EMBARGO_DAYS
         step_days = val_days
 
@@ -258,13 +263,15 @@ class FactorSelectionEngine:
                 "walk_forward_status": "DEVELOPMENT_SAMPLE" if sym_count < cfg.MIN_RESEARCH_SYMBOLS else "PRELIMINARY",
                 "reason": "insufficient_history_for_purged_folds",
                 "total_folds": 0,
-                "folds_detail": []
+                "folds_detail": [],
+                "wf_horizon_significance": []
             }
 
         factor_selected_counts = {f: 0 for f in factor_cols}
         factor_oos_rank_ics: Dict[str, List[float]] = {f: [] for f in factor_cols}
         factor_oos_icirs: Dict[str, List[float]] = {f: [] for f in factor_cols}
         folds_detail = []
+        all_wf_horizon_records = []
 
         for f_dict in folds_info:
             f_id = f_dict["fold_id"]
@@ -275,31 +282,82 @@ class FactorSelectionEngine:
             train_df = df[pd.to_datetime(df["date"]).isin(train_d)].copy()
             val_df = df[pd.to_datetime(df["date"]).isin(val_d)].copy()
 
-            # 1. 训练折内独立运行全要素评估与多重检验
+            # ---------------- 1. 训练折全家族 Factor x Horizon Global FDR ----------------
+            train_pair_rows = []
+            train_pvals = []
             train_metrics: Dict[str, FactorEvaluationMetrics] = {}
             train_decay: Dict[str, FactorDecayResult] = {}
             train_stab: Dict[str, FactorStabilityResult] = {}
-            train_pvals = []
             train_ic_dict = {}
 
+            available_horizons = [h for h in cfg.HORIZONS if f"future_return_{h}d" in train_df.columns or f"future_excess_return_{h}d" in train_df.columns or f"future_tradable_return_{h}d" in train_df.columns]
+            if not available_horizons:
+                available_horizons = cfg.HORIZONS
+
             for f in factor_cols:
+                best_h_cand = cfg.PRIMARY_HORIZON
+                best_h_abs_ic = -1.0
+
+                for h in available_horizons:
+                    ret_col_h = f"future_excess_return_{h}d" if f"future_excess_return_{h}d" in train_df.columns else f"future_return_{h}d"
+                    ic_s = FactorMetricsEngine.compute_daily_ic(train_df, f, ret_col_h, method="spearman")
+                    m_ic = float(ic_s.mean()) if not ic_s.empty else 0.0
+                    t_stat, p_val = FactorMetricsEngine.compute_hac_tstat(ic_s, lag=max(h - 1, 1))
+
+                    train_pair_rows.append({
+                        "fold_id": f_id,
+                        "factor": f,
+                        "horizon": f"{h}D",
+                        "train_mean_rank_ic": round(m_ic, 4),
+                        "train_hac_t": t_stat,
+                        "train_hac_p": p_val
+                    })
+                    train_pvals.append(p_val)
+
+            # Global BH-FDR across all N_factor x N_horizon hypotheses in this Train fold
+            train_global_fdr = FactorMetricsEngine.compute_fdr_pvalues(train_pvals)
+            f_to_passing_horizons: Dict[str, List[Tuple[int, float, float]]] = {f: [] for f in factor_cols}
+
+            for idx, r_item in enumerate(train_pair_rows):
+                fdr_p = round(float(train_global_fdr[idx]), 6)
+                r_item["train_global_fdr_p"] = fdr_p
+                f_name = r_item["factor"]
+                h_int = int(r_item["horizon"].replace("D", ""))
+                
+                # 记录通过 FDR 门禁的视界
+                if fdr_p <= cfg.FDR_USEFUL_ALPHA:
+                    f_to_passing_horizons[f_name].append((h_int, abs(r_item["train_mean_rank_ic"]), fdr_p))
+
+            # ---------------- 2. 训练折单因子最优视界决策与主指标评估 ----------------
+            f_best_h_map = {}
+            for f in factor_cols:
+                passing = f_to_passing_horizons[f]
+                if passing:
+                    # 在通过 FDR 的视界中选择 abs RankIC 最大的最优视界
+                    passing.sort(key=lambda x: x[1], reverse=True)
+                    chosen_h = passing[0][0]
+                else:
+                    chosen_h = cfg.PRIMARY_HORIZON
+                f_best_h_map[f] = chosen_h
+
                 dec = FactorDecayEngine.analyze_decay(train_df, f, horizons=cfg.HORIZONS)
                 train_decay[f] = dec
-                best_h = int(dec.best_horizon.replace("D", ""))
-                ret_col = f"future_excess_return_{best_h}d" if f"future_excess_return_{best_h}d" in train_df.columns else f"future_return_{best_h}d"
                 
-                m = FactorMetricsEngine.evaluate_factor(train_df, f, ret_col, horizon=best_h, config=cfg)
+                ret_col_chosen = f"future_excess_return_{chosen_h}d" if f"future_excess_return_{chosen_h}d" in train_df.columns else f"future_return_{chosen_h}d"
+                m = FactorMetricsEngine.evaluate_factor(train_df, f, ret_col_chosen, horizon=chosen_h, config=cfg)
+                
+                # 匹配训练折内的 Global FDR p-value
+                match_rows = [r for r in train_pair_rows if r["factor"] == f and r["horizon"] == f"{chosen_h}D"]
+                if match_rows:
+                    m.rank_ic_fdr_p_value = float(match_rows[0]["train_global_fdr_p"])
+                    m.fdr_p_value = m.rank_ic_fdr_p_value
+
                 train_metrics[f] = m
-                train_pvals.append(m.rank_ic_hac_p_value)
                 if m.daily_rank_ic_series is not None and not m.daily_rank_ic_series.empty:
                     train_ic_dict[f] = m.daily_rank_ic_series
 
-                stab = FactorStabilityEngine.evaluate_stability(train_df, f, ret_col, config=cfg)
+                stab = FactorStabilityEngine.evaluate_stability(train_df, f, ret_col_chosen, config=cfg)
                 train_stab[f] = stab
-
-            train_fdr = FactorMetricsEngine.compute_fdr_pvalues(train_pvals)
-            for idx, f in enumerate(factor_cols):
-                train_metrics[f].rank_ic_fdr_p_value = train_fdr[idx]
 
             # 训练折相关性与冗余聚类
             train_corr = FactorCorrelationEngine.analyze_correlation(train_df, factor_cols, train_ic_dict, config=cfg)
@@ -313,29 +371,47 @@ class FactorSelectionEngine:
             for f in fold_selected:
                 factor_selected_counts[f] += 1
 
-            # 2. 验证折严格评估冻结决策 (Frozen Direction & Horizon)
+            # ---------------- 3. 验证折严格评估冻结决策 (Frozen Direction & Horizon) ----------------
             val_results = {}
-            for f in fold_selected:
-                f_dir = train_sel_res.factor_directions[f]
-                f_horiz = train_sel_res.best_horizons[f]
-                h_int = int(f_horiz.replace("D", ""))
-                val_ret_col = f"future_excess_return_{h_int}d" if f"future_excess_return_{h_int}d" in val_df.columns else f"future_return_{h_int}d"
+            for f in factor_cols:
+                f_dir = train_sel_res.factor_directions.get(f, 1)
+                f_horiz_int = f_best_h_map[f]
+                val_ret_col = f"future_excess_return_{f_horiz_int}d" if f"future_excess_return_{f_horiz_int}d" in val_df.columns else f"future_return_{f_horiz_int}d"
                 
                 val_ic_s = FactorMetricsEngine.compute_daily_ic(val_df, f, val_ret_col, method="spearman")
                 if not val_ic_s.empty:
-                    aligned_ic = val_ic_s * f_dir
-                    m_val_ic = float(aligned_ic.mean())
-                    std_val_ic = float(aligned_ic.std(ddof=1)) if len(aligned_ic) > 1 else 1e-6
-                    val_icir = (m_val_ic / std_val_ic) if std_val_ic > 1e-8 else 0.0
+                    raw_val_ic = float(val_ic_s.mean())
+                    aligned_ic = raw_val_ic * f_dir
+                    std_val_ic = float(val_ic_s.std(ddof=1)) if len(val_ic_s) > 1 else 1e-6
+                    val_icir = (aligned_ic / std_val_ic) if std_val_ic > 1e-8 else 0.0
 
-                    factor_oos_rank_ics[f].append(m_val_ic)
-                    factor_oos_icirs[f].append(val_icir)
-                    val_results[f] = {
-                        "train_direction": f_dir,
-                        "train_horizon": f_horiz,
-                        "oos_rank_ic": round(m_val_ic, 4),
-                        "oos_icir": round(val_icir, 4)
-                    }
+                    if f in fold_selected:
+                        factor_oos_rank_ics[f].append(aligned_ic)
+                        factor_oos_icirs[f].append(val_icir)
+                        val_results[f] = {
+                            "train_direction": f_dir,
+                            "train_horizon": f"{f_horiz_int}D",
+                            "oos_raw_rank_ic": round(raw_val_ic, 4),
+                            "oos_aligned_rank_ic": round(aligned_ic, 4),
+                            "oos_icir": round(val_icir, 4)
+                        }
+
+                # 填充全家族记录
+                for r_item in train_pair_rows:
+                    if r_item["factor"] == f:
+                        h_val = int(r_item["horizon"].replace("D", ""))
+                        is_sel = (f in fold_selected and h_val == f_horiz_int)
+                        r_item["selected"] = is_sel
+                        r_item["selected_horizon"] = f"{f_horiz_int}D"
+                        r_item["train_direction"] = f_dir
+                        
+                        val_ic_h = FactorMetricsEngine.compute_daily_ic(
+                            val_df, f, f"future_excess_return_{h_val}d" if f"future_excess_return_{h_val}d" in val_df.columns else f"future_return_{h_val}d", method="spearman"
+                        )
+                        r_item["validation_raw_rank_ic"] = round(float(val_ic_h.mean()), 4) if not val_ic_h.empty else 0.0
+                        r_item["validation_aligned_rank_ic"] = round(float(val_ic_h.mean()) * f_dir, 4) if not val_ic_h.empty else 0.0
+
+            all_wf_horizon_records.extend(train_pair_rows)
 
             folds_detail.append({
                 "fold_id": f_id,
@@ -356,7 +432,7 @@ class FactorSelectionEngine:
 
         total_folds = len(folds_info)
 
-        # 综合多门禁状态划分 (P1-2)
+        # 综合多门禁状态划分 (Phase 1.4 P1-2)
         if sym_count < cfg.MIN_RESEARCH_SYMBOLS:
             wf_status = "DEVELOPMENT_SAMPLE"
         elif total_folds >= cfg.MIN_WF_FOLDS_FOR_CERTIFICATION:
@@ -381,5 +457,6 @@ class FactorSelectionEngine:
             "total_folds": total_folds,
             "min_folds_required": cfg.MIN_WF_FOLDS_FOR_CERTIFICATION,
             "folds_detail": folds_detail,
-            "factor_summary": summary
+            "factor_summary": summary,
+            "wf_horizon_significance": all_wf_horizon_records
         }

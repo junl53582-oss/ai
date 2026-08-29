@@ -297,7 +297,7 @@ class DataManager:
         self.raw_benchmark_coverage_ratio = round(raw_matched_count / max(len(canonical_dates), 1), 4)
 
         bench_reindexed = pd.DataFrame({"date": canonical_dates})
-        bench_merged = pd.merge(bench_reindexed, bench_clean[["date", "close"]], on="date", how="left")
+        bench_merged = pd.merge(bench_reindexed, bench_clean[["date", "open", "high", "low", "close"]] if "open" in bench_clean.columns else bench_clean[["date", "close"]], on="date", how="left")
         
         # 记录内部缺失与填充次数
         is_na_mask = bench_merged["close"].isna()
@@ -305,6 +305,8 @@ class DataManager:
         
         # 严格向前填充
         bench_merged["benchmark_close"] = bench_merged["close"].ffill()
+        if "open" in bench_merged.columns:
+            bench_merged["benchmark_open"] = bench_merged["open"].ffill()
         
         # 若前导缺失 (首日前无历史行情)，记录缺失日期并截断
         leading_na_count = int(bench_merged["benchmark_close"].isna().sum())
@@ -320,7 +322,10 @@ class DataManager:
 
         bench_merged["benchmark_pct_change"] = bench_merged["benchmark_close"].pct_change().fillna(0.0)
         self.benchmark_coverage_ratio = round(float(bench_merged["benchmark_close"].notna().mean()), 4)
-        benchmark_final = bench_merged[["date", "benchmark_close", "benchmark_pct_change"]].copy()
+        cols_to_keep = ["date", "benchmark_close", "benchmark_pct_change"]
+        if "benchmark_open" in bench_merged.columns:
+            cols_to_keep.insert(1, "benchmark_open")
+        benchmark_final = bench_merged[cols_to_keep].copy()
 
         # 2. 循环拉取所有股票
         stock_dfs = []

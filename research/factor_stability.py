@@ -1,6 +1,6 @@
 """
 因子时序稳定性、牛熊市场状态与多年度稳健性分析引擎 (research/factor_stability.py)
-Phase 1.3 P1-3: 增加年度最小有效交易日门禁 MIN_VALID_DAYS_PER_YEAR，样本不足年份不参与符号一致性判定
+Phase 1.4: 年度有效天数门禁与无有效年份 Fail-Closed (sign_consistency_ratio = None)
 """
 import logging
 from dataclasses import dataclass, field
@@ -19,7 +19,8 @@ class FactorStabilityResult:
     """因子时序稳定性评估结果"""
     factor_name: str
     overall_mean_rank_ic: float = 0.0
-    sign_consistency_ratio: float = 0.0
+    sign_consistency_ratio: Optional[float] = None
+    annual_stability_status: str = "INSUFFICIENT_DATA"
     bull_rank_ic: float = 0.0
     bear_rank_ic: float = 0.0
     sideways_rank_ic: float = 0.0
@@ -52,7 +53,7 @@ class FactorStabilityEngine:
         overall_mean = float(daily_rank_ic.mean())
         target_sign = 1 if overall_mean >= 0 else -1
 
-        # 2. 分年度 RankIC 计算与有效天数门禁 (Phase 1.3 P1-3)
+        # 2. 分年度 RankIC 计算与有效天数门禁 (Phase 1.4 Fail-Closed)
         daily_df = daily_rank_ic.to_frame(name="rank_ic")
         daily_df["year"] = daily_df.index.year
 
@@ -85,11 +86,13 @@ class FactorStabilityEngine:
                 "status": status_str
             }
 
-        # 符号一致性仅由样本充分的年份决定
+        # 符号一致性: 若无任何达标有效年份，严格 Fail-Closed 为 None
         if total_valid_years > 0:
-            sign_consistency = float(valid_sign_years / total_valid_years)
+            sign_consistency = round(float(valid_sign_years / total_valid_years), 4)
+            stab_status = "VALID"
         else:
-            sign_consistency = float((daily_rank_ic * target_sign > 0).mean())
+            sign_consistency = None
+            stab_status = "INSUFFICIENT_DATA"
 
         # 3. 牛熊与震荡市场状态划分
         market_bench_col = cfg.BENCHMARK_CLOSE_COL if cfg.BENCHMARK_CLOSE_COL in df.columns else None
@@ -125,7 +128,8 @@ class FactorStabilityEngine:
         return FactorStabilityResult(
             factor_name=factor_col,
             overall_mean_rank_ic=round(overall_mean, 4),
-            sign_consistency_ratio=round(sign_consistency, 4),
+            sign_consistency_ratio=sign_consistency,
+            annual_stability_status=stab_status,
             bull_rank_ic=round(bull_ic, 4),
             bear_rank_ic=round(bear_ic, 4),
             sideways_rank_ic=round(side_ic, 4),

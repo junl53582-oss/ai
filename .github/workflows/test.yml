@@ -32,6 +32,10 @@ jobs:
         run: |
           python tools/run_factor_research.py
 
+      - name: Validate Research Artifacts & Lineage Evidence
+        run: |
+          python tools/validate_research_artifacts.py
+
       - name: Upload Pytest Test Results
         if: always()
         uses: actions/upload-artifact@v4

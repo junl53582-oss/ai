@@ -136,8 +136,8 @@ def _neutralize_one_day(date_key, group, factor_cols, industry_col, actual_mv_co
                     residuals = y_series[valid_mask_full] - X_full[valid_mask_full] @ beta
                     if np.std(residuals) > 1e-7:
                         group.loc[valid_mask_full, col] = residuals
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.debug(f"OLS 中性化拟合异常 ({col}, {date_key}): {exc}")
 
     return date_key, mode_str, daily_coverage_rounded, False, group
 

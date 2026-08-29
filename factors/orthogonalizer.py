@@ -53,8 +53,8 @@ class GramSchmidtOrthogonalizer:
                 stds = np.nanstd(mat, axis=0, keepdims=True)
                 ortho_mat = Q * stds * np.sqrt(n_rows)
                 day_df[valid_factors] = ortho_mat
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.debug(f"QR 分解正交化异常: {exc}")
             return day_df
 
         if date_col in df_out.columns:

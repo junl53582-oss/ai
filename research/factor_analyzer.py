@@ -1,10 +1,10 @@
 """
 统一因子研究引擎 (research/factor_analyzer.py)
-Phase 1.3 核心硬化:
-1. P0-1 & P0-2: 彻底修复基准前向收益与股票前向超额收益标签 (统一定义为 T+1 Open 计价成交至 T+H Close 结算)
-2. P1-1: 实现 Factor x Horizon 全家族 Global FDR 多重假设检验并导出 factor_horizon_significance.csv
-3. P0-3 & P0-4: 真实截面 OLS 中性化与逐步残差正交化 Fail-Closed 机制
-4. P0-6: 全要素绑定 Research Run Manifest
+Phase 1.4 核心硬化:
+1. P0-1: 显式生成 Diagnostic Return 与 A-Share Tradable Return 双重前向标签
+2. P0-2: 严密审计 Benchmark Open 数据链与 Date-Level 单维映射，缺失时 Fail-Closed
+3. P0-3: 全家族 Global FDR 多重检验与 Walk-Forward 逐折统计
+4. P0-4: Canonical Date+Symbol 组合哈希与全要素 Research Run Manifest
 """
 import logging
 import json
@@ -40,7 +40,9 @@ class FactorResearchEngine:
         self.orthogonalization_comparison: Dict[str, Any] = {}
         self.outlier_sensitivity_comparison: Dict[str, Any] = {}
         self.horizon_significance_df: pd.DataFrame = pd.DataFrame()
+        self.wf_horizon_significance_df: pd.DataFrame = pd.DataFrame()
         self.run_manifest: Dict[str, Any] = {}
+        self.benchmark_evidence: Dict[str, Any] = {}
 
     @classmethod
     def generate_future_return_labels(
@@ -56,15 +58,17 @@ class FactorResearchEngine:
         config: Optional[ResearchConfig] = None
     ) -> pd.DataFrame:
         """
-        Phase 1.3 核心硬化 (P0-1 / P0-2 时序与基准严密对齐):
-        特征切断时间: T 日收盘后 (T Close)
-        买入成交价格: T+1 日开盘价 (T+1 Open)
-        卖出结算价格: T+H 日收盘价 (T+H Close)
-        - 股票前向收益: R^{stock}_{H D, T+1 -> T+H} = (StockClose_{T+H} / StockOpen_{T+1}) - 1
-        - 基准前向收益: R^{bench}_{H D, T+1 -> T+H} = (BenchmarkClose_{T+H} / BenchmarkOpen_{T+1}) - 1
-        - 前向超额收益: R^{excess}_{H D} = R^{stock}_{H D} - R^{bench}_{H D}
+        Phase 1.4 前向收益标签生成引擎:
+        1. 诊断收益 (Diagnostic):
+           future_diagnostic_return_1d = StockClose[T+1] / StockOpen[T+1] - 1
+        2. A股可执行收益 (Tradable Holding):
+           future_tradable_return_Hd = StockOpen[T+1+H] / StockOpen[T+1] - 1 (或 Exit Close)
+        3. 基准与超额收益 (Exact Math):
+           future_benchmark_tradable_return_Hd = BenchmarkOpen[T+1+H] / BenchmarkOpen[T+1] - 1
+           future_tradable_excess_return_Hd = future_tradable_return_Hd - future_benchmark_tradable_return_Hd
         """
-        horizons = horizons or [1, 3, 5, 10, 20]
+        cfg = config or default_research_config
+        horizons = horizons or cfg.HORIZONS
         df = df.copy()
         df[date_col] = pd.to_datetime(df[date_col])
         df.sort_values(by=[symbol_col, date_col], inplace=True)
@@ -74,45 +78,70 @@ class FactorResearchEngine:
         b_close = benchmark_close_col if benchmark_close_col in df.columns else None
         b_open = benchmark_open_col if benchmark_open_col in df.columns else None
 
-        # 1. 基准指数前向收益 (Date-Level 对齐，严格从 T+1 Open 计价成交至 T+H Close)
-        bench_ret_map: Dict[int, pd.Series] = {}
+        # 1. 诊断收益标签 (1D Intraday Open to Close, Non-Tradable Round Trip)
+        if o_col in df.columns and (df[o_col] > 0).any():
+            df["future_diagnostic_return_1d"] = (df.groupby(symbol_col)[c_col].shift(-1) / df.groupby(symbol_col)[o_col].shift(-1)) - 1.0
+        else:
+            df["future_diagnostic_return_1d"] = df.groupby(symbol_col)[c_col].pct_change(1).shift(-1)
+
+        # 2. 基准指数前向收益 (Date-Level 对齐，严格按 trading date 映射)
+        bench_tradable_map: Dict[int, pd.Series] = {}
         if b_close:
-            b_daily = df.groupby(date_col)[[b_close, b_open] if b_open else [b_close]].first().sort_index()
+            b_daily = df.groupby(date_col)[[c for c in [b_close, b_open] if c]].first().sort_index()
             for h in horizons:
                 if b_open and (b_daily[b_open] > 0).any():
-                    bench_ret_map[h] = (b_daily[b_close].shift(-h) / b_daily[b_open].shift(-1)) - 1.0
+                    if cfg.EXIT_PRICE_TYPE == "open":
+                        # T+1 Open 买入 -> T+1+H Open 卖出
+                        bench_tradable_map[h] = (b_daily[b_open].shift(-(h + 1)) / b_daily[b_open].shift(-1)) - 1.0
+                    else:
+                        # T+1 Open 买入 -> T+H Close 卖出
+                        bench_tradable_map[h] = (b_daily[b_close].shift(-h) / b_daily[b_open].shift(-1)) - 1.0
                 else:
                     if h == 1:
-                        bench_ret_map[1] = b_daily[b_close].pct_change(1).shift(-1)
+                        bench_tradable_map[1] = b_daily[b_close].pct_change(1).shift(-1)
                     else:
-                        bench_ret_map[h] = (b_daily[b_close].shift(-h) / b_daily[b_close].shift(-1)) - 1.0
+                        bench_tradable_map[h] = (b_daily[b_close].shift(-h) / b_daily[b_close].shift(-1)) - 1.0
 
-        # 2. 个股前向收益率与超额收益
+        # 3. 个股真实可执行收益率与超额收益
         for h in horizons:
-            abs_col = f"future_return_{h}d"
-            bench_col = f"future_benchmark_return_{h}d"
-            exc_col = f"future_excess_return_{h}d"
+            abs_col = f"future_tradable_return_{h}d"
+            bench_col = f"future_benchmark_tradable_return_{h}d"
+            exc_col = f"future_tradable_excess_return_{h}d"
+
+            # 兼容别名
+            legacy_abs = f"future_return_{h}d"
+            legacy_bench = f"future_benchmark_return_{h}d"
+            legacy_exc = f"future_excess_return_{h}d"
 
             if o_col in df.columns and (df[o_col] > 0).any():
-                df[abs_col] = (df.groupby(symbol_col)[c_col].shift(-h) / df.groupby(symbol_col)[o_col].shift(-1)) - 1.0
-            else:
-                if h == 1:
-                    df[abs_col] = df.groupby(symbol_col)[c_col].transform(lambda s: (s.shift(-1) / s) - 1.0)
+                if cfg.EXIT_PRICE_TYPE == "open":
+                    # T+1 Open 买入 -> T+1+H Open 卖出
+                    s_ret = (df.groupby(symbol_col)[o_col].shift(-(h + 1)) / df.groupby(symbol_col)[o_col].shift(-1)) - 1.0
                 else:
-                    df[abs_col] = df.groupby(symbol_col)[c_col].transform(lambda s: (s.shift(-h) / s.shift(-1)) - 1.0)
+                    # T+1 Open 买入 -> T+H Close 卖出
+                    s_ret = (df.groupby(symbol_col)[c_col].shift(-h) / df.groupby(symbol_col)[o_col].shift(-1)) - 1.0
+            else:
+                s_ret = df.groupby(symbol_col)[c_col].transform(lambda s: (s.shift(-h) / s.shift(-1)) - 1.0)
 
-            if h in bench_ret_map and not bench_ret_map[h].empty:
-                df[bench_col] = df[date_col].map(bench_ret_map[h])
+            df[abs_col] = s_ret
+            df[legacy_abs] = s_ret
+
+            if h in bench_tradable_map and not bench_tradable_map[h].empty:
+                df[bench_col] = df[date_col].map(bench_tradable_map[h])
+                df[legacy_bench] = df[bench_col]
                 df[exc_col] = df[abs_col] - df[bench_col]
+                df[legacy_exc] = df[exc_col]
             else:
                 df[bench_col] = 0.0
+                df[legacy_bench] = 0.0
                 df[exc_col] = df[abs_col]
+                df[legacy_exc] = df[abs_col]
 
-            # 3. 可交易性掩码
+            # 停牌掩码安全置空
             if "is_suspended" in df.columns:
                 next_susp = df.groupby(symbol_col)["is_suspended"].shift(-1)
                 future_susp = next_susp.isna() | (next_susp == True)
-                df.loc[future_susp, [abs_col, bench_col, exc_col]] = np.nan
+                df.loc[future_susp, [abs_col, bench_col, exc_col, legacy_abs, legacy_bench, legacy_exc]] = np.nan
 
         df.sort_values(by=[date_col, symbol_col], inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -125,28 +154,38 @@ class FactorResearchEngine:
         primary_horizon: Optional[int] = None,
         output_dir: Optional[Path] = None
     ) -> FactorSelectionResult:
-        """端到端执行全要素因子研究"""
+        """端到端执行全要素因子研究 (Phase 1.4)"""
         primary_h = primary_horizon or self.config.PRIMARY_HORIZON
-        logger.info(f"🚀 启动统一因子研究系统 (主分析视界: {primary_h}D)...")
+        logger.info(f"🚀 启动统一因子研究系统 Phase 1.4 (主分析视界: {primary_h}D)...")
 
-        # 1. 准备未来收益标签 (P0-1 / P0-2)
+        # 1. 准备未来收益标签与基准完整性审计 (P0-1 / P0-2)
         df_labeled = self.generate_future_return_labels(df, horizons=self.config.HORIZONS, config=self.config)
         primary_ret_col = f"future_excess_return_{primary_h}d" if self.config.USE_EXCESS_RETURN else f"future_return_{primary_h}d"
+
+        # 审计基准数据质量
+        self._audit_benchmark_evidence(df_labeled)
 
         if not factor_cols:
             exclude_cols = {
                 "date", "symbol", "open", "high", "low", "close", "volume", "amount", "turnover", "pct_change",
                 "adj_open", "adj_high", "adj_low", "adj_close", "adj_pct_change", "benchmark_close", "benchmark_open",
-                "in_universe", "is_st", "is_suspended", "industry", "list_date", "trade_date"
+                "benchmark_high", "benchmark_low", "benchmark_pct_change", "in_universe", "is_st", "is_suspended",
+                "industry", "list_date", "trade_date", "future_diagnostic_return_1d"
             }
-            factor_cols = [c for c in df_labeled.columns if c not in exclude_cols and not c.startswith("future_return_") and not c.startswith("future_excess_return_") and not c.startswith("future_benchmark_return_")]
+            factor_cols = [
+                c for c in df_labeled.columns
+                if c not in exclude_cols
+                and not c.startswith("future_return_")
+                and not c.startswith("future_excess_return_")
+                and not c.startswith("future_benchmark_return_")
+                and not c.startswith("future_tradable_")
+            ]
 
         logger.info(f"📊 待研究候选因子数量: {len(factor_cols)} 个")
 
-        # 2. Factor x Horizon 全家族 Global FDR 多重检验 (Phase 1.3 P1-1)
+        # 2. Factor x Horizon 全家族 Global FDR 多重检验 (Phase 1.4 P0-3)
         horizon_rows = []
         global_pvals = []
-        pair_keys = []
 
         for f in factor_cols:
             for h in self.config.HORIZONS:
@@ -163,7 +202,6 @@ class FactorResearchEngine:
                     "hac_p": p_val
                 })
                 global_pvals.append(p_val)
-                pair_keys.append((f, h))
 
         # 全局 BH-FDR 校正
         global_fdr = FactorMetricsEngine.compute_fdr_pvalues(global_pvals)
@@ -199,10 +237,10 @@ class FactorResearchEngine:
             stab = FactorStabilityEngine.evaluate_stability(df_labeled, f, primary_ret_col, config=self.config)
             self.stability_dict[f] = stab
 
-        # 6. 相关性与高冗余聚集分析 (P1-4 Complete Linkage)
+        # 6. 相关性与高冗余聚集分析 (Complete Linkage)
         self.corr_result = FactorCorrelationEngine.analyze_correlation(df_labeled, factor_cols, daily_ic_dict, config=self.config)
 
-        # 7. 真实中性化与正交化对照检验 (P0-3 / P0-4 Fail-Closed)
+        # 7. 真实中性化与正交化对照检验 (Fail-Closed)
         self.neutralization_comparison = self._run_real_neutralization_comparison(df_labeled, factor_cols, primary_ret_col)
         self.orthogonalization_comparison = self._run_real_orthogonalization_comparison(df_labeled, factor_cols, primary_ret_col)
         self.outlier_sensitivity_comparison = self._run_real_outlier_comparison(df_labeled, factor_cols, primary_ret_col)
@@ -218,14 +256,15 @@ class FactorResearchEngine:
             config=self.config
         )
 
-        # 9. 严格 Purged Walk-Forward 样本外验证 (P0-5 / P1-2)
+        # 9. 严格 Purged Walk-Forward 样本外验证与逐折 FDR (Phase 1.4 P0-3)
         wf_res = FactorSelectionEngine.run_purged_walk_forward(df_labeled, factor_cols, config=self.config)
         self.selection_result.walk_forward_stability = wf_res
+        self.wf_horizon_significance_df = pd.DataFrame(wf_res.get("wf_horizon_significance", []))
 
-        # 10. 生成研究 Manifest 真实性证据链 (P0-4 / P0-6)
+        # 10. 生成研究 Manifest 真实性证据链 (P0-4 绑定 Canonical Date+Symbol 哈希)
         self._build_research_run_manifest(df_labeled, factor_cols)
 
-        # 11. 导出结构化报表与图表 (共 18 份证据文件)
+        # 11. 导出结构化报表与图表 (全套 20 份证据文件)
         if output_dir is not None:
             out_p = Path(output_dir)
             out_p.mkdir(parents=True, exist_ok=True)
@@ -239,11 +278,53 @@ class FactorResearchEngine:
                 neutralization_comp=self.neutralization_comparison,
                 orthogonalization_comp=self.orthogonalization_comparison,
                 horizon_significance_df=self.horizon_significance_df,
-                run_manifest=self.run_manifest
+                wf_horizon_significance_df=self.wf_horizon_significance_df,
+                run_manifest=self.run_manifest,
+                benchmark_evidence=self.benchmark_evidence
             )
 
         logger.info(f"✅ 因子研究完成！STRONG: {len(self.selection_result.selected_factors)}, USEFUL: {len(self.selection_result.useful_factors)}, REJECT: {len(self.selection_result.rejected_factors)}")
         return self.selection_result
+
+    def _audit_benchmark_evidence(self, df: pd.DataFrame):
+        """审计基准数据链与覆盖率 (Phase 1.4 P0-2)"""
+        cfg = self.config
+        b_close_col = cfg.BENCHMARK_CLOSE_COL if cfg.BENCHMARK_CLOSE_COL in df.columns else None
+        b_open_col = cfg.BENCHMARK_OPEN_COL if cfg.BENCHMARK_OPEN_COL in df.columns else None
+
+        all_dates = df["date"].nunique()
+        if b_close_col:
+            b_close_valid = df.groupby("date")[b_close_col].first().notna()
+            close_valid_count = int(b_close_valid.sum())
+            close_cov = float(close_valid_count / max(all_dates, 1))
+        else:
+            close_valid_count = 0
+            close_cov = 0.0
+
+        if b_open_col:
+            b_open_valid = (df.groupby("date")[b_open_col].first() > 0)
+            open_valid_count = int(b_open_valid.sum())
+            open_cov = float(open_valid_count / max(all_dates, 1))
+        else:
+            open_valid_count = 0
+            open_cov = 0.0
+
+        if open_cov >= 0.8 and close_cov >= 0.8:
+            timing_status = "VALID"
+        elif close_cov >= 0.8:
+            timing_status = "BENCHMARK_OPEN_UNAVAILABLE"
+        else:
+            timing_status = "UNAVAILABLE"
+
+        self.benchmark_evidence = {
+            "benchmark_source": "akshare_index_daily",
+            "benchmark_open_coverage_ratio": round(open_cov, 4),
+            "benchmark_close_coverage_ratio": round(close_cov, 4),
+            "benchmark_valid_date_count": open_valid_count if open_cov > 0 else close_valid_count,
+            "benchmark_missing_date_count": all_dates - (open_valid_count if open_cov > 0 else close_valid_count),
+            "benchmark_timing_status": timing_status,
+            "benchmark_return_definition": "BenchmarkOpen[T+2] / BenchmarkOpen[T+1] - 1 (Tradable) & Open to Close (Diagnostic)"
+        }
 
     def _run_real_neutralization_comparison(
         self,
@@ -440,7 +521,7 @@ class FactorResearchEngine:
         return res
 
     def _build_research_run_manifest(self, df: pd.DataFrame, factor_cols: List[str]):
-        """生成因子研究执行凭据 Manifest (Phase 1.3 P0-4 / P0-6)"""
+        """生成研究执行凭据 Manifest (Phase 1.4 Canonical Date+Symbol Hash 绑定)"""
         try:
             import subprocess
             git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
@@ -452,27 +533,51 @@ class FactorResearchEngine:
             tree_hash = "unknown"
             is_clean = False
 
-        # requirements hash
         req_file = Path("requirements.txt")
         req_hash = hashlib.sha256(req_file.read_bytes()).hexdigest() if req_file.exists() else "unknown"
 
-        # 全量因子矩阵按规范字母顺序排序后计算 SHA-256
+        # 1. 因子矩阵规范哈希: 必须先严格按 [date, symbol] 排序，再将 [date, symbol, factor_1..n] 序列化哈希 (P0-4)
+        df_sorted = df.copy()
+        df_sorted["date_str"] = pd.to_datetime(df_sorted["date"]).dt.strftime("%Y-%m-%d")
+        df_sorted.sort_values(by=["date_str", "symbol"], inplace=True)
+        
         sorted_factors = sorted(factor_cols)
-        h_matrix = pd.util.hash_pandas_object(df[sorted_factors], index=False)
+        matrix_cols = ["date_str", "symbol"] + sorted_factors
+        h_matrix = pd.util.hash_pandas_object(df_sorted[matrix_cols], index=False)
         matrix_hash = hashlib.sha256(h_matrix.values.tobytes()).hexdigest()
         cols_hash = hashlib.sha256(",".join(sorted_factors).encode("utf-8")).hexdigest()
+
+        # 2. 研究输入数据集全字段哈希 (Input Dataset Hash)
+        input_core_cols = ["date_str", "symbol"]
+        for opt_c in ["adj_open", "adj_close", "open", "close", "benchmark_open", "benchmark_close", "in_universe", "is_st", "is_suspended", "limit_up", "limit_down"]:
+            if opt_c in df_sorted.columns:
+                input_core_cols.append(opt_c)
+        input_core_cols.extend(sorted_factors)
+        
+        h_input = pd.util.hash_pandas_object(df_sorted[input_core_cols], index=False)
+        input_dataset_hash = hashlib.sha256(h_input.values.tobytes()).hexdigest()
 
         sym_count = int(df["symbol"].nunique()) if "symbol" in df.columns else 0
         cfg = self.config
         
+        # 截面规模统计
+        cs_counts = df.groupby("date")[sorted_factors[0]].count()
+        med_cs = float(cs_counts.median()) if not cs_counts.empty else 0.0
+        min_cs = int(cs_counts.min()) if not cs_counts.empty else 0
+        max_cs = int(cs_counts.max()) if not cs_counts.empty else 0
+
         # 样本充分性门槛分类 (P1-2)
         if sym_count < cfg.MIN_RESEARCH_SYMBOLS:
+            validity_status = "DEVELOPMENT_SAMPLE"
+        elif self.benchmark_evidence.get("benchmark_timing_status") != "VALID":
             validity_status = "DEVELOPMENT_SAMPLE"
         else:
             validity_status = self.selection_result.walk_forward_stability.get("walk_forward_status", "DISCOVERY") if self.selection_result else "DISCOVERY"
 
+        total_wf_folds = self.selection_result.walk_forward_stability.get("total_folds", 0) if self.selection_result else 0
+
         self.run_manifest = {
-            "schema_version": "1.3",
+            "schema_version": "1.4",
             "research_validity_status": validity_status,
             "research_source_commit": git_commit,
             "research_source_tree_hash": tree_hash,
@@ -480,19 +585,32 @@ class FactorResearchEngine:
             "requirements_hash": req_hash,
             "factor_matrix_hash": matrix_hash,
             "factor_columns_hash": cols_hash,
+            "research_input_dataset_hash": input_dataset_hash,
             "dataset_rows": len(df),
             "symbol_count": sym_count,
             "factor_count": len(factor_cols),
+            "median_daily_cross_section": med_cs,
+            "min_daily_cross_section": min_cs,
+            "max_daily_cross_section": max_cs,
             "start_date": str(df["date"].min().date()) if hasattr(df["date"].min(), "date") else str(df["date"].min()),
             "end_date": str(df["date"].max().date()) if hasattr(df["date"].max(), "date") else str(df["date"].max()),
             "primary_horizon": cfg.PRIMARY_HORIZON,
             "horizons_tested": cfg.HORIZONS,
-            "label_definition": "T_close_to_T+1_open_entry_to_T+H_close_exit",
-            "execution_definition": "T_signal_T+1_open_execution_T+1_close_realized",
-            "benchmark_return_definition": "T+1_open_to_T+H_close_return_matching_stock",
-            "wf_purge_days": cfg.WF_PURGE_DAYS,
-            "wf_embargo_days": cfg.WF_EMBARGO_DAYS,
-            "min_wf_folds_required": cfg.MIN_WF_FOLDS_FOR_CERTIFICATION,
+            "settlement_rule": cfg.SETTLEMENT_RULE,
+            "signal_timestamp": cfg.SIGNAL_TIMESTAMP,
+            "entry_offset": cfg.ENTRY_OFFSET,
+            "entry_price_type": cfg.ENTRY_PRICE_TYPE,
+            "earliest_exit_offset": cfg.EARLIEST_EXIT_OFFSET,
+            "exit_price_type": cfg.EXIT_PRICE_TYPE,
+            "label_definition": "Tradable: T_close signal -> T+1 open entry -> T+2 earliest exit; Diagnostic: T+1 open to T+1 close",
+            "execution_definition": "T_close_signal -> T+1_open_long_entry -> T+2_open_earliest_exit",
+            "benchmark_timing_status": self.benchmark_evidence.get("benchmark_timing_status", "UNAVAILABLE"),
+            "benchmark_open_coverage_ratio": self.benchmark_evidence.get("benchmark_open_coverage_ratio", 0.0),
+            "benchmark_close_coverage_ratio": self.benchmark_evidence.get("benchmark_close_coverage_ratio", 0.0),
+            "global_fdr_family_size": len(factor_cols) * len(cfg.HORIZONS),
+            "global_fdr_method": "Benjamini-Hochberg",
+            "wf_total_folds": total_wf_folds,
+            "wf_valid_folds": total_wf_folds if total_wf_folds >= cfg.MIN_WF_FOLDS_FOR_CERTIFICATION else 0,
             "walk_forward_status": self.selection_result.walk_forward_stability.get("walk_forward_status", "PRELIMINARY") if self.selection_result else "PRELIMINARY",
             "selected_strong_count": len(self.selection_result.selected_factors) if self.selection_result else 0,
             "selected_useful_count": len(self.selection_result.useful_factors) if self.selection_result else 0,
