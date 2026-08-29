@@ -1,22 +1,21 @@
 """
 企业级量化回测与数据真实性审计收集器 (backtest/audit.py)
-严格遵循 Fail-Closed 原则 (未提供证据 ≠ 已验证)：
-1. 默认状态全方位防伪：survivorship_bias_risk=True, synthetic_data_used=True, calendar_is_exchange_official=False
-2. 全量审计字段从运行时核心对象自动派生，禁止乐观硬编码
-3. 严格白名单防伪保护 (NON_CERTIFICATION_OVERRIDE_FIELDS)，封死一切通过 custom_overrides 修改认证字段的途径
-4. 密码级 64-hex SHA256 Chained Manifest Provenance 审计与一致性检验
-5. 订单数量守恒缺失时严格默认为 False (Fail-Closed)
-6. 实际回测窗口与覆盖区间必须由 CertificationPolicy 独立强制双向比对
-7. 公司行为缺少数据时必须具备真实 Zero Event Proof 才能认证
-8. runtime_config_hash 作为核心门禁检查项
+核心原则：
+1. CANONICAL FULL CONFIG HASH: 递归序列化全部业务/模型/交易/费率配置，杜绝漏项与伪造。
+2. MANIFEST ACTUAL FILE VERIFICATION: Manifest Hash 必须实际匹配磁盘物理文件与 64-hex SHA256。
+3. MANIFEST PARENT CHAIN VERIFICATION: 严格验证 Market -> Universe -> Factor -> Runtime 链式父哈希。
+4. CORPORATE ACTION PROVENANCE: 强制纳入公司行为 Manifest 与数据血缘认证门禁。
+5. STRICT WHITELIST ANTI-FORGERY: 封死一切通过 custom_overrides 篡改认证字段的途径。
+6. FAIL-CLOSED: 默认状态全方位防伪，缺少任何物理证据一律判定为 HIGH_RISK。
 """
 import re
 import json
 import hashlib
 import logging
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, Optional, List, Union, Tuple
-import pandas as pd
+from enum import Enum
+from pathlib import Path
+from dataclasses import dataclass, field, asdict, is_dataclass
+from typing import Dict, Any, Optional, List, Union, Tuple, Set
 
 logger = logging.getLogger(__name__)
 
@@ -32,35 +31,151 @@ CERTIFICATION_FIELDS = NON_CERTIFICATION_OVERRIDE_FIELDS
 
 HEX_64_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
 
+# 排除纯文件输出路径与瞬态临时目录 (不影响策略、数据与回测计算逻辑的路径)
+TRANSIENT_CONFIG_EXCLUDE_KEYS = {
+    "BASE_DIR", "DATA_DIR", "RAW_DATA_DIR", "PARQUET_DIR",
+    "FACTOR_DIR", "FACTORS_DIR", "MODELS_DIR", "REPORTS_DIR"
+}
+
+
+def canonical_serialize(obj: Any) -> Any:
+    """递归规范化序列化任意 Python 对象 (Path, Enum, Dataclass, Dict, List, Set, Float)"""
+    if obj is None:
+        return None
+    if isinstance(obj, (str, int, bool)):
+        return obj
+    if isinstance(obj, float):
+        return round(obj, 8)
+    if isinstance(obj, Path):
+        return str(obj).replace("\\", "/")
+    if isinstance(obj, Enum):
+        return obj.value
+    if is_dataclass(obj):
+        return canonical_serialize(asdict(obj))
+    if isinstance(obj, dict):
+        res = {}
+        for k in sorted(obj.keys()):
+            if str(k) not in TRANSIENT_CONFIG_EXCLUDE_KEYS:
+                res[str(k)] = canonical_serialize(obj[k])
+        return res
+    if isinstance(obj, (list, tuple)):
+        return [canonical_serialize(x) for x in obj]
+    if isinstance(obj, (set, frozenset)):
+        serialized = [canonical_serialize(x) for x in obj]
+        return sorted(serialized, key=lambda x: str(x))
+    return str(obj)
+
 
 def compute_canonical_runtime_config_hash(config_obj: Any) -> str:
-    """确定性计算运行时解析后的核心配置 Canonical SHA256 哈希"""
-    keys = [
-        "START_DATE", "END_DATE", "LABEL_HORIZON", "UNIVERSE_MODE", "INDEX_CODE",
-        "TRAIN_WINDOW_DAYS", "PURGE_GAP_DAYS", "TOP_K_BUY", "TOP_K_HOLD",
-        "REBALANCE_FREQ", "TRANSACTION_FEE", "STAMP_DUTY", "SLIPPAGE", "ENABLE_NEUTRALIZATION"
-    ]
-    extracted = {}
-    for k in keys:
-        extracted[k] = str(getattr(config_obj, k, "")) if config_obj is not None else ""
-    sorted_json = json.dumps(extracted, sort_keys=True)
-    return hashlib.sha256(sorted_json.encode('utf-8')).hexdigest()
+    """确定性递归计算运行时全量有效配置的 Canonical SHA256 哈希 (P1-31, P1-32)"""
+    if config_obj is None:
+        return hashlib.sha256(b"EMPTY_CONFIG").hexdigest()
+
+    if is_dataclass(config_obj):
+        raw_dict = asdict(config_obj)
+    elif isinstance(config_obj, dict):
+        raw_dict = dict(config_obj)
+    elif hasattr(config_obj, "__dict__"):
+        raw_dict = {k: v for k, v in config_obj.__dict__.items() if not k.startswith("_")}
+    else:
+        raw_dict = {"config_repr": repr(config_obj)}
+
+    filtered = {k: v for k, v in raw_dict.items() if k not in TRANSIENT_CONFIG_EXCLUDE_KEYS}
+    canonical_dict = canonical_serialize(filtered)
+    sorted_json = json.dumps(canonical_dict, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+    return hashlib.sha256(sorted_json.encode("utf-8")).hexdigest()
+
+
+@dataclass
+class ManifestVerificationResult:
+    """Manifest 物理文件与父依赖链校验结果实体"""
+    manifest_path: str
+    expected_hash: Optional[str] = None
+    actual_hash: Optional[str] = None
+    hash_verified: bool = False
+    schema_verified: bool = False
+    parent_chain_verified: bool = False
+    failed_checks: List[str] = field(default_factory=list)
+
+
+class ManifestVerifier:
+    """物理 Manifest 文件哈希与父链递归校验器 (P1 Hardened)"""
+
+    @classmethod
+    def verify_manifest_file(
+        cls,
+        manifest_path: Union[str, Path],
+        expected_hash: Optional[str] = None,
+        expected_parents: Optional[Dict[str, str]] = None
+    ) -> ManifestVerificationResult:
+        """实际校验 Manifest 文件物理哈希、JSON Schema 及 Parent Chain"""
+        p = Path(manifest_path)
+        res = ManifestVerificationResult(manifest_path=str(p))
+
+        if not p.exists():
+            res.failed_checks.append(f"manifest_file_missing_{p.name}")
+            return res
+
+        try:
+            h = hashlib.sha256()
+            with open(p, "rb") as f:
+                content = f.read()
+                h.update(content)
+            actual_h = h.hexdigest()
+            res.actual_hash = actual_h
+
+            if expected_hash:
+                res.expected_hash = expected_hash
+                if actual_h.lower() == str(expected_hash).lower():
+                    res.hash_verified = True
+                else:
+                    res.failed_checks.append(f"manifest_hash_mismatch_{expected_hash}_vs_{actual_h}")
+            else:
+                res.hash_verified = True
+
+            data = json.loads(content.decode("utf-8"))
+            res.schema_verified = isinstance(data, dict)
+
+            # 校验父链哈希 (Parent Chain Verification)
+            if expected_parents:
+                parent_ok = True
+                for parent_key, expected_parent_val in expected_parents.items():
+                    actual_parent_val = data.get(parent_key)
+                    if not actual_parent_val or str(actual_parent_val).lower() != str(expected_parent_val).lower():
+                        res.failed_checks.append(f"parent_chain_mismatch_{parent_key}_{expected_parent_val}_vs_{actual_parent_val}")
+                        parent_ok = False
+                res.parent_chain_verified = parent_ok
+            else:
+                res.parent_chain_verified = True
+
+        except Exception as e:
+            res.failed_checks.append(f"manifest_verification_error_{str(e)}")
+
+        return res
 
 
 @dataclass
 class AuditMetadata:
     """标准量化回测真实性与合规审计数据实体 (Fail-Closed Default)"""
-    # 0. 运行时唯一标识与配置指纹 (P0, P1-3)
+    # 0. 运行时唯一标识与配置指纹 (P0, P1)
     runtime_instance_id: str = "default_runtime"
     runtime_config_hash: Optional[str] = None
+    runtime_config_hash_verified: bool = False
     market_manifest_hash: Optional[str] = None
+    market_manifest_hash_verified: bool = False
     factor_manifest_hash: Optional[str] = None
+    factor_manifest_hash_verified: bool = False
     universe_manifest_hash: Optional[str] = None
+    universe_manifest_hash_verified: bool = False
+    corporate_action_manifest_hash: Optional[str] = None
+    corporate_action_manifest_hash_verified: bool = False
+    manifest_chain_verified: bool = False
+
     display_notes: Optional[str] = None
     user_comment: Optional[str] = None
     custom_tag: Optional[str] = None
 
-    # 1. 真实回测区间与请求区间 (P0, P1)
+    # 1. 真实回测区间与请求区间
     actual_backtest_start_date: Optional[str] = None
     actual_backtest_end_date: Optional[str] = None
     requested_backtest_start_date: Optional[str] = None
@@ -144,13 +259,15 @@ class AuditMetadata:
     deferred_order_count: int = 0
     order_quantity_conservation_passed: bool = False  # 缺失严格默认为 False
 
-    # 8. 公司行为除权除息覆盖
+    # 8. 公司行为除权除息与 Provenance 门禁
     corporate_action_source: str = "unknown"
     corporate_action_coverage_ratio: float = 0.0
     corporate_action_coverage_complete: bool = False
     corporate_action_bias_risk: bool = True
     corporate_action_adjustment_available: bool = False
     corporate_action_zero_event_proof_verified: bool = False
+    corporate_action_provenance_verified: bool = False
+    corporate_action_dataset_hash_verified: bool = False
     action_types_supported: List[str] = field(default_factory=lambda: ["CASH_DIVIDEND", "BONUS_SHARE", "SPLIT"])
     unsupported_corporate_action_types: List[str] = field(default_factory=lambda: ["RIGHTS_ISSUE"])
     backtest_total_return_reliability: str = "limited"
@@ -184,26 +301,40 @@ class AuditMetadata:
 class CertificationPolicy:
     """
     全要素量化回测真实性与可信度评级策略门禁 (P0 Single Certification Gate)
-    严格检验全部核心要素，任何一项不满足即拒绝 VERIFIED。
+    严格检验全部核心要素与物理证据，任何一项不满足即拒绝 VERIFIED。
     """
     @classmethod
     def evaluate(cls, meta: AuditMetadata) -> Tuple[str, List[str]]:
         failed_checks = []
 
-        # 0. 关键链式哈希完整性校验 (Chained Manifest Provenance & 64-hex Hash Validation)
+        # 0. 关键链式哈希完整性校验与物理验签 (Manifest Value + Verification Flags)
         if not meta.runtime_config_hash or not HEX_64_PATTERN.match(str(meta.runtime_config_hash)):
             failed_checks.append("runtime_config_hash_missing")
+        elif not meta.runtime_config_hash_verified:
+            failed_checks.append("runtime_config_hash_unverified")
 
         if not meta.universe_manifest_hash or not HEX_64_PATTERN.match(str(meta.universe_manifest_hash)):
             failed_checks.append("universe_manifest_hash_missing")
+        elif not meta.universe_manifest_hash_verified:
+            failed_checks.append("universe_manifest_hash_unverified")
 
         if not meta.factor_manifest_hash or not HEX_64_PATTERN.match(str(meta.factor_manifest_hash)):
             failed_checks.append("factor_manifest_hash_missing")
+        elif not meta.factor_manifest_hash_verified:
+            failed_checks.append("factor_manifest_hash_unverified")
 
         if not meta.market_manifest_hash or not HEX_64_PATTERN.match(str(meta.market_manifest_hash)):
             failed_checks.append("market_manifest_hash_missing")
+        elif not meta.market_manifest_hash_verified:
+            failed_checks.append("market_manifest_hash_unverified")
 
-        # 1. 实际回测窗口与 PIT 股票池覆盖独立校验 (P1-12)
+        if meta.corporate_action_manifest_hash and not meta.corporate_action_manifest_hash_verified:
+            failed_checks.append("corporate_action_manifest_hash_unverified")
+
+        if not meta.manifest_chain_verified:
+            failed_checks.append("manifest_chain_unverified")
+
+        # 1. 实际回测窗口与 PIT 股票池覆盖独立校验
         if (
             meta.actual_backtest_start_date is None
             or meta.actual_backtest_end_date is None
@@ -239,7 +370,7 @@ class CertificationPolicy:
         if meta.historical_st_bias_risk:
             failed_checks.append("historical_st_bias_risk_present")
 
-        # 4. 公司行为覆盖一致性与 Zero Event Proof 校验 (P0, P1)
+        # 4. 公司行为覆盖一致性与 Zero Event Proof 校验 (包含 Provenance 门禁)
         has_complete_action_data = (
             meta.corporate_action_coverage_complete
             and meta.corporate_action_adjustment_available
@@ -256,6 +387,8 @@ class CertificationPolicy:
                 failed_checks.append("corporate_action_coverage_incomplete")
         if meta.corporate_action_bias_risk:
             failed_checks.append("corporate_action_bias_risk_present")
+        if not meta.corporate_action_provenance_verified:
+            failed_checks.append("corporate_action_provenance_unverified")
 
         # 5. 缓存指纹与数据血缘
         if not meta.cache_fingerprint_verified:
@@ -303,9 +436,16 @@ class CertificationPolicy:
             "universe_raw_evidence_unverified",
             "universe_dataset_hash_unverified",
             "universe_manifest_hash_missing",
+            "universe_manifest_hash_unverified",
             "factor_manifest_hash_missing",
+            "factor_manifest_hash_unverified",
             "market_manifest_hash_missing",
+            "market_manifest_hash_unverified",
+            "corporate_action_manifest_hash_unverified",
+            "corporate_action_provenance_unverified",
+            "manifest_chain_unverified",
             "runtime_config_hash_missing",
+            "runtime_config_hash_unverified",
             "corporate_action_missing_adjustment_or_zero_event_proof",
             "actual_backtest_window_or_universe_coverage_dates_missing",
             "market_data_source_unverified"
@@ -338,12 +478,14 @@ class AuditCollector:
 
         if config is not None:
             meta.runtime_config_hash = compute_canonical_runtime_config_hash(config)
+            # 在没有物理 manifest 校验通过前，默认保持 unverified (Fail-Closed)
+            meta.runtime_config_hash_verified = bool(getattr(config, "runtime_config_hash_verified", False))
 
         # 1. 数据层采集 (Fail-Closed 默认值)
         if data_manager is not None:
             meta.data_source = getattr(data_manager, "data_source", "unknown")
             meta.data_source_breakdown = dict(getattr(data_manager, "data_source_breakdown", {}))
-            meta.synthetic_data_used = bool(getattr(data_manager, "synthetic_data_used", True))  # 未知时必须判定为 True (Fail-Closed)
+            meta.synthetic_data_used = bool(getattr(data_manager, "synthetic_data_used", True))
             meta.cache_fingerprint_verified = bool(getattr(data_manager, "cache_fingerprint_verified", False))
             meta.raw_data_provenance_preserved = bool(getattr(data_manager, "raw_data_provenance_preserved", False))
 
@@ -371,6 +513,7 @@ class AuditCollector:
                 meta.universe_raw_evidence_verified = getattr(provider, "universe_raw_evidence_verified", False)
                 meta.universe_dataset_hash_verified = getattr(provider, "universe_dataset_hash_verified", False)
                 meta.universe_manifest_hash = getattr(provider, "universe_manifest_hash", None)
+                meta.universe_manifest_hash_verified = getattr(provider, "universe_manifest_hash_verified", False)
                 meta.universe_verification_failures = list(getattr(provider, "universe_verification_failures", []))
                 meta.survivorship_bias_risk = provider.has_survivorship_bias_risk(meta.actual_backtest_start_date, meta.actual_backtest_end_date)
 
@@ -390,6 +533,7 @@ class AuditCollector:
             meta.adjustment_point_in_time_safe = bool(getattr(data_manager, "adjustment_point_in_time_safe", False))
             meta.future_adjustment_leakage_test_passed = bool(getattr(data_manager, "future_adjustment_leakage_test_passed", False))
             meta.market_manifest_hash = getattr(data_manager, "manifest_hash", None)
+            meta.market_manifest_hash_verified = getattr(data_manager, "manifest_hash_verified", False)
 
         # 2. 因子特征层采集
         if factor_processor is not None:
@@ -402,6 +546,7 @@ class AuditCollector:
             meta.industry_data_available = bool(getattr(factor_processor, "industry_data_available", False))
             meta.feature_missing_ratio_total = getattr(factor_processor, "feature_missing_ratio_total", 0.0)
             meta.factor_manifest_hash = getattr(factor_processor, "manifest_hash", None)
+            meta.factor_manifest_hash_verified = getattr(factor_processor, "manifest_hash_verified", False)
 
         # 3. 策略组合层采集
         if portfolio_builder is not None:
@@ -409,7 +554,7 @@ class AuditCollector:
             meta.unknown_industry_cap_applied = bool(getattr(portfolio_builder, "unknown_industry_cap_applied", False))
             meta.unknown_industry_weight = getattr(portfolio_builder, "unknown_industry_weight", 0.0)
 
-        # 4. 回测撮合执行层采集 (Fail-Closed: 缺失默认为 False)
+        # 4. 回测撮合执行层采集
         if engine is not None:
             meta.fee_model_scope = getattr(engine, "fee_model_scope", "historical_tiered")
             meta.order_quantity_conservation_passed = bool(getattr(engine, "order_quantity_conservation_passed", False))
@@ -424,6 +569,10 @@ class AuditCollector:
             meta.corporate_action_bias_risk = bool(getattr(engine, "corporate_action_bias_risk", True))
             meta.corporate_action_adjustment_available = bool(getattr(engine, "corporate_action_adjustment_available", False))
             meta.corporate_action_zero_event_proof_verified = bool(getattr(engine, "corporate_action_zero_event_proof_verified", False))
+            meta.corporate_action_provenance_verified = bool(getattr(engine, "corporate_action_provenance_verified", False))
+            meta.corporate_action_dataset_hash_verified = bool(getattr(engine, "corporate_action_dataset_hash_verified", False))
+            meta.corporate_action_manifest_hash = getattr(engine, "corporate_action_manifest_hash", None)
+            meta.corporate_action_manifest_hash_verified = getattr(engine, "corporate_action_manifest_hash_verified", False)
 
         # 5. 处理外部自定义 override (严格白名单防伪拦截：所有认证输入字段一律禁止 override)
         if custom_overrides:

@@ -1,3 +1,4 @@
+import hashlib
 import pytest
 import numpy as np
 import pandas as pd
@@ -5,6 +6,7 @@ from pathlib import Path
 
 from config.settings import settings
 from data.provenance import SourceClass, UniverseVerificationResult
+from data.source_registry import CorporateActionCoverageEvidence
 from data.universe_provider import (
     UniverseProvider,
     StaticUniverseProvider,
@@ -308,19 +310,33 @@ def test_audit_collector_anti_forgery_blocks_override():
 
 
 @pytest.mark.unit
-def test_corporate_action_coverage_with_zero_events():
+def test_corporate_action_coverage_with_zero_events(tmp_path):
     prov = CorporateActionProvider()
-    rec = CorporateActionCoverageRecord(
+    raw_f = tmp_path / "raw.json"
+    raw_f.write_text("{}", encoding="utf-8")
+    h_raw = hashlib.sha256(raw_f.read_bytes()).hexdigest()
+    resp_f = tmp_path / "resp.json"
+    resp_f.write_text("{}", encoding="utf-8")
+    h_resp = hashlib.sha256(resp_f.read_bytes()).hexdigest()
+
+    ev = CorporateActionCoverageEvidence(
         symbol='600519.SH',
         query_start='2021-01-01',
         query_end='2023-12-31',
+        source_id='CSI',
         query_success=True,
-        empty_result_verified=True
+        empty_result=True,
+        empty_result_verified=True,
+        raw_result_file="raw.json",
+        raw_result_hash=h_raw,
+        response_file="resp.json",
+        response_hash=h_resp
     )
-    prov.register_coverage_record(rec)
+    prov.register_coverage_record(ev)
     
-    assert prov.validate_coverage(['600519.SH'], '2021-01-01', '2023-12-31') is True
+    assert prov.validate_coverage(['600519.SH'], '2021-01-01', '2023-12-31', evidence_dir=tmp_path) is True
     assert prov.coverage_complete is True
+    assert prov.zero_event_proof_verified is True
 
 
 @pytest.mark.unit
@@ -579,12 +595,20 @@ def test_certification_policy_truth_table():
     # 1. 完美状态 -> VERIFIED
     meta_pass = AuditMetadata(
         runtime_config_hash="a" * 64,
+        runtime_config_hash_verified=True,
         universe_source_class="OFFICIAL_PRIMARY",
         universe_raw_evidence_verified=True,
         universe_dataset_hash_verified=True,
         universe_manifest_hash="b" * 64,
+        universe_manifest_hash_verified=True,
         factor_manifest_hash="c" * 64,
+        factor_manifest_hash_verified=True,
         market_manifest_hash="d" * 64,
+        market_manifest_hash_verified=True,
+        corporate_action_manifest_hash="e" * 64,
+        corporate_action_manifest_hash_verified=True,
+        manifest_chain_verified=True,
+        corporate_action_provenance_verified=True,
         data_source="csi_official_direct",
         benchmark_source="csi_000300_official",
         actual_backtest_start_date="2020-01-01",
@@ -627,12 +651,20 @@ def test_certification_policy_truth_table():
     # 3. 仅日历为第三方 -> CONTROLLED_WITH_LIMITATIONS
     meta_lim = AuditMetadata(
         runtime_config_hash="a" * 64,
+        runtime_config_hash_verified=True,
         universe_source_class="OFFICIAL_PRIMARY",
         universe_raw_evidence_verified=True,
         universe_dataset_hash_verified=True,
         universe_manifest_hash="b" * 64,
+        universe_manifest_hash_verified=True,
         factor_manifest_hash="c" * 64,
+        factor_manifest_hash_verified=True,
         market_manifest_hash="d" * 64,
+        market_manifest_hash_verified=True,
+        corporate_action_manifest_hash="e" * 64,
+        corporate_action_manifest_hash_verified=True,
+        manifest_chain_verified=True,
+        corporate_action_provenance_verified=True,
         data_source="csi_official_direct",
         benchmark_source="csi_000300_official",
         actual_backtest_start_date="2020-01-01",

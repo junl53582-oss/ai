@@ -2,9 +2,10 @@
 运行时审计数字信封与非对称密码学防伪签名鉴证引擎 (backtest/runtime_attestation.py)
 核心原则：
 1. RUNTIME JSON != TRUSTED RUNTIME EVIDENCE (未通过 Ed25519 数字签名的本地 JSON 绝不能作为生产凭据)
-2. ASYMMETRIC TRUST ANCHOR: 签名依靠外部注入私钥，验签仅依靠公开注册公钥，彻底杜绝源码推导假签名。
-3. ZERO HARDCODED SECRETS: 仓库与默认配置不包含任何生产私钥，开发环境若无私钥则自动降级为 DEV_UNTRUSTED。
-4. CODE COMMIT BINDING: 强绑定 Git Commit SHA、Tree Hash 与 Dirty 状态。
+2. ASYMMETRIC TRUST ANCHOR: 签名依靠外部注入私钥，验签仅依靠公开注册公钥与严格 Purpose 检查。
+3. GIT COMMIT & TREE BINDING: 生产认证强制要求 Envelope Commit/Tree 与当前 HEAD 保持 100% 一致。
+4. DIRTY WORKTREE GATE: Envelope 启动时或当前验证时若存在脏工作区，严格禁止获得最高 VERIFIED。
+5. HISTORICAL VS CURRENT ARTIFACT: 显式支持并区分历史已归档报告与当前运行时回测报告。
 """
 import os
 import sys
@@ -20,6 +21,7 @@ from pathlib import Path
 from backtest.audit import AuditMetadata, CertificationPolicy
 from data.crypto_anchor import (
     TRUSTED_KEY_REGISTRY,
+    DOMAIN_SEPARATOR_RUNTIME,
     verify_ed25519_signature,
     sign_with_environment_key
 )
@@ -78,22 +80,34 @@ class RuntimeAttestationEnvelope:
     market_manifest_hash: Optional[str] = None
     factor_manifest_hash: Optional[str] = None
     universe_manifest_hash: Optional[str] = None
+    corporate_action_manifest_hash: Optional[str] = None
     pytest_xml_hash: Optional[str] = None
     audit_payload_hash: str = ""
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     signing_key_id: Optional[str] = None
     envelope_signature: Optional[str] = None
 
-    def compute_envelope_digest(self) -> str:
-        """计算信封关键元数据的摘要"""
-        raw_str = (
-            f"{self.schema_version}|{self.runtime_instance_id}|"
-            f"{self.git_commit_sha}|{self.git_tree_hash}|{self.git_dirty}|"
-            f"{self.runtime_config_hash}|{self.market_manifest_hash}|"
-            f"{self.factor_manifest_hash}|{self.universe_manifest_hash}|"
-            f"{self.pytest_xml_hash}|{self.audit_payload_hash}|{self.created_at}"
-        )
-        return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
+    def compute_canonical_bytes(self) -> bytes:
+        """确定性计算信封待签名字节流"""
+        raw_dict = {
+            "audit_payload_hash": self.audit_payload_hash,
+            "corporate_action_manifest_hash": self.corporate_action_manifest_hash,
+            "created_at": self.created_at,
+            "factor_manifest_hash": self.factor_manifest_hash,
+            "git_commit_sha": self.git_commit_sha,
+            "git_dirty": self.git_dirty,
+            "git_tree_hash": self.git_tree_hash,
+            "market_manifest_hash": self.market_manifest_hash,
+            "os_platform": self.os_platform,
+            "pytest_xml_hash": self.pytest_xml_hash,
+            "python_version": self.python_version,
+            "runtime_config_hash": self.runtime_config_hash,
+            "runtime_instance_id": self.runtime_instance_id,
+            "schema_version": self.schema_version,
+            "universe_manifest_hash": self.universe_manifest_hash
+        }
+        sorted_json = json.dumps(raw_dict, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        return sorted_json.encode("utf-8")
 
     def sign(
         self,
@@ -102,12 +116,14 @@ class RuntimeAttestationEnvelope:
     ) -> "RuntimeAttestationEnvelope":
         """
         使用指定的非对称私钥对信封进行 Ed25519 数字签名。
-        若环境未注入私钥，则将 key_id 标记为 DEV_UNTRUSTED_KEY 且签名置空。
+        强制校验 Purpose=RUNTIME_ATTESTATION 与 Domain Separator 隔离。
         """
-        digest = self.compute_envelope_digest()
+        msg_bytes = self.compute_canonical_bytes()
         sig_hex, errs = sign_with_environment_key(
-            message=digest.encode("utf-8"),
+            message=msg_bytes,
             key_id=signing_key_id,
+            required_purpose="RUNTIME_ATTESTATION",
+            domain_separator=DOMAIN_SEPARATOR_RUNTIME,
             explicit_private_key_hex=explicit_private_key_hex
         )
         if sig_hex:
@@ -121,9 +137,13 @@ class RuntimeAttestationEnvelope:
     def verify(
         self,
         audit_payload_data: Dict[str, Any],
-        require_clean_git: bool = False
+        require_clean_git: bool = True,
+        verify_current_git_binding: bool = True,
+        is_historical: bool = False
     ) -> Tuple[bool, List[str]]:
-        """全方位校验信封 Ed25519 签名、Payload 哈希一致性与代码版本绑定"""
+        """
+        全方位校验信封 Ed25519 签名、Payload 哈希一致性、代码版本强绑定与工作区纯净性
+        """
         errors = []
 
         # 1. 校验 Payload 哈希一致性
@@ -131,24 +151,39 @@ class RuntimeAttestationEnvelope:
         if actual_payload_hash.lower() != str(self.audit_payload_hash).lower():
             errors.append(f"audit_payload_hash_mismatch_{actual_payload_hash}_vs_{self.audit_payload_hash}")
 
-        # 2. 校验 Ed25519 非对称密码学数字签名 (严禁任何自算 SHA256 伪签名)
+        # 2. 校验 Ed25519 非对称密码学数字签名 (严格用途与注册公钥检查)
         if not self.signing_key_id or self.signing_key_id not in TRUSTED_KEY_REGISTRY:
             errors.append(f"unregistered_runtime_signing_key_{self.signing_key_id}")
         elif not self.envelope_signature:
             errors.append("missing_runtime_envelope_signature")
         else:
-            digest = self.compute_envelope_digest()
+            msg_bytes = self.compute_canonical_bytes()
             sig_ok, sig_errs = verify_ed25519_signature(
-                message=digest.encode("utf-8"),
+                message=msg_bytes,
                 signature_hex=self.envelope_signature,
-                key_id=self.signing_key_id
+                key_id=self.signing_key_id,
+                required_purpose="RUNTIME_ATTESTATION",
+                domain_separator=DOMAIN_SEPARATOR_RUNTIME,
+                created_at_iso=self.created_at
             )
             if not sig_ok:
                 errors.extend(sig_errs)
 
-        # 3. 校验 Git 状态 (生产环境 VERIFIED 严格要求干净工作区)
-        if require_clean_git and self.git_dirty:
-            errors.append("git_worktree_is_dirty_untrusted_for_production_verification")
+        # 3. 校验 Git Commit 与 Tree 强绑定 (P0 Git Binding Guard)
+        if verify_current_git_binding and not is_historical:
+            current_git = get_git_environment_info()
+            if self.git_commit_sha != current_git["git_commit_sha"]:
+                errors.append(f"runtime_commit_mismatch_{self.git_commit_sha}_vs_{current_git['git_commit_sha']}")
+            if self.git_tree_hash != current_git["git_tree_hash"]:
+                errors.append(f"runtime_tree_hash_mismatch_{self.git_tree_hash}_vs_{current_git['git_tree_hash']}")
+
+        # 4. 校验 Git 纯净性状态 (生产环境 VERIFIED 严格要求干净工作区)
+        if require_clean_git and not is_historical:
+            if self.git_dirty:
+                errors.append("runtime_started_from_dirty_worktree")
+            current_git = get_git_environment_info()
+            if current_git.get("git_dirty", True):
+                errors.append("current_worktree_dirty")
 
         return len(errors) == 0, errors
 
@@ -183,6 +218,7 @@ def create_signed_runtime_attestation(
         market_manifest_hash=audit_meta.market_manifest_hash,
         factor_manifest_hash=audit_meta.factor_manifest_hash,
         universe_manifest_hash=audit_meta.universe_manifest_hash,
+        corporate_action_manifest_hash=audit_meta.corporate_action_manifest_hash,
         pytest_xml_hash=xml_hash,
         audit_payload_hash=payload_hash
     )

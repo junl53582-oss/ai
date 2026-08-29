@@ -1,19 +1,25 @@
 """
-公司行为 (Corporate Actions) 数据结构与除权除息调度器 (strategy/corporate_actions.py)
+公司行为 (Corporate Actions) 数据结构、覆盖证明与除权除息调度器 (strategy/corporate_actions.py)
 处理现金分红、送红股、转增股与股票拆细等公司行为，
-提供全量股票池覆盖完整性 (Coverage-Aware) 验证与除息除权价值守恒调度
+提供全量股票池覆盖完整性 (Coverage-Aware) 验证与除息除权价值守恒调度。
 严格遵循 Fail-Closed 原则：
-- CorporateActionCoverageRecord / CorporateActionCoverageEvidence 默认状态必须为 False
-- 严禁以纯布尔值声称证明，必须具备可审计的数据源凭据与区间覆盖
+- CorporateActionCoverageRecord 标记为 production_eligible=False (仅用于测试/非认证)，绝不赋予生产认证权。
+- 生产环境仅接受 CorporateActionCoverageEvidence，且必须具备真实的物理文件与区间覆盖凭据。
+- 提供 CorporateActionDatasetVerifier 与 Corporate Action Manifest 验证。
 """
 import json
 import logging
+import hashlib
 from pathlib import Path
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional, Union, Set, Any, Tuple
 import pandas as pd
 
-from data.source_registry import CorporateActionCoverageEvidence, TRUSTED_SOURCE_REGISTRY
+from data.source_registry import (
+    CorporateActionCoverageEvidence,
+    TRUSTED_SOURCE_REGISTRY,
+    AcquisitionReceipt
+)
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +42,7 @@ class CorporateAction:
 
 @dataclass
 class CorporateActionCoverageRecord:
-    """公司行为数据源覆盖证明 (Fail-Closed Default)"""
+    """旧版/测试用公司行为覆盖记录 (Legacy Non-Certifying Record)"""
     symbol: str
     query_start: str
     query_end: str
@@ -48,6 +54,7 @@ class CorporateActionCoverageRecord:
     raw_result_hash: Optional[str] = None
     response_hash: Optional[str] = None
     supported_action_types: List[str] = field(default_factory=lambda: ["CASH_DIVIDEND", "BONUS_SHARE", "SPLIT"])
+    production_eligible: bool = False         # 严格禁止进入生产认证 (P0 Hardened)
 
 
 class CorporateActionProvider:
@@ -89,7 +96,8 @@ class CorporateActionProvider:
                 empty_result_verified=record.empty_result_verified,
                 source_class=record.source_class,
                 raw_result_hash=record.raw_result_hash,
-                response_hash=record.response_hash
+                response_hash=record.response_hash,
+                production_eligible=record.production_eligible
             )
             self.coverage_records[sym] = rec
         else:
@@ -104,7 +112,7 @@ class CorporateActionProvider:
             self.coverage_end = q_e
 
     def register_action(self, action: CorporateAction):
-        """注册公司行为 (注意：单次分红事件不作为全区间覆盖证明)"""
+        """注册单笔公司行为"""
         date_str = pd.to_datetime(action.ex_date).strftime("%Y-%m-%d")
         if date_str not in self._actions_by_date:
             self._actions_by_date[date_str] = []
@@ -130,11 +138,13 @@ class CorporateActionProvider:
         self,
         required_symbols: List[str],
         start_date: Union[str, pd.Timestamp],
-        end_date: Union[str, pd.Timestamp]
+        end_date: Union[str, pd.Timestamp],
+        evidence_dir: Optional[Path] = None
     ) -> bool:
         """
-        验证回测区间与所有候选股票的公司行为覆盖完整性 (P0 严格校验)：
-        必须每个 required_symbol 均拥有 query_success=True 且覆盖 [start_date, end_date] 的可信记录。
+        验证回测区间与所有候选股票的公司行为覆盖完整性 (P0 生产级严格校验)：
+        - 仅接受具有真实物理文件的 CorporateActionCoverageEvidence。
+        - 旧版 CorporateActionCoverageRecord 自动降级，绝不赋予生产 validly_covered 资格。
         """
         self.required_symbols = set(s.strip().upper() for s in required_symbols)
         if not self.required_symbols:
@@ -151,25 +161,23 @@ class CorporateActionProvider:
         for sym in self.required_symbols:
             if sym in self.coverage_evidences:
                 ev = self.coverage_evidences[sym]
-                is_valid, _ = ev.is_valid_zero_event_proof(sym, s_date, e_date)
-                if ev.query_success and ev.query_start <= s_date and ev.query_end >= e_date:
-                    validly_covered.add(sym)
-                    if not is_valid and ev.empty_result:
-                        all_zero_event_proven = False
-                else:
+                if not ev.production_eligible:
                     all_zero_event_proven = False
+                    continue
 
-            elif sym in self.coverage_records:
-                rec = self.coverage_records[sym]
-                q_s = pd.to_datetime(rec.query_start).strftime("%Y-%m-%d")
-                q_e = pd.to_datetime(rec.query_end).strftime("%Y-%m-%d")
-                if rec.query_success and q_s <= s_date and q_e >= e_date:
-                    validly_covered.add(sym)
-                    if not rec.empty_result_verified:
+                if ev.empty_result:
+                    is_valid, _ = ev.is_valid_zero_event_proof(sym, s_date, e_date, evidence_dir=evidence_dir)
+                    if is_valid and ev.query_start <= s_date and ev.query_end >= e_date:
+                        validly_covered.add(sym)
+                    else:
                         all_zero_event_proven = False
                 else:
-                    all_zero_event_proven = False
+                    if ev.query_success and ev.query_start <= s_date and ev.query_end >= e_date:
+                        validly_covered.add(sym)
+                    else:
+                        all_zero_event_proven = False
             else:
+                # 仅有 Legacy CorporateActionCoverageRecord 或无记录 -> 绝不能通过生产认证
                 all_zero_event_proven = False
 
         self.coverage_ratio = len(validly_covered) / len(self.required_symbols)
@@ -177,6 +185,72 @@ class CorporateActionProvider:
         self.zero_event_proof_verified = bool(self.coverage_complete and all_zero_event_proven and self._action_count == 0)
 
         return self.coverage_complete
+
+
+class CorporateActionDatasetVerifier:
+    """公司行为事件数据集与 Manifest 物理校验器 (P0 Hardened)"""
+
+    @classmethod
+    def compute_dataframe_sha256(cls, df: pd.DataFrame) -> str:
+        """确定性计算公司行为 DataFrame 的 Canonical SHA256 哈希"""
+        if df.empty:
+            return hashlib.sha256(b"EMPTY_CORPORATE_ACTION_DATAFRAME").hexdigest()
+
+        df_sorted = df.sort_values(by=["ex_date", "symbol", "action_type"]).reset_index(drop=True)
+        canonical_rows = []
+        for _, row in df_sorted.iterrows():
+            item_str = (
+                f"{row.get('ex_date', '')}|{row.get('symbol', '')}|{row.get('action_type', '')}|"
+                f"{float(row.get('cash_dividend_per_share', 0.0)):.6f}|{float(row.get('share_ratio', 0.0)):.6f}"
+            )
+            canonical_rows.append(item_str)
+        canonical_bytes = "\n".join(canonical_rows).encode("utf-8")
+        return hashlib.sha256(canonical_bytes).hexdigest()
+
+    @classmethod
+    def verify_dataset(
+        cls,
+        df: pd.DataFrame,
+        manifest_data: Dict[str, Any],
+        raw_evidence_dir: Optional[Path] = None
+    ) -> Tuple[bool, List[str], Dict[str, Any]]:
+        """核验公司行为数据集与 Manifest 的哈希、来源及物理文件链"""
+        failed_checks = []
+        details = {}
+
+        # 1. 验证规范化哈希
+        expected_dataset_sha256 = manifest_data.get("normalized_dataset_sha256", "")
+        actual_dataset_sha256 = cls.compute_dataframe_sha256(df)
+        details["actual_dataset_sha256"] = actual_dataset_sha256
+        details["expected_dataset_sha256"] = expected_dataset_sha256
+
+        if not expected_dataset_sha256:
+            failed_checks.append("corporate_action_manifest_missing_dataset_sha256")
+        elif actual_dataset_sha256 != expected_dataset_sha256:
+            failed_checks.append("corporate_action_dataset_sha256_mismatch")
+
+        # 2. 验证原始文件存在性与哈希
+        source_files = manifest_data.get("source_files", [])
+        source_hashes = manifest_data.get("source_hashes", {})
+        if not source_files:
+            failed_checks.append("corporate_action_manifest_missing_source_files")
+        elif raw_evidence_dir:
+            ev_dir = Path(raw_evidence_dir)
+            for sf in source_files:
+                f_path = ev_dir / sf
+                if not f_path.exists():
+                    failed_checks.append(f"corporate_action_raw_file_missing_{sf}")
+                else:
+                    h = hashlib.sha256()
+                    with open(f_path, "rb") as f:
+                        while chunk := f.read(65536):
+                            h.update(chunk)
+                    exp_h = source_hashes.get(sf, "")
+                    if h.hexdigest().lower() != str(exp_h).lower():
+                        failed_checks.append(f"corporate_action_raw_hash_mismatch_{sf}")
+
+        is_valid = len(failed_checks) == 0
+        return is_valid, failed_checks, details
 
 
 def create_corporate_action_provider(config: Any) -> CorporateActionProvider:
@@ -194,19 +268,23 @@ def create_corporate_action_provider(config: Any) -> CorporateActionProvider:
             for item in cov_data:
                 sym = item.get("symbol")
                 if sym:
-                    rec = CorporateActionCoverageRecord(
+                    ev = CorporateActionCoverageEvidence(
                         symbol=sym,
                         query_start=item.get("query_start", "2000-01-01"),
                         query_end=item.get("query_end", "2099-12-31"),
-                        query_success=bool(item.get("query_success", False)),  # 严格默认为 False
-                        empty_result_verified=bool(item.get("empty_result_verified", False)),  # 严格默认为 False
-                        source=item.get("source", "csi_official"),
+                        query_success=bool(item.get("query_success", False)),
+                        empty_result=bool(item.get("empty_result", False)),
+                        empty_result_verified=bool(item.get("empty_result_verified", False)),
+                        source_id=item.get("source_id", item.get("source", "UNKNOWN")),
                         source_class=item.get("source_class", "UNKNOWN"),
                         raw_result_hash=item.get("raw_result_hash"),
-                        response_hash=item.get("response_hash")
+                        raw_result_file=item.get("raw_result_file"),
+                        response_hash=item.get("response_hash"),
+                        response_file=item.get("response_file"),
+                        production_eligible=bool(item.get("production_eligible", True))
                     )
-                    provider.register_coverage_record(rec)
-            logger.info(f"成功加载公司行为覆盖凭据: {len(provider.coverage_records)} 条记录")
+                    provider.register_coverage_record(ev)
+            logger.info(f"成功加载公司行为覆盖凭据: {len(provider.coverage_evidences)} 条证据")
         except Exception as e:
             logger.warning(f"加载公司行为覆盖凭据失败: {e}")
 

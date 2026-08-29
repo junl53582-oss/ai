@@ -271,7 +271,11 @@ def generate_capability_report(junit_info: Dict[str, Any], output_path: Path):
     print(f"成功生成代码能力报告: {output_path}")
 
 
-def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], output_path: Path):
+def generate_runtime_attestation(
+    raw_input_data: Optional[Dict[str, Any]],
+    output_path: Path,
+    is_historical: bool = False
+):
     """根据真实运行时导出的数字信封与 audit metadata 生成本次运行认证报告 RUNTIME_ATTESTATION.md"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -289,14 +293,20 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
     envelope_valid = False
     envelope_errors = []
     audit_data = {}
+    envelope_obj: Optional[RuntimeAttestationEnvelope] = None
 
     # 检验是否包含 RuntimeAttestationEnvelope 数字信封
     if "attestation_envelope" in raw_input_data and "audit_metadata" in raw_input_data:
         env_dict = raw_input_data["attestation_envelope"]
         audit_data = raw_input_data["audit_metadata"]
         try:
-            envelope = RuntimeAttestationEnvelope(**env_dict)
-            envelope_valid, envelope_errors = envelope.verify(audit_payload_data=audit_data, require_clean_git=False)
+            envelope_obj = RuntimeAttestationEnvelope(**env_dict)
+            envelope_valid, envelope_errors = envelope_obj.verify(
+                audit_payload_data=audit_data,
+                require_clean_git=True,
+                verify_current_git_binding=True,
+                is_historical=is_historical
+            )
         except Exception as e:
             envelope_valid = False
             envelope_errors.append(f"corrupted_envelope_format_{str(e)}")
@@ -317,9 +327,20 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
     if not envelope_valid:
         reliability = "HIGH_RISK"
         failed_checks.extend(envelope_errors)
-        run_id = f"UNTRUSTED_{meta.runtime_instance_id}"
+        if any("runtime_commit_mismatch" in e for e in envelope_errors):
+            run_id = f"STALE_COMMIT_MISMATCH_{meta.runtime_instance_id}"
+        elif any("dirty" in e for e in envelope_errors):
+            run_id = f"DIRTY_WORKTREE_{meta.runtime_instance_id}"
+        else:
+            run_id = f"UNTRUSTED_{meta.runtime_instance_id}"
     else:
-        run_id = meta.runtime_instance_id
+        if is_historical:
+            run_id = f"HISTORICAL_BOUND_{envelope_obj.git_commit_sha[:8] if envelope_obj else 'UNKNOWN'}"
+        else:
+            run_id = meta.runtime_instance_id
+
+    bound_commit_info = envelope_obj.git_commit_sha if envelope_obj else "NONE"
+    mode_label = "HISTORICAL_ATTESTATION (仅历史签名有效，非当前运行)" if is_historical else "CURRENT_RUNTIME_ATTESTATION"
 
     # 10 项运行时要素检查
     runtime_items = [
@@ -351,7 +372,7 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
         {
             "name": "公司行为除权除息覆盖",
             "val": "COVERED" if (meta.corporate_action_coverage_complete and meta.corporate_action_adjustment_available) else "LIMITED_COVERAGE",
-            "passed": bool(meta.corporate_action_coverage_complete and meta.corporate_action_adjustment_available),
+            "passed": bool(meta.corporate_action_coverage_complete and meta.corporate_action_adjustment_available and meta.corporate_action_provenance_verified),
             "detail": f"覆盖率: {meta.corporate_action_coverage_ratio*100:.1f}%, 调整可用: {meta.corporate_action_adjustment_available}, 数据源: {meta.corporate_action_source}"
         },
         {
@@ -381,7 +402,7 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
         {
             "name": "运行时防伪数字信封与配置哈希",
             "val": "SIGNED_AND_VERIFIED" if envelope_valid else "UNTRUSTED_OR_TAMPERED",
-            "passed": bool(envelope_valid and meta.runtime_config_hash is not None),
+            "passed": bool(envelope_valid and meta.runtime_config_hash is not None and meta.runtime_config_hash_verified),
             "detail": f"信封校验: {envelope_valid}, 配置指纹: {meta.runtime_config_hash}"
         }
     ]
@@ -402,6 +423,8 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
     report = f"""# A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
 > **运行时实例 ID**: `{run_id}`  
+> **认证类型**: `{mode_label}`  
+> **绑定 Git Commit**: `{bound_commit_info}`  
 > **认证评估时间**: {timestamp}  
 > **本次回测可信度总评级**: **`{reliability}`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
@@ -425,14 +448,14 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
 ## 3. 评级定义与解释说明
 
 - **`VERIFIED` (最高真实性等级)**: 
-  - 必须具备完整的官方/持牌 Raw Evidence 原始证据、Trust Anchor 签名与 SHA256 密码级哈希链；
-  - 必须具备合法的 RuntimeAttestationEnvelope 数字信封；
+  - 必须具备完整的官方/持牌 Raw Evidence 原始证据、Trust Anchor Ed25519 签名与 SHA256 密码级哈希链；
+  - 必须具备合法的 RuntimeAttestationEnvelope 数字信封且通过当前 Commit 强绑定校验；
   - 必须 100% 通过无未来函数、订单数量守恒与交易所官方日历校验；
   - 幸存者偏差完全清零。
 - **`CONTROLLED_WITH_LIMITATIONS` (受限受控等级)**: 
   - 代码具备完整量化与风控逻辑，但运行时使用了部分第三方公开接口或静态成分股子集。
 - **`HIGH_RISK` (高风险提示)**: 
-  - 缺少可信的 PIT 原始证据、数字信封无效或存在幸存者偏差风险。系统严格遵循科学诚信，绝不粉饰。
+  - 缺少可信的 PIT 原始证据、数字信封无效、Commit 不匹配或存在幸存者偏差风险。系统严格遵循科学诚信，绝不粉饰。
 """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
@@ -440,7 +463,12 @@ def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], outpu
     print(f"成功生成运行时认证报告: {output_path}")
 
 
-def generate_master_report(junit_info: Dict[str, Any], raw_input_data: Optional[Dict[str, Any]], output_path: Path):
+def generate_master_report(
+    junit_info: Dict[str, Any],
+    raw_input_data: Optional[Dict[str, Any]],
+    output_path: Path,
+    is_historical: bool = False
+):
     """生成总览报告 MASTER_REPORT.md"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -451,7 +479,12 @@ def generate_master_report(junit_info: Dict[str, Any], raw_input_data: Optional[
             audit_data = raw_input_data["audit_metadata"]
             try:
                 env = RuntimeAttestationEnvelope(**raw_input_data["attestation_envelope"])
-                envelope_valid, _ = env.verify(audit_data, require_clean_git=False)
+                envelope_valid, _ = env.verify(
+                    audit_data,
+                    require_clean_git=True,
+                    verify_current_git_binding=True,
+                    is_historical=is_historical
+                )
             except Exception:
                 envelope_valid = False
         else:
@@ -500,6 +533,7 @@ def main():
     parser.add_argument("--xml", "--pytest-xml", dest="xml", type=str, default="artifacts/pytest.xml", help="JUnit XML 路径")
     parser.add_argument("--audit", "--audit-json", dest="audit", type=str, default="artifacts/runtime_audit.json", help="Audit JSON 路径")
     parser.add_argument("--output-dir", type=str, default=".", help="输出根目录")
+    parser.add_argument("--historical-attestation", action="store_true", help="允许以历史归档模式校验旧 Commit 证书")
     args = parser.parse_args()
 
     root = Path(args.output_dir)
@@ -517,8 +551,8 @@ def main():
             print(f"读取 Audit JSON 失败: {e}")
 
     generate_capability_report(junit_info, root / "CAPABILITY_REPORT.md")
-    generate_runtime_attestation(audit_data, root / "RUNTIME_ATTESTATION.md")
-    generate_master_report(junit_info, audit_data, root / "MASTER_REPORT.md")
+    generate_runtime_attestation(audit_data, root / "RUNTIME_ATTESTATION.md", is_historical=args.historical_attestation)
+    generate_master_report(junit_info, audit_data, root / "MASTER_REPORT.md", is_historical=args.historical_attestation)
 
 
 if __name__ == "__main__":
