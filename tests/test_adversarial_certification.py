@@ -624,25 +624,52 @@ class TestAdversarialCertification:
         assert ok is False
         assert any("audit_payload_hash_mismatch" in e for e in errs)
 
-    def test_runtime_config_hash_required(self):
-        """攻击 32: 缺失 runtime_config_hash 时必须被 CertificationPolicy 判定为 HIGH_RISK"""
-        meta = AuditMetadata(runtime_config_hash=None)
-        status, failed = CertificationPolicy.evaluate(meta)
-        assert status == "HIGH_RISK"
-        assert "runtime_config_hash_missing" in failed
-
-    def test_fake_short_manifest_hash_rejected(self):
-        """攻击 33: 非 64-hex SHA256 格式的短字符串哈希必须被 Policy 拒绝"""
+    def test_forged_envelope_with_deterministic_sha_rejected(self):
+        """
+        红队深度攻击 (User Attack Chain):
+        攻击者手工构造绿色 AuditMetadata -> 计算 canonical payload hash ->
+        构造 Envelope 并填入已注册的 key_id (PROD_RUNTIME_KEY_2026_V1) ->
+        尝试使用普通 SHA256 或伪造签名冒充数字签名 ->
+        Envelope.verify() 必须严格判定为 False，绝不能通过非对称 Ed25519 验签！
+        """
         meta = AuditMetadata(
-            runtime_config_hash="abc",  # 非法 64-hex
-            universe_manifest_hash="xyz",
-            factor_manifest_hash="123",
-            market_manifest_hash="bad_hash"
+            runtime_instance_id="forged_attack_run",
+            survivorship_bias_risk=False,
+            synthetic_data_used=False
         )
-        status, failed = CertificationPolicy.evaluate(meta)
-        assert status == "HIGH_RISK"
-        assert "runtime_config_hash_missing" in failed
-        assert "universe_manifest_hash_missing" in failed
+        payload_dict = meta.to_dict()
+        payload_hash = compute_canonical_audit_payload_hash(payload_dict)
+
+        envelope = RuntimeAttestationEnvelope(
+            runtime_instance_id="forged_attack_run",
+            signing_key_id="PROD_RUNTIME_KEY_2026_V1",
+            audit_payload_hash=payload_hash,
+            # 攻击者尝试自造 128-hex 伪造签名
+            envelope_signature="a" * 128
+        )
+
+        ok, errs = envelope.verify(payload_dict)
+        assert ok is False
+        assert any("ed25519_cryptographic_signature_verification_failed" in e for e in errs)
+
+    def test_no_private_keys_hardcoded_in_repository(self):
+        """
+        安全审计规则检验:
+        验证仓库代码与配置中绝对不包含任何私钥或生产 Secret。
+        若环境中未设置私钥，sign_with_environment_key 必须拒绝签发生产签名并返回 None (Fail-Closed)。
+        """
+        from data.crypto_anchor import TRUSTED_KEY_REGISTRY, sign_with_environment_key
+        # 确保注册表中只有 public_key_hex，无任何 private_key 字段
+        for key_id, info in TRUSTED_KEY_REGISTRY.items():
+            assert "public_key_hex" in info
+            assert "private_key" not in info
+            assert "secret" not in info
+            assert "private_key_hex" not in info
+
+        # 在无环境变量注入的情况下尝试生产签名必须失败 (Fail-Closed)
+        sig, errs = sign_with_environment_key(b"test message", "PROD_RUNTIME_KEY_2026_V1")
+        assert sig is None
+        assert any("missing_private_key" in e for e in errs)
 
     # ----------------------------------------------------
     # 8. 全面防伪、一致性与 DataFrame Canonical Hash

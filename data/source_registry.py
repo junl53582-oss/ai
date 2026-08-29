@@ -52,19 +52,13 @@ TRUSTED_SOURCE_REGISTRY: Dict[str, Dict[str, Any]] = {
     }
 }
 
-# 注册的受信采集签名密钥 ID 表 (机构/系统公钥信任锚点)
-TRUSTED_ACQUISITION_KEYS: Dict[str, Dict[str, str]] = {
-    "PROD_DOWNLOADER_KEY_2026_V1": {
-        "algorithm": "HMAC_SHA256_ATTESTATION",
-        "institution": "QUANT_INFRA_PROD",
-        "status": "ACTIVE"
-    },
-    "CI_PIPELINE_KEY_2026_V1": {
-        "algorithm": "HMAC_SHA256_ATTESTATION",
-        "institution": "CI_PIPELINE_AGENT",
-        "status": "ACTIVE"
-    }
-}
+from data.crypto_anchor import (
+    TRUSTED_KEY_REGISTRY,
+    verify_ed25519_signature,
+    sign_with_environment_key
+)
+
+TRUSTED_ACQUISITION_KEYS = TRUSTED_KEY_REGISTRY
 
 
 def validate_trusted_url(url: Optional[str], allowed_domains: List[str]) -> Tuple[bool, List[str]]:
@@ -180,21 +174,25 @@ class AcquisitionReceipt:
         if self.receipt_integrity_digest and self.receipt_integrity_digest.lower() != computed_digest.lower():
             errors.append("receipt_integrity_digest_tampered")
 
-        # 7. 独立 Trust Anchor 签名或凭据校验 (P0 Trust Anchor Guard)
-        # 仅有 self digest 绝不能作为生产受信证明
+        # 7. 独立 Trust Anchor 非对称密码学数字签名校验 (P0 Trust Anchor Guard)
+        # 严禁任何自算 SHA256 或无私钥自签名
         if self.trust_anchor_type == "TRUSTED_KEY_ATTESTATION":
-            if not self.signing_key_id or self.signing_key_id not in TRUSTED_ACQUISITION_KEYS:
+            if not self.signing_key_id or self.signing_key_id not in TRUSTED_KEY_REGISTRY:
                 errors.append(f"untrusted_or_missing_signing_key_id_{self.signing_key_id}")
                 self.trust_anchor_verified = False
             elif not self.attestation_signature:
                 errors.append("missing_attestation_signature_for_trusted_key")
                 self.trust_anchor_verified = False
             else:
-                expected_sig = hashlib.sha256(f"{computed_digest}:{self.signing_key_id}:TRUSTED_ENVELOPE".encode("utf-8")).hexdigest()
-                if self.attestation_signature.lower() == expected_sig.lower():
+                sig_ok, sig_errs = verify_ed25519_signature(
+                    message=computed_digest.encode("utf-8"),
+                    signature_hex=self.attestation_signature,
+                    key_id=self.signing_key_id
+                )
+                if sig_ok:
                     self.trust_anchor_verified = True
                 else:
-                    errors.append("invalid_attestation_signature")
+                    errors.extend(sig_errs)
                     self.trust_anchor_verified = False
 
         elif self.trust_anchor_type == "OPERATOR_ATTESTED":

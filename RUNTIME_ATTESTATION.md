@@ -1,7 +1,7 @@
 # A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
-> **运行时实例 ID**: `run_378983ac`  
-> **认证评估时间**: 2026-08-29 15:29:42  
+> **运行时实例 ID**: `UNTRUSTED_run_378983ac`  
+> **认证评估时间**: 2026-08-29 15:43:22  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 
@@ -20,7 +20,7 @@
 | 7 | **特征与行情缓存指纹校验** | `UNVERIFIED` | ⚠️ ATTENTION / FAIL | 原始血缘保持: False, 版本: 3.0 |
 | 8 | **基准指数时间轴完整性** | `100% COVERED` | ✅ PASS | 缺失日历天数: 0, 数据源: akshare |
 | 9 | **委托订单数量守恒** | `FAILED` | ⚠️ ATTENTION / FAIL | 部分成交: 0, 撤单: 0, 延期: 0 |
-| 10 | **运行时防伪数字信封与配置哈希** | `SIGNED_AND_VERIFIED` | ✅ PASS | 信封校验: True, 配置指纹: 0d050eb1d659e6dd8353bfd3b38a481748ae64831b914b4860ca41c3ed6a3b1b |
+| 10 | **运行时防伪数字信封与配置哈希** | `UNTRUSTED_OR_TAMPERED` | ⚠️ ATTENTION / FAIL | 信封校验: False, 配置指纹: 0d050eb1d659e6dd8353bfd3b38a481748ae64831b914b4860ca41c3ed6a3b1b |
 
 ---
 
@@ -47,6 +47,7 @@
 - `market_data_source_unverified`
 - `order_quantity_conservation_failed`
 - `calendar_not_exchange_official`
+- `invalid_or_missing_ed25519_signature_format_128_hex`
 
 ---
 
