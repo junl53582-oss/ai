@@ -4,9 +4,9 @@
 1. 解析 pytest 生成的真实 JUnit XML 文件，提取测试 nodeid 与执行状态
 2. 解析运行时导出的 runtime_audit.json 与 Manifest 指纹
 3. 输出两份职责清晰的报告：
-   - CAPABILITY_REPORT.md: 代码能力证明 (由单元/集成测试结果推导)
+   - CAPABILITY_REPORT.md: 代码能力证明 (由单元/集成/对抗性测试结果推导)
    - RUNTIME_ATTESTATION.md: 运行时真实性认证 (由本次运行数据、Manifest、配置推导)
-4. 任何未在 XML 中通过或未在运行数据中证明的项目，自动降级为 UNKNOWN / CONTROLLED_WITH_LIMITATIONS
+4. 任何未在 XML 中通过或未在运行数据中证明的项目，自动降级为 UNKNOWN / CONTROLLED_WITH_LIMITATIONS / HIGH_RISK
 """
 import sys
 import os
@@ -21,6 +21,12 @@ from typing import Dict, Any, List, Optional, Set
 if sys.platform.startswith("win"):
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+from backtest.audit import CertificationPolicy, AuditMetadata
 
 
 def parse_junit_xml(xml_path: Path) -> Dict[str, Any]:
@@ -49,36 +55,24 @@ def parse_junit_xml(xml_path: Path) -> Dict[str, Any]:
         failures = int(testsuite.attrib.get("failures", 0))
         errors = int(testsuite.attrib.get("errors", 0))
         skipped = int(testsuite.attrib.get("skipped", 0))
-        passed = max(0, total - failures - errors - skipped)
+        passed = total - failures - errors - skipped
 
-        passed_nodeids: Set[str] = set()
-        all_nodeids: Set[str] = set()
+        passed_nodeids = set()
+        all_nodeids = set()
 
-        for tc in root.iter("testcase"):
-            classname = tc.attrib.get("classname", "")
-            name = tc.attrib.get("name", "")
-            file_attr = tc.attrib.get("file", "")
-
-            if file_attr:
-                nodeid_std = f"{file_attr}::{name}"
-            else:
-                parts = classname.split(".")
-                prefix = "/".join(parts[:-1]) if len(parts) > 1 else classname
-                nodeid_std = f"{prefix}.py::{name}"
-
-            all_nodeids.add(nodeid_std)
+        for testcase in root.iter("testcase"):
+            classname = testcase.attrib.get("classname", "")
+            name = testcase.attrib.get("name", "")
+            file_attr = testcase.attrib.get("file", "")
+            nodeid = f"{file_attr}::{name}" if file_attr else f"{classname}::{name}"
+            all_nodeids.add(nodeid)
             all_nodeids.add(name)
 
-            has_failure = tc.find("failure") is not None or tc.find("error") is not None
-            is_skipped = tc.find("skipped") is not None
-
-            if not has_failure and not is_skipped:
-                passed_nodeids.add(nodeid_std)
+            has_failure = testcase.find("failure") is not None or testcase.find("error") is not None
+            has_skipped = testcase.find("skipped") is not None
+            if not has_failure and not has_skipped:
+                passed_nodeids.add(nodeid)
                 passed_nodeids.add(name)
-                if "/" in nodeid_std:
-                    passed_nodeids.add(nodeid_std.split("/")[-1])
-                if "\\" in nodeid_std:
-                    passed_nodeids.add(nodeid_std.split("\\")[-1])
 
         return {
             "exists": True,
@@ -90,7 +84,7 @@ def parse_junit_xml(xml_path: Path) -> Dict[str, Any]:
             "all_nodeids": all_nodeids
         }
     except Exception as e:
-        print(f"警告: 解析 JUnit XML 异常: {e}")
+        print(f"解析 JUnit XML 异常: {e}")
         return {
             "exists": False,
             "total": 0,
@@ -195,6 +189,38 @@ def generate_capability_report(junit_info: Dict[str, Any], output_path: Path):
             "test_short": "test_certification_policy_truth_table",
             "component": "CertificationPolicy, AuditCollector",
             "desc": "拦截针对 CERTIFICATION_FIELDS 的外部 override，评级严格由 13 项核心要素真值表推导"
+        },
+        {
+            "id": 12,
+            "category": "数据血缘与 Raw Evidence 密码级单字节防篡改 (ProvenanceVerifier)",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_tampered_raw_source_hash_rejected",
+            "test_short": "test_tampered_raw_source_hash_rejected",
+            "component": "ProvenanceVerifier, SourceClass",
+            "desc": "原始证据文件修改 1 字节即判定失败，规范化 Parquet 数据集改 1 个值即判定失败"
+        },
+        {
+            "id": 13,
+            "category": "严禁算法/模拟生成数据伪造生产 PIT (Anti-Synthetic Attack)",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_synthetic_pit_can_never_be_verified",
+            "test_short": "test_synthetic_pit_can_never_be_verified",
+            "component": "ProvenanceVerifier, PointInTimeUniverseProvider",
+            "desc": "标记为 SYNTHETIC 或 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证"
+        },
+        {
+            "id": 14,
+            "category": "Manifest 自我声明布尔值无效与反伪造防御 (Anti-Self-Certification)",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_manifest_claim_true_cannot_self_certify",
+            "test_short": "test_manifest_claim_true_cannot_self_certify",
+            "component": "ProvenanceVerifier, CertificationPolicy",
+            "desc": "Manifest 自行写死 verified=True 无法绕过检查，必须在本地磁盘复核 Raw Evidence 哈希"
+        },
+        {
+            "id": 15,
+            "category": "ST 存在未知行时谎称完全覆盖熔断门禁 (ST Consistency Gate)",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_unknown_st_rows_consistency_gate",
+            "test_short": "test_unknown_st_rows_consistency_gate",
+            "component": "CertificationPolicy",
+            "desc": "只要存在 st_unknown_rows > 0，严格禁止声明 ST 完全覆盖，自动熔断降级"
         }
     ]
 
@@ -217,15 +243,14 @@ def generate_capability_report(junit_info: Dict[str, Any], output_path: Path):
 
     report = f"""# A股量化系统 · 代码静态能力认证报告 (CAPABILITY_REPORT)
 
-> **报告版本**: Release v7.0.0-Attestation  
+> **报告版本**: Release v8.0.0-ProvenanceHarden  
 > **生成时间**: {timestamp}  
-> **能力数据源**: pytest 自动化测试执行产物 (`artifacts/pytest.xml`)  
-> **测试执行概况**: 收集到 **{junit_info['total']}** 个测试用例，通过 **{junit_info['passed']}** 个，失败 **{junit_info['failed']}** 个，跳过 **{junit_info['skipped']}** 个  
-> **认证原则**: 本报告仅证明**代码库具备处理对应场景的静态机制与算法能力**。单测通过不等于本次运行时数据已满足全部生产条件。
+> **测试环境**: Python {sys.version.split()[0]} ({sys.platform})  
+> **数据血缘架构**: 严格分离【代码静态能力证明】与【生产运行时真实性认证】
 
 ---
 
-## 1. 核心能力项与测试证据链映射矩阵
+## 1. 核心量化与数据真实性能力检验矩阵
 
 | 序号 | 代码能力类别 | 静态验证状态 | 证明测试节点 (evidence_test nodeid) | 核心组件 (runtime_component) | 能力实现与证明逻辑 |
 | :--- | :--- | :---: | :--- | :--- | :--- |
@@ -263,71 +288,76 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
             f.write(report)
         return
 
-    reliability = audit_data.get("overall_backtest_reliability", "UNKNOWN")
-    failed_checks = audit_data.get("failed_certification_checks", [])
-    run_id = audit_data.get("runtime_instance_id", "unknown")
+    # 构造 AuditMetadata 实例并调用 CertificationPolicy 动态评估
+    meta = AuditMetadata()
+    for k, v in audit_data.items():
+        if hasattr(meta, k):
+            setattr(meta, k, v)
+
+    reliability, failed_checks = CertificationPolicy.evaluate(meta)
+    run_id = meta.runtime_instance_id
 
     # 10 项运行时要素检查
     runtime_items = [
         {
             "name": "股票池时点覆盖 (PIT Universe)",
-            "val": "COMPLETE" if audit_data.get("universe_coverage_complete") else "INCOMPLETE",
-            "passed": bool(audit_data.get("universe_coverage_complete") and not audit_data.get("survivorship_bias_risk")),
-            "detail": f"模式: {audit_data.get('universe_mode')}, 幸存者风险: {audit_data.get('survivorship_bias_risk')}, 证明源: {audit_data.get('universe_provenance_verified')}"
+            "val": "COMPLETE" if meta.universe_coverage_complete else "INCOMPLETE",
+            "passed": bool(meta.universe_coverage_complete and not meta.survivorship_bias_risk and meta.universe_raw_evidence_verified),
+            "detail": f"模式: {meta.universe_mode}, 来源类别: {meta.universe_source_class}, 原始证据校验: {meta.universe_raw_evidence_verified}, 幸存者风险: {meta.survivorship_bias_risk}"
         },
         {
             "name": "真实数据源 (No Synthetic)",
-            "val": "REAL_DATA" if not audit_data.get("synthetic_data_used") else "SYNTHETIC_DATA",
-            "passed": not bool(audit_data.get("synthetic_data_used")),
-            "detail": f"数据源: {audit_data.get('data_source')}, 分布: {audit_data.get('data_source_breakdown')}"
+            "val": "REAL_DATA" if not meta.synthetic_data_used else "SYNTHETIC_DATA",
+            "passed": not bool(meta.synthetic_data_used),
+            "detail": f"数据源: {meta.data_source}, 分布: {meta.data_source_breakdown}"
         },
         {
             "name": "交易所官方交易日历",
-            "val": "OFFICIAL" if audit_data.get("calendar_is_exchange_official") else "THIRD_PARTY/FALLBACK",
-            "passed": bool(audit_data.get("calendar_is_exchange_official")),
-            "detail": f"日历来源: {audit_data.get('calendar_source')}, 质量评级: {audit_data.get('calendar_quality')}"
+            "val": "OFFICIAL" if meta.calendar_is_exchange_official else "THIRD_PARTY/FALLBACK",
+            "passed": bool(meta.calendar_is_exchange_official),
+            "detail": f"日历来源: {meta.calendar_source}, 质量评级: {meta.calendar_quality}"
         },
         {
             "name": "历史逐日 ST 时间线",
-            "val": "COVERED" if audit_data.get("historical_st_coverage_complete") else "LIMITED_STATIC",
-            "passed": bool(audit_data.get("historical_st_coverage_complete")),
-            "detail": f"标的覆盖: {audit_data.get('historical_st_symbol_coverage_ratio', 0)*100:.1f}%, 偏差风险: {audit_data.get('historical_st_bias_risk')}"
+            "val": "COVERED" if (meta.historical_st_coverage_complete and meta.st_unknown_rows == 0) else "LIMITED_STATIC",
+            "passed": bool(meta.historical_st_coverage_complete and meta.st_unknown_rows == 0),
+            "detail": f"标的覆盖: {meta.historical_st_symbol_coverage_ratio*100:.1f}%, 未知行数: {meta.st_unknown_rows}, 偏差风险: {meta.historical_st_bias_risk}"
         },
         {
             "name": "公司行为除权除息覆盖",
-            "val": "COVERED" if audit_data.get("corporate_action_coverage_complete") else "LIMITED_COVERAGE",
-            "passed": bool(audit_data.get("corporate_action_coverage_complete")),
-            "detail": f"覆盖率: {audit_data.get('corporate_action_coverage_ratio', 0)*100:.1f}%, 数据源: {audit_data.get('corporate_action_source')}"
+            "val": "COVERED" if (meta.corporate_action_coverage_complete and meta.corporate_action_adjustment_available) else "LIMITED_COVERAGE",
+            "passed": bool(meta.corporate_action_coverage_complete and meta.corporate_action_adjustment_available),
+            "detail": f"覆盖率: {meta.corporate_action_coverage_ratio*100:.1f}%, 调整可用: {meta.corporate_action_adjustment_available}, 数据源: {meta.corporate_action_source}"
         },
         {
             "name": "前复权因果安全性 (PIT Safe)",
-            "val": "PIT_SAFE" if audit_data.get("adjustment_point_in_time_safe") else "UNKNOWN_OR_UNVERIFIED",
-            "passed": bool(audit_data.get("adjustment_point_in_time_safe")),
-            "detail": f"复权模式: {audit_data.get('price_adjustment_mode')}"
+            "val": "PIT_SAFE" if meta.adjustment_point_in_time_safe else "UNKNOWN_OR_UNVERIFIED",
+            "passed": bool(meta.adjustment_point_in_time_safe),
+            "detail": f"复权模式: {meta.price_adjustment_mode}"
         },
         {
             "name": "特征与行情缓存指纹校验",
-            "val": "VERIFIED" if audit_data.get("cache_fingerprint_verified") else "UNVERIFIED",
-            "passed": bool(audit_data.get("cache_fingerprint_verified")),
-            "detail": f"原始血缘保持: {audit_data.get('raw_data_provenance_preserved')}, 版本: {audit_data.get('cache_manifest_version')}"
+            "val": "VERIFIED" if meta.cache_fingerprint_verified else "UNVERIFIED",
+            "passed": bool(meta.cache_fingerprint_verified),
+            "detail": f"原始血缘保持: {meta.raw_data_provenance_preserved}, 版本: {meta.cache_manifest_version}"
         },
         {
             "name": "基准指数时间轴完整性",
-            "val": "100% COVERED" if audit_data.get("benchmark_coverage_ratio", 0) >= 1.0 else f"{audit_data.get('benchmark_coverage_ratio', 0)*100:.1f}%",
-            "passed": bool(audit_data.get("benchmark_coverage_ratio", 0) >= 1.0 and audit_data.get("benchmark_missing_date_count", 0) == 0),
-            "detail": f"缺失日历天数: {audit_data.get('benchmark_missing_date_count', 0)}, 数据源: {audit_data.get('benchmark_source')}"
+            "val": "100% COVERED" if meta.benchmark_coverage_ratio >= 1.0 else f"{meta.benchmark_coverage_ratio*100:.1f}%",
+            "passed": bool(meta.benchmark_coverage_ratio >= 1.0 and meta.benchmark_missing_date_count == 0),
+            "detail": f"缺失日历天数: {meta.benchmark_missing_date_count}, 数据源: {meta.benchmark_source}"
         },
         {
             "name": "委托订单数量守恒",
-            "val": "CONSERVED" if audit_data.get("order_quantity_conservation_passed") else "FAILED",
-            "passed": bool(audit_data.get("order_quantity_conservation_passed")),
-            "detail": f"部分成交: {audit_data.get('partial_fill_count')}, 撤单: {audit_data.get('cancelled_order_count')}, 延期: {audit_data.get('deferred_order_count')}"
+            "val": "CONSERVED" if meta.order_quantity_conservation_passed else "FAILED",
+            "passed": bool(meta.order_quantity_conservation_passed),
+            "detail": f"部分成交: {meta.partial_fill_count}, 撤单: {meta.cancelled_order_count}, 延期: {meta.deferred_order_count}"
         },
         {
             "name": "逐日截面行业中性化",
-            "val": audit_data.get("industry_neutralization_enabled", "DISABLED"),
-            "passed": audit_data.get("industry_neutralization_enabled") in ["FULL", "PARTIAL"],
-            "detail": f"中性化天数比例: {audit_data.get('industry_neutralized_day_ratio', 0)*100:.1f}%, 均值覆盖率: {audit_data.get('industry_coverage_ratio_mean', 0)*100:.1f}%"
+            "val": meta.industry_neutralization_enabled,
+            "passed": meta.industry_neutralization_enabled in ["FULL", "PARTIAL"],
+            "detail": f"中性化天数比例: {(meta.industry_neutralized_day_ratio or 0)*100:.1f}%, 均值覆盖率: {(meta.industry_coverage_ratio_mean or 0)*100:.1f}%"
         }
     ]
 
@@ -361,17 +391,22 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
 
 ---
 
-## 2. 门禁诊断与可信度结论
+## 2. 门禁评估与缺失证据诊断
 
 {failed_desc}
 
 ---
 
-## 3. 评级使用与投产指导
+## 3. 评级定义与解释说明
 
-- **`VERIFIED`**: 本次回测所用数据为真实官方数据、日历经过交易所认证、股票池具备完整时点无幸存者偏差、前复权安全且订单完全守恒，回测收益与胜率可作为真实投资决策依据。
-- **`CONTROLLED_WITH_LIMITATIONS`**: 本次回测在受控环境下完成，但存在明确局限（如使用了离线静态股票池或第三方交易日历），收益率仅供策略研发对比参考。
-- **`HIGH_RISK`**: 本次回测存在重大偏差风险（如仿真数据、未来信息泄露或状态不守恒），严禁用于实盘投资参考。
+- **`VERIFIED` (最高真实性等级)**: 
+  - 必须具备完整的官方/持牌 Raw Evidence 原始证据与 SHA256 密码级哈希链；
+  - 必须 100% 通过无未来函数、订单数量守恒与交易所官方日历校验；
+  - 幸存者偏差完全清零。
+- **`CONTROLLED_WITH_LIMITATIONS` (受限受控等级)**: 
+  - 代码具备完整量化与风控逻辑，但运行时使用了部分第三方公开接口或静态成分股子集。
+- **`HIGH_RISK` (高风险提示)**: 
+  - 缺少可信的 PIT 原始证据或存在幸存者偏差风险。系统严格遵循科学诚信，绝不粉饰。
 """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
@@ -379,33 +414,23 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
     print(f"成功生成运行时认证报告: {output_path}")
 
 
-def main():
-    parser = argparse.ArgumentParser(description="生成量化系统代码能力与运行时认证双报告")
-    parser.add_argument("--pytest-xml", type=str, default="artifacts/pytest.xml", help="pytest JUnit XML 路径")
-    parser.add_argument("--audit-json", type=str, default="artifacts/runtime_audit.json", help="运行时 Audit JSON 路径")
-    parser.add_argument("--capability-out", type=str, default="CAPABILITY_REPORT.md", help="能力报告输出路径")
-    parser.add_argument("--attestation-out", type=str, default="RUNTIME_ATTESTATION.md", help="运行时认证输出路径")
-    parser.add_argument("--master-out", type=str, default="MASTER_REPORT.md", help="总览报告输出路径")
-    args = parser.parse_args()
+def generate_master_report(junit_info: Dict[str, Any], audit_data: Optional[Dict[str, Any]], output_path: Path):
+    """生成总览报告 MASTER_REPORT.md"""
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    xml_path = Path(args.pytest_xml)
-    audit_path = Path(args.audit_json)
+    meta = AuditMetadata()
+    if audit_data:
+        for k, v in audit_data.items():
+            if hasattr(meta, k):
+                setattr(meta, k, v)
+    reliability, _ = CertificationPolicy.evaluate(meta)
 
-    junit_info = parse_junit_xml(xml_path)
-    audit_data = None
-    if audit_path.exists():
-        try:
-            with open(audit_path, "r", encoding="utf-8") as f:
-                audit_data = json.load(f)
-        except Exception as e:
-            print(f"警告: 读取 audit_json 失败: {e}")
+    total_tests = junit_info.get("total", 0)
+    passed_tests = junit_info.get("passed", 0)
 
-    generate_capability_report(junit_info, Path(args.capability_out))
-    generate_runtime_attestation(audit_data, Path(args.attestation_out))
+    report = f"""# A股多因子量化选股与实盘级回测系统 · 终极认证与能力总览 (Release v8.0.0)
 
-    master_content = f"""# A股多因子量化选股与实盘级回测系统 · 终极认证与能力总览 (Release v7.0.0)
-
-> **生成时间**: {datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")}  
+> **生成时间**: {timestamp}  
 > **架构设计**: 严格分离【代码静态能力证明】与【生产运行时真实性认证】
 
 本系统采用双报告认证体系：
@@ -413,19 +438,46 @@ def main():
 1. 📖 **[CAPABILITY_REPORT.md](./CAPABILITY_REPORT.md)**
    - **核心职责**: 回答“代码具备什么能力”。
    - **证据来源**: 基于全量自动化测试套件 (`artifacts/pytest.xml`) 动态推导。
-   - **当前状态**: 已收集 **{junit_info['total']}** 个测试用例，通过 **{junit_info['passed']}** 个。
+   - **当前状态**: 已收集 **{total_tests}** 个测试用例，通过 **{passed_tests}** 个。
 
 2. 🛡️ **[RUNTIME_ATTESTATION.md](./RUNTIME_ATTESTATION.md)**
    - **核心职责**: 回答“本次具体回测实际上证明了什么”。
    - **证据来源**: 基于本次回测运行的 AuditMetadata (`artifacts/runtime_audit.json`)、Manifest 链式指纹与数据血缘推导。
-   - **当前评级**: **`{audit_data.get('overall_backtest_reliability', 'NOT_RUN') if audit_data else 'PENDING_EXECUTION'}`**
+   - **当前评级**: **`{reliability}`**
 
 ---
-*注：任何 VERIFIED 认证必须来自真实运行产物，严禁任何硬编码结论。*
+*注：任何 VERIFIED 认证必须来自真实运行产物与 Raw Evidence，严禁任何自我声明与硬编码结论。*
 """
-    with open(args.master_out, "w", encoding="utf-8") as f:
-        f.write(master_content)
-    print(f"成功生成总览报告: {args.master_out}")
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "w", encoding="utf-8") as f:
+        f.write(report)
+    print(f"成功生成总览报告: {output_path}")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="生成量化系统双认证报告")
+    parser.add_argument("--xml", type=str, default="artifacts/pytest.xml", help="JUnit XML 路径")
+    parser.add_argument("--audit", type=str, default="artifacts/runtime_audit.json", help="Audit JSON 路径")
+    parser.add_argument("--output-dir", type=str, default=".", help="输出根目录")
+    args = parser.parse_args()
+
+    root = Path(args.output_dir)
+    xml_path = Path(args.xml)
+    audit_path = Path(args.audit)
+
+    junit_info = parse_junit_xml(xml_path)
+
+    audit_data = None
+    if audit_path.exists():
+        try:
+            with open(audit_path, "r", encoding="utf-8") as f:
+                audit_data = json.load(f)
+        except Exception as e:
+            print(f"读取 Audit JSON 失败: {e}")
+
+    generate_capability_report(junit_info, root / "CAPABILITY_REPORT.md")
+    generate_runtime_attestation(audit_data, root / "RUNTIME_ATTESTATION.md")
+    generate_master_report(junit_info, audit_data, root / "MASTER_REPORT.md")
 
 
 if __name__ == "__main__":

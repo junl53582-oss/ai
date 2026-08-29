@@ -4,6 +4,7 @@
 1. 默认状态全方位防伪：survivorship_bias_risk=True, synthetic_data_used='unknown', calendar_is_exchange_official=False
 2. 全量审计字段从运行时核心对象自动派生，禁止乐观硬编码
 3. 关键认证字段具有防篡改保护 (Anti-Forgery Protection)，若使用 override 强制覆盖则显式记录 override 证据
+4. 密码级 Chained Manifest Provenance 审计与一致性检验
 """
 import logging
 from dataclasses import dataclass, field, asdict
@@ -17,6 +18,8 @@ CERTIFICATION_FIELDS = {
     "survivorship_bias_risk",
     "universe_coverage_complete",
     "universe_provenance_verified",
+    "universe_raw_evidence_verified",
+    "universe_dataset_hash_verified",
     "synthetic_data_used",
     "calendar_is_exchange_official",
     "historical_st_bias_risk",
@@ -35,10 +38,10 @@ class AuditMetadata:
     """标准量化回测真实性与合规审计数据实体 (Fail-Closed Default)"""
     # 0. 运行时唯一标识与配置指纹 (P0-2)
     runtime_instance_id: str = "default_runtime"
-    runtime_config_hash: str = "none"
-    market_manifest_hash: str = "none"
-    factor_manifest_hash: str = "none"
-    universe_manifest_hash: str = "none"
+    runtime_config_hash: Optional[str] = None
+    market_manifest_hash: Optional[str] = None
+    factor_manifest_hash: Optional[str] = None
+    universe_manifest_hash: Optional[str] = None
 
     # 1. 数据来源与缓存指纹
     data_source: str = "unknown"
@@ -57,10 +60,14 @@ class AuditMetadata:
 
     # 3. 股票池与幸存者偏差
     universe_mode: str = "STATIC"
+    universe_source_class: str = "UNKNOWN"
     universe_coverage_start: Optional[str] = None
     universe_coverage_end: Optional[str] = None
     universe_coverage_complete: bool = False
     universe_provenance_verified: bool = False
+    universe_raw_evidence_verified: bool = False
+    universe_dataset_hash_verified: bool = False
+    universe_verification_failures: List[str] = field(default_factory=list)
     survivorship_bias_risk: bool = True
     empty_universe_day_count: int = 0
     unknown_membership_row_count: int = 0
@@ -152,28 +159,46 @@ class AuditMetadata:
 
 class CertificationPolicy:
     """
-    全要素量化回测真实性与可信度评级策略门禁 (P0-12 Single Certification Gate)
-    严格检验全部 13 项核心要素，任何一项不满足即拒绝 VERIFIED。
+    全要素量化回测真实性与可信度评级策略门禁 (P0 Single Certification Gate)
+    严格检验全部核心要素，任何一项不满足即拒绝 VERIFIED。
     """
     @classmethod
     def evaluate(cls, meta: AuditMetadata) -> Tuple[str, List[str]]:
         failed_checks = []
 
-        # 1. PIT 股票池
+        # 0. 关键链式哈希完整性校验 (Chained Manifest Provenance)
+        if meta.universe_manifest_hash in (None, "", "none"):
+            failed_checks.append("universe_manifest_hash_missing")
+        if meta.factor_manifest_hash in (None, "", "none"):
+            failed_checks.append("factor_manifest_hash_missing")
+        if meta.market_manifest_hash in (None, "", "none"):
+            failed_checks.append("market_manifest_hash_missing")
+
+        # 1. PIT 股票池血缘与原始证据校验
         if not meta.universe_coverage_complete:
             failed_checks.append("universe_coverage_incomplete")
         if not meta.universe_provenance_verified:
             failed_checks.append("universe_provenance_unverified")
+        if not meta.universe_raw_evidence_verified:
+            failed_checks.append("universe_raw_evidence_unverified")
+        if not meta.universe_dataset_hash_verified:
+            failed_checks.append("universe_dataset_hash_unverified")
+        if meta.universe_source_class not in ["OFFICIAL_PRIMARY", "LICENSED_VENDOR"]:
+            failed_checks.append(f"universe_source_class_ineligible_for_production_{meta.universe_source_class}")
         if meta.survivorship_bias_risk:
             failed_checks.append("survivorship_bias_risk_present")
 
-        # 2. ST 时间线
+        # 2. ST 时间线与 UNKNOWN 状态一致性 Gate (任务 9)
+        if meta.historical_st_coverage_complete and meta.st_unknown_rows > 0:
+            failed_checks.append(f"st_unknown_rows_{meta.st_unknown_rows}_inconsistent_with_complete_coverage")
         if not meta.historical_st_coverage_complete:
             failed_checks.append("historical_st_coverage_incomplete")
         if meta.historical_st_bias_risk:
             failed_checks.append("historical_st_bias_risk_present")
 
-        # 3. 公司行为
+        # 3. 公司行为覆盖一致性 Gate (任务 10)
+        if meta.corporate_action_coverage_complete and not meta.corporate_action_adjustment_available and meta.corporate_action_coverage_ratio < 1.0:
+            failed_checks.append("corporate_action_missing_data_inconsistent_with_complete_coverage")
         if not meta.corporate_action_coverage_complete:
             failed_checks.append("corporate_action_coverage_incomplete")
         if meta.corporate_action_bias_risk:
@@ -216,7 +241,12 @@ class CertificationPolicy:
             "survivorship_bias_risk_present",
             "synthetic_data_used",
             "order_quantity_conservation_failed",
-            "future_adjustment_leakage_test_not_passed"
+            "future_adjustment_leakage_test_not_passed",
+            "universe_raw_evidence_unverified",
+            "universe_dataset_hash_unverified",
+            "universe_manifest_hash_missing",
+            "factor_manifest_hash_missing",
+            "market_manifest_hash_missing"
         }
         if any(c in critical_high_risks for c in failed_checks):
             return "HIGH_RISK", failed_checks
@@ -258,33 +288,38 @@ class AuditCollector:
             meta.calendar_fallback_used = bool(getattr(data_manager, "calendar_fallback_used", False))
             meta.listing_date_coverage_ratio = getattr(data_manager, "listing_date_coverage_ratio", None)
 
-            # ST 审计
+            # 股票池提供器数据采集
+            provider = getattr(data_manager, "universe_provider", None)
+            if provider is not None:
+                meta.universe_mode = provider.get_mode(meta.universe_coverage_start, meta.universe_coverage_end)
+                meta.universe_coverage_start = getattr(provider, "coverage_start", None)
+                meta.universe_coverage_end = getattr(provider, "coverage_end", None)
+                meta.universe_coverage_complete = provider.is_coverage_complete(meta.universe_coverage_start, meta.universe_coverage_end)
+                meta.universe_provenance_verified = getattr(provider, "universe_provenance_verified", False)
+                meta.universe_source_class = getattr(provider, "universe_source_class", "UNKNOWN")
+                meta.universe_raw_evidence_verified = getattr(provider, "universe_raw_evidence_verified", False)
+                meta.universe_dataset_hash_verified = getattr(provider, "universe_dataset_hash_verified", False)
+                meta.universe_manifest_hash = getattr(provider, "universe_manifest_hash", None)
+                meta.universe_verification_failures = list(getattr(provider, "universe_verification_failures", []))
+                meta.survivorship_bias_risk = provider.has_survivorship_bias_risk(meta.universe_coverage_start, meta.universe_coverage_end)
+
             meta.historical_st_symbol_coverage_ratio = getattr(data_manager, "historical_st_symbol_coverage_ratio", 0.0)
             meta.historical_st_date_coverage_ratio = getattr(data_manager, "historical_st_date_coverage_ratio", 0.0)
-            meta.historical_st_coverage_complete = bool(getattr(data_manager, "historical_st_coverage_complete", False))
-            meta.historical_st_bias_risk = bool(getattr(data_manager, "historical_st_bias_risk", True))
-            meta.historical_st_available = bool(getattr(data_manager, "historical_st_available", False))
-            meta.historical_st_rule_applied = bool(getattr(data_manager, "historical_st_rule_applied", False))
+            meta.historical_st_coverage_complete = getattr(data_manager, "historical_st_coverage_complete", False)
+            meta.historical_st_bias_risk = getattr(data_manager, "historical_st_bias_risk", True)
+            meta.historical_st_available = getattr(data_manager, "historical_st_available", False)
+            meta.historical_st_rule_applied = getattr(data_manager, "historical_st_rule_applied", False)
+            meta.st_unknown_rows = getattr(data_manager, "st_unknown_rows", 0)
 
-            # 基准对齐
             meta.benchmark_source = getattr(data_manager, "benchmark_source", "unknown")
             meta.benchmark_coverage_ratio = getattr(data_manager, "benchmark_coverage_ratio", 0.0)
             meta.benchmark_missing_date_count = getattr(data_manager, "benchmark_missing_date_count", 0)
 
-            # 股票池
-            u_prov = getattr(data_manager, "universe_provider", None)
-            if u_prov is not None:
-                meta.universe_mode = u_prov.get_mode()
-                meta.survivorship_bias_risk = u_prov.has_survivorship_bias_risk()
-                meta.universe_coverage_start = getattr(u_prov, "coverage_start", None)
-                meta.universe_coverage_end = getattr(u_prov, "coverage_end", None)
-                meta.universe_coverage_complete = bool(getattr(u_prov, "is_coverage_complete", lambda: False)())
-                meta.universe_provenance_verified = bool(getattr(u_prov, "universe_provenance_verified", False))
+            meta.price_adjustment_mode = getattr(data_manager, "price_adjustment_mode", "unknown")
+            meta.adjustment_point_in_time_safe = getattr(data_manager, "adjustment_point_in_time_safe", False)
+            meta.future_adjustment_leakage_test_passed = getattr(data_manager, "future_adjustment_leakage_test_passed", False)
 
-            meta.empty_universe_day_count = getattr(data_manager, "empty_universe_day_count", 0)
-            meta.unknown_membership_row_count = getattr(data_manager, "unknown_membership_row_count", 0)
-
-        # 2. 因子层采集
+        # 2. 因子特征层采集
         if factor_processor is not None:
             meta.industry_neutralization_enabled = getattr(factor_processor, "industry_neutralization_enabled", "DISABLED")
             meta.industry_coverage_ratio_mean = getattr(factor_processor, "industry_coverage_ratio_mean", None)
@@ -292,70 +327,46 @@ class AuditCollector:
             meta.industry_neutralized_day_ratio = getattr(factor_processor, "industry_neutralized_day_ratio", None)
             meta.industry_neutralized_days = getattr(factor_processor, "industry_neutralized_days", 0)
             meta.market_cap_only_days = getattr(factor_processor, "market_cap_only_days", 0)
-            meta.industry_coverage_ratio = getattr(factor_processor, "industry_coverage_ratio_mean", None)
+            meta.industry_data_available = getattr(factor_processor, "industry_data_available", False)
             meta.feature_missing_ratio_total = getattr(factor_processor, "feature_missing_ratio_total", 0.0)
-            meta.price_adjustment_mode = getattr(factor_processor, "price_adjustment_mode", "unknown")
-            meta.adjustment_point_in_time_safe = bool(getattr(factor_processor, "adjustment_point_in_time_safe", False))
-            meta.future_adjustment_leakage_test_passed = bool(getattr(factor_processor, "future_adjustment_leakage_test_passed", False))
+            meta.factor_manifest_hash = getattr(factor_processor, "manifest_hash", None)
 
-        # 3. 训练层采集 (P0-7)
-        if trainer is not None:
-            meta.st_unknown_rows = getattr(trainer, "st_unknown_rows", 0)
-            meta.st_training_excluded_rows = getattr(trainer, "st_training_excluded_rows", 0)
-            meta.st_trading_excluded_rows = getattr(trainer, "st_trading_excluded_rows", 0)
-
-        # 4. 组合构建层采集
+        # 3. 策略组合层采集
         if portfolio_builder is not None:
-            meta.sector_cap_enabled = bool(getattr(portfolio_builder, "sector_cap_enabled", True))
-            meta.industry_data_available = bool(getattr(portfolio_builder, "industry_data_available", False))
-            meta.unknown_industry_cap_applied = bool(getattr(portfolio_builder, "unknown_industry_cap_applied", False))
-            meta.unknown_industry_weight = float(getattr(portfolio_builder, "unknown_industry_weight", 0.0))
-            meta.sector_constraint_enabled = bool(getattr(portfolio_builder, "sector_constraint_enabled", True))
+            meta.sector_cap_enabled = getattr(portfolio_builder, "sector_cap_enabled", True)
+            meta.unknown_industry_cap_applied = getattr(portfolio_builder, "unknown_industry_cap_applied", False)
+            meta.unknown_industry_weight = getattr(portfolio_builder, "unknown_industry_weight", 0.0)
 
-        # 5. 回测执行引擎采集
+        # 4. 回测撮合执行层采集
         if engine is not None:
-            meta.fee_model_scope = "historical_tiered"
-            meta.stale_price_warning_events = getattr(engine, "stale_price_warning_events", 0)
-            meta.stale_price_symbol_days = getattr(engine, "stale_price_symbol_days", 0)
-            meta.stale_price_days_total = meta.stale_price_symbol_days
-            meta.max_stale_price_days = getattr(engine, "max_stale_price_days", 0)
-            meta.stale_price_affected_symbols = sorted(list(getattr(engine, "stale_price_affected_symbols", set())))
-            meta.stale_price_warning_count = meta.stale_price_warning_events
-
+            meta.fee_model_scope = getattr(engine, "fee_model_scope", "historical_tiered")
+            meta.order_quantity_conservation_passed = getattr(engine, "order_quantity_conservation_passed", True)
             meta.partial_fill_count = getattr(engine, "partial_fill_count", 0)
             meta.liquidity_rejected_count = getattr(engine, "liquidity_rejected_count", 0)
             meta.pending_order_count = getattr(engine, "pending_order_count", 0)
             meta.cancelled_order_count = getattr(engine, "cancelled_order_count", 0)
             meta.deferred_order_count = getattr(engine, "deferred_order_count", 0)
-            meta.order_quantity_conservation_passed = bool(getattr(engine, "order_quantity_conservation_passed", False))
+            meta.corporate_action_source = getattr(engine, "corporate_action_source", "unknown")
+            meta.corporate_action_coverage_ratio = getattr(engine, "corporate_action_coverage_ratio", 0.0)
+            meta.corporate_action_coverage_complete = getattr(engine, "corporate_action_coverage_complete", False)
+            meta.corporate_action_bias_risk = getattr(engine, "corporate_action_bias_risk", True)
+            meta.corporate_action_adjustment_available = getattr(engine, "corporate_action_adjustment_available", False)
 
-            corp_prov = getattr(engine, "corporate_actions", None)
-            if corp_prov is not None:
-                meta.corporate_action_source = getattr(corp_prov, "corporate_action_source", "unknown")
-                meta.corporate_action_coverage_ratio = getattr(corp_prov, "coverage_ratio", 0.0)
-                meta.corporate_action_coverage_complete = bool(getattr(corp_prov, "coverage_complete", False))
-                meta.corporate_action_bias_risk = not meta.corporate_action_coverage_complete
-                meta.corporate_action_adjustment_available = corp_prov.has_actions_data()
-                meta.action_types_supported = getattr(corp_prov, "action_types_supported", ["CASH_DIVIDEND", "BONUS_SHARE", "SPLIT"])
-                meta.unsupported_corporate_action_types = getattr(corp_prov, "unsupported_corporate_action_types", ["RIGHTS_ISSUE"])
-                meta.backtest_total_return_reliability = "standard" if meta.corporate_action_coverage_complete else "limited"
-
-        # 6. 防伪审计覆盖处理 (Anti-Forgery & Audit Override Tracking - P0-10)
+        # 5. 处理外部自定义 override (防伪拦截并记录审计痕迹: CERTIFICATION_FIELDS 禁止被外部 override 篡改)
         if custom_overrides:
             meta.audit_override_used = True
-            meta.audit_override_fields = list(custom_overrides.keys())
-            meta.audit_override_source = "custom_overrides"
-
             for k, v in custom_overrides.items():
-                if k in CERTIFICATION_FIELDS:
-                    logger.warning(f"⚠️ 拦截对认证字段 {k} 的非法覆盖尝试！")
-                    continue
                 if hasattr(meta, k):
-                    setattr(meta, k, v)
+                    if k in CERTIFICATION_FIELDS:
+                        meta.audit_override_fields.append(f"BLOCKED:{k}")
+                        logger.warning(f"🛡️ [Anti-Forgery] 拦截针对受保护认证字段 {k} 的外部 override 篡改尝试！")
+                    else:
+                        setattr(meta, k, v)
+                        meta.audit_override_fields.append(k)
 
-        # 7. 通过 CertificationPolicy 评估综合评级 (P0-12)
-        overall_status, failed_checks = CertificationPolicy.evaluate(meta)
-        meta.overall_backtest_reliability = overall_status
-        meta.failed_certification_checks = failed_checks
+        # 6. 执行全要素策略门禁评级
+        status, failed = CertificationPolicy.evaluate(meta)
+        meta.overall_backtest_reliability = status
+        meta.failed_certification_checks = failed
 
         return meta

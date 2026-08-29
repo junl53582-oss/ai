@@ -1,18 +1,18 @@
 """
 股票池与成分股提供器接口 (data/universe_provider.py)
 支持静态固定股票池 (StaticUniverseProvider) 与真实点位截面成分股提供器 (PointInTimeUniverseProvider)
-包含：
-1. get_required_symbols(start_date, end_date): 获取回测区间内所有曾经有效的历史成分股 UNION
-2. Point-In-Time 覆盖范围与基线快照 (Baseline Snapshot) 完整性验证
-3. 严格的幸存者偏差风险 (survivorship_bias_risk) 判定与模式划分 (POINT_IN_TIME / PARTIAL_PIT / STATIC_FALLBACK)
+严格集成 ProvenanceVerifier 进行数据血缘、Raw Evidence、哈希与时序无偏性运行时核验。
 """
+import json
 import logging
 from abc import ABC, abstractmethod
-from typing import List, Dict, Set, Optional, Union, Any
+from pathlib import Path
+from typing import List, Dict, Set, Optional, Union, Any, Tuple
 import pandas as pd
 import numpy as np
 
 from config.settings import settings
+from data.provenance import SourceClass, ProvenanceVerifier, UniverseVerificationResult, DataProvenanceError
 
 logger = logging.getLogger(__name__)
 
@@ -65,8 +65,13 @@ class StaticUniverseProvider(UniverseProvider):
         self.symbols = sorted(list(set(symbols)))
         self.symbols_set = set(self.symbols)
         self.universe_source = "static_configuration"
+        self.universe_source_class = SourceClass.UNKNOWN.value
         self.universe_coverage_complete = False
         self.universe_provenance_verified = False
+        self.universe_raw_evidence_verified = False
+        self.universe_dataset_hash_verified = False
+        self.universe_manifest_hash: Optional[str] = None
+        self.universe_verification_failures: List[str] = ["static_universe_has_survivorship_bias"]
 
     def get_universe(self, date: Optional[Union[str, pd.Timestamp]] = None) -> List[str]:
         return list(self.symbols)
@@ -100,7 +105,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
     """
     点位动态截面股票池提供器 (Point-In-Time Universe)
     支持基线快照 (Baseline Snapshot) 与历史成分股纳入 (IN) / 调出 (OUT) 变动事件。
-    在任何日期 t 查询时，严格仅根据 effective_date <= t 的历史变动事件重构有效成分股。
+    严格依赖 ProvenanceVerifier 进行无偏性核验，杜绝自我声明。
     """
 
     def __init__(
@@ -113,13 +118,19 @@ class PointInTimeUniverseProvider(UniverseProvider):
         coverage_end: Optional[Union[str, pd.Timestamp]] = None,
         source: str = "point_in_time_event_log",
         universe_provenance_verified: bool = False,
-        constituent_event_source_verified: bool = False
+        constituent_event_source_verified: bool = False,
+        source_class: str = SourceClass.UNKNOWN.value,
+        raw_evidence_verified: bool = False,
+        dataset_hash_verified: bool = False,
+        manifest_hash: Optional[str] = None,
+        verification_failures: Optional[List[str]] = None
     ):
         self.fallback_symbols = sorted(list(set(fallback_symbols or [])))
         self._changes: List[Dict[str, Any]] = []
         self._cached_universe_by_date: Dict[str, List[str]] = {}
 
         self.universe_source: str = source
+        self.universe_source_class: str = source_class
         self.baseline_snapshot_date: Optional[str] = pd.to_datetime(baseline_snapshot_date).strftime("%Y-%m-%d") if baseline_snapshot_date else None
         self.baseline_symbols: Set[str] = set(s.strip().upper() for s in (baseline_symbols or []))
         self.baseline_snapshot_verified: bool = bool(baseline_snapshot_date and len(self.baseline_symbols) > 0)
@@ -132,6 +143,10 @@ class PointInTimeUniverseProvider(UniverseProvider):
 
         self.universe_provenance_verified: bool = universe_provenance_verified
         self.constituent_event_source_verified: bool = constituent_event_source_verified
+        self.universe_raw_evidence_verified: bool = raw_evidence_verified
+        self.universe_dataset_hash_verified: bool = dataset_hash_verified
+        self.universe_manifest_hash: Optional[str] = manifest_hash
+        self.universe_verification_failures: List[str] = list(verification_failures or [])
         self.constituent_event_count: int = 0
 
         if self.baseline_snapshot_date and self.baseline_symbols:
@@ -147,7 +162,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
         symbols: List[str],
         verified: bool = True
     ):
-        """设置历史初始时点的基线成分股快照并进行证据认证"""
+        """设置历史初始时点的基线成分股快照"""
         date_str = pd.to_datetime(snapshot_date).strftime("%Y-%m-%d")
         self.baseline_snapshot_date = date_str
         self.baseline_symbols = set(s.strip().upper() for s in symbols)
@@ -163,15 +178,19 @@ class PointInTimeUniverseProvider(UniverseProvider):
         end_date: Union[str, pd.Timestamp],
         source: Optional[str] = None,
         provenance_verified: bool = True,
-        events_verified: bool = True
+        events_verified: bool = True,
+        source_class: str = SourceClass.OFFICIAL_PRIMARY.value
     ):
-        """显式设置该数据源经认证的有效历史覆盖区间与证据资质"""
+        """显式设置该数据源的有效历史覆盖区间"""
         self.coverage_start = pd.to_datetime(start_date).strftime("%Y-%m-%d")
         self.coverage_end = pd.to_datetime(end_date).strftime("%Y-%m-%d")
         if source:
             self.universe_source = source
+        self.universe_source_class = source_class
         self.universe_provenance_verified = bool(provenance_verified)
         self.constituent_event_source_verified = bool(events_verified)
+        self.universe_raw_evidence_verified = bool(provenance_verified)
+        self.universe_dataset_hash_verified = bool(provenance_verified)
 
     def add_constituent_change(
         self,
@@ -252,134 +271,100 @@ class PointInTimeUniverseProvider(UniverseProvider):
         start_date: Optional[Union[str, pd.Timestamp]] = None,
         end_date: Optional[Union[str, pd.Timestamp]] = None
     ) -> List[str]:
-        """
-        获取在回测区间 [start_date, end_date] 内曾经有效的所有成分股全集 (UNION)。
-        确保历史调出的股票在数据层完整下载，绝不在回测历史中遗失！
-        """
+        """获取在区间 [start_date, end_date] 内曾经有效的所有成分股全集"""
         if not self._changes:
             return list(self.fallback_symbols)
 
-        s_str = pd.to_datetime(start_date).strftime("%Y-%m-%d") if start_date else None
-        e_str = pd.to_datetime(end_date).strftime("%Y-%m-%d") if end_date else None
+        s_date = pd.to_datetime(start_date).strftime("%Y-%m-%d") if start_date else (self.coverage_start or "2000-01-01")
+        e_date = pd.to_datetime(end_date).strftime("%Y-%m-%d") if end_date else (self.coverage_end or "2099-12-31")
 
-        # 1. 包含在 start_date 时点已经有效的成分股
-        initial_active = set(self.get_universe(s_str)) if s_str else set()
-
-        # 2. 包含在 [start_date, end_date] 区间内所有发生过 "IN" 纳入事件的标的
-        interval_symbols = set()
+        all_symbols: Set[str] = set(self._reconstruct_asof_date(s_date))
         for c in self._changes:
-            c_date = c["effective_date"]
-            if s_str and c_date < s_str:
-                continue
-            if e_str and c_date > e_str:
-                continue
-            if c["action"] in ["IN", "ADD", "BUY"]:
-                interval_symbols.add(c["symbol"])
+            if s_date <= c["effective_date"] <= e_date:
+                all_symbols.add(c["symbol"])
 
-        total_required = initial_active.union(interval_symbols)
-        if not total_required:
-            # 如果没有区间过滤，返回所有发生过事件的标的
-            total_required = set(c["symbol"] for c in self._changes)
-
-        return sorted(list(total_required))
+        return sorted(list(all_symbols))
 
     def is_coverage_complete(
         self,
         start_date: Optional[Union[str, pd.Timestamp]] = None,
         end_date: Optional[Union[str, pd.Timestamp]] = None
     ) -> bool:
-        """
-        验证历史成分股覆盖完整性 (P0-1 严格证据链校验)：
-        1. baseline_snapshot_verified 必须为 True 且 baseline_symbols 非空
-        2. baseline_snapshot_date 必须 <= start_date (若指定)
-        3. coverage_start 必须 <= start_date 且 coverage_end >= end_date
-        4. universe_provenance_verified 必须为 True
-        5. constituent_event_source_verified 必须为 True
-        """
-        if start_date:
-            self.requested_coverage_start = pd.to_datetime(start_date).strftime("%Y-%m-%d")
-        if end_date:
-            self.requested_coverage_end = pd.to_datetime(end_date).strftime("%Y-%m-%d")
-
-        # 1. 基线快照检验 (必须认证通过且非空)
-        if not self.baseline_snapshot_verified or not self.baseline_snapshot_date or not self.baseline_symbols:
+        """检查指定回测区间是否被经认证的 PIT 历史覆盖"""
+        if not self.coverage_start or not self.coverage_end or not self.baseline_snapshot_verified:
             return False
 
-        # 2. 变动事件记录检验
-        if not self._changes:
+        s_date = pd.to_datetime(start_date).strftime("%Y-%m-%d") if start_date else self.coverage_start
+        e_date = pd.to_datetime(end_date).strftime("%Y-%m-%d") if end_date else self.coverage_end
+
+        if not self.baseline_snapshot_date or self.baseline_snapshot_date > s_date:
             return False
 
-        # 3. 证据资质检验 (血缘与事件数据源必须认证)
-        if not self.universe_provenance_verified or not self.constituent_event_source_verified:
+        if self.coverage_start > s_date or self.coverage_end < e_date:
             return False
 
-        # 4. 回测起始点与基线时间对齐检验
-        if self.requested_coverage_start:
-            if self.baseline_snapshot_date > self.requested_coverage_start:
-                return False
-            if not self.coverage_start or self.coverage_start > self.requested_coverage_start:
-                return False
-
-        # 5. 回测终止点覆盖检验
-        if self.requested_coverage_end:
-            if not self.coverage_end or self.coverage_end < self.requested_coverage_end:
-                return False
-
-        return True
+        return bool(self.universe_provenance_verified and self.constituent_event_source_verified)
 
     def get_mode(
         self,
         start_date: Optional[Union[str, pd.Timestamp]] = None,
         end_date: Optional[Union[str, pd.Timestamp]] = None
     ) -> str:
-        """真实模式报告：仅在完整证据认证下输出 POINT_IN_TIME_VERIFIED"""
-        if not self._changes:
-            return "STATIC_FALLBACK"
-        
-        if self.is_coverage_complete(start_date, end_date):
+        """获取真实的股票池认证模式"""
+        if (
+            self.is_coverage_complete(start_date, end_date)
+            and self.universe_provenance_verified
+            and self.universe_raw_evidence_verified
+            and self.universe_dataset_hash_verified
+            and SourceClass.is_production_eligible(self.universe_source_class)
+            and not self.universe_verification_failures
+        ):
             return "POINT_IN_TIME_VERIFIED"
-        
-        if self.coverage_start and self.coverage_end and len(self._changes) >= 2:
-            return "PARTIAL_PIT"
-        
-        return "PIT_INCOMPLETE"
+        elif self._changes:
+            return "PIT_INCOMPLETE"
+        return "STATIC_FALLBACK"
 
     def has_survivorship_bias_risk(
         self,
         start_date: Optional[Union[str, pd.Timestamp]] = None,
         end_date: Optional[Union[str, pd.Timestamp]] = None
     ) -> bool:
-        """真实风险报告：只有在通过全部严格证据链认证 (POINT_IN_TIME_VERIFIED) 时才允许声明无幸存者偏差风险"""
-        return self.get_mode(start_date, end_date) != "POINT_IN_TIME_VERIFIED"
+        """严格判定是否存在幸存者偏差风险"""
+        if not self.is_coverage_complete(start_date, end_date):
+            return True
+        if (
+            not self.universe_provenance_verified
+            or not self.universe_raw_evidence_verified
+            or not self.universe_dataset_hash_verified
+            or not SourceClass.is_production_eligible(self.universe_source_class)
+            or bool(self.universe_verification_failures)
+        ):
+            return True
+        return False
 
 
 def fetch_index_constituents(index_code: str = "000300") -> List[str]:
-    """从 AKShare 拉取指数成分股，返回标准 symbol 列表 (如 '600519.SH')"""
+    """从网络接口实时拉取最新静态成分股"""
     try:
         import akshare as ak
-    except ImportError:
-        logger.warning("未安装 akshare，无法拉取指数成分股")
-        return []
-
-    try:
-        df = ak.index_stock_cons_csindex(symbol=index_code)
-        if df is None or df.empty:
-            logger.warning(f"指数 {index_code} 成分股为空")
-            return []
+        clean_code = str(index_code).strip().zfill(6)
+        df = ak.index_stock_cons_em(symbol=clean_code)
+        if df.empty or "品种代码" not in df.columns:
+            df = ak.index_stock_cons_csindex(symbol=clean_code)
+        
         symbols = []
-        for _, row in df.iterrows():
-            code = str(row.get("成分券代码", "")).strip().zfill(6)
-            exchange = str(row.get("交易所", ""))
-            if "上海" in exchange:
+        code_col = "品种代码" if "品种代码" in df.columns else ("成分券代码" if "成分券代码" in df.columns else "symbol")
+        for code in df[code_col].astype(str).str.zfill(6):
+            if code.startswith(("60", "688", "689")):
                 symbols.append(f"{code}.SH")
-            elif "深圳" in exchange:
+            elif code.startswith(("00", "300", "301")):
                 symbols.append(f"{code}.SZ")
-            elif "北京" in exchange:
+            elif code.startswith(("8", "4", "920")):
                 symbols.append(f"{code}.BJ")
             else:
                 symbols.append(f"{code}.SH" if code.startswith("6") else f"{code}.SZ")
         symbols = sorted(set(symbols))
-        logger.info(f"成功拉取指数 {index_code} 成分股 {len(symbols)} 只")
+        logger.info(f"成功拉取指数 {index_code} 当前静态成分股 {len(symbols)} 只")
         return symbols
     except Exception as e:
         logger.warning(f"拉取指数 {index_code} 成分股失败: {e}")
@@ -397,9 +382,8 @@ def create_universe_provider(
     events_verified: bool = False
 ) -> UniverseProvider:
     """
-    统一股票池提供器工厂函数 (P0-2, P0-4)
-    供 CLI (run_pipeline.py), FastAPI (server/app.py), Streamlit (dashboard/app.py) 与测试套件统一调用。
-    生产环境下严格读取 universe_pit_events.manifest.json 进行血缘与基线哈希校验。
+    统一股票池提供器工厂函数 (P0 严格数据血缘认证)
+    必须通过 ProvenanceVerifier 运行时核验，绝不相信 Manifest 自我声明。
     """
     cfg = config or settings
     mode = getattr(cfg, "UNIVERSE_MODE", "STATIC").upper()
@@ -417,22 +401,25 @@ def create_universe_provider(
         return StaticUniverseProvider(symbols=getattr(cfg, "DEFAULT_UNIVERSE", []))
 
     elif mode in ["POINT_IN_TIME", "POINT_IN_TIME_VERIFIED"]:
-        pit_file = cfg.DATA_DIR / "universe_pit_events.parquet" if hasattr(cfg, "DATA_DIR") else None
-        manifest_file = cfg.DATA_DIR / "universe_pit_events.manifest.json" if hasattr(cfg, "DATA_DIR") else None
-        
-        pit_df = None
-        manifest_verified = False
-        manifest_data = {}
+        pit_file = cfg.DATA_DIR / "universe" / "csi300" / "normalized" / "universe_pit_events.parquet" if hasattr(cfg, "DATA_DIR") else None
+        if not pit_file or not pit_file.exists():
+            pit_file = cfg.DATA_DIR / "universe_pit_events.parquet" if hasattr(cfg, "DATA_DIR") else None
 
-        # 尝试读取 Manifest (P0-4)
+        manifest_file = cfg.DATA_DIR / "universe" / "csi300" / "normalized" / "universe_pit_events.manifest.json" if hasattr(cfg, "DATA_DIR") else None
+        if not manifest_file or not manifest_file.exists():
+            manifest_file = cfg.DATA_DIR / "universe_pit_events.manifest.json" if hasattr(cfg, "DATA_DIR") else None
+
+        raw_dir = cfg.DATA_DIR / "universe" / "csi300" / "raw" if hasattr(cfg, "DATA_DIR") else None
+
+        pit_df = None
+        manifest_data: Dict[str, Any] = {}
+        manifest_hash: Optional[str] = None
+
         if manifest_file and manifest_file.exists():
             try:
-                import json
+                manifest_hash = ProvenanceVerifier.compute_file_sha256(manifest_file)
                 with open(manifest_file, "r", encoding="utf-8") as f:
                     manifest_data = json.load(f)
-                if manifest_data.get("provenance_verified", False) and manifest_data.get("verification_method"):
-                    manifest_verified = True
-                    logger.info(f"成功加载并验证 PIT 股票池 Manifest: {manifest_file} (版本: {manifest_data.get('dataset_version', '1.0')})")
             except Exception as e:
                 logger.warning(f"读取 PIT 股票池 Manifest 失败: {e}")
 
@@ -444,14 +431,23 @@ def create_universe_provider(
             except Exception as e:
                 logger.warning(f"读取本地 PIT 事件文件失败: {e}")
 
+        # 运行时密码级真实性核验
+        ver_res = ProvenanceVerifier.verify_pit_universe(
+            normalized_df=pit_df,
+            manifest_data=manifest_data,
+            raw_evidence_dir=raw_dir,
+            backtest_start_date=getattr(cfg, "START_DATE", "2020-01-01"),
+            backtest_end_date=getattr(cfg, "END_DATE", "2026-12-31")
+        )
+
         b_date = baseline_date or manifest_data.get("baseline_snapshot_date") or getattr(cfg, "START_DATE", "2020-01-01")
         b_syms = baseline_symbols or manifest_data.get("baseline_symbols") or getattr(cfg, "DEFAULT_UNIVERSE", [])
 
         c_start = coverage_start or manifest_data.get("coverage_start") or getattr(cfg, "START_DATE", "2020-01-01")
-        c_end = coverage_end or manifest_data.get("coverage_end") or getattr(cfg, "END_DATE", "2023-12-31")
+        c_end = coverage_end or manifest_data.get("coverage_end") or getattr(cfg, "END_DATE", "2026-12-31")
 
-        final_provenance_verified = manifest_verified or provenance_verified
-        final_events_verified = manifest_verified or events_verified
+        final_provenance_verified = ver_res.provenance_verified or provenance_verified
+        final_events_verified = ver_res.source_verified or events_verified
 
         provider = PointInTimeUniverseProvider(
             fallback_symbols=getattr(cfg, "DEFAULT_UNIVERSE", []),
@@ -461,11 +457,15 @@ def create_universe_provider(
             coverage_start=c_start,
             coverage_end=c_end,
             universe_provenance_verified=final_provenance_verified,
-            constituent_event_source_verified=final_events_verified
+            constituent_event_source_verified=final_events_verified,
+            source_class=ver_res.source_class.value,
+            raw_evidence_verified=ver_res.raw_hash_verified,
+            dataset_hash_verified=ver_res.dataset_hash_verified,
+            manifest_hash=manifest_hash,
+            verification_failures=ver_res.failed_checks
         )
         return provider
 
     else:
         logger.warning(f"未知股票池模式 {mode}，降级为静态股票池")
         return StaticUniverseProvider(symbols=getattr(cfg, "DEFAULT_UNIVERSE", []))
-

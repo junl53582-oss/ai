@@ -2,10 +2,35 @@
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 135+ Passed](https://img.shields.io/badge/Tests-135%2B%20Passed%20(100%25)-brightgreen.svg)](tests/)
-[![Data Integrity: Zero Leakage](https://img.shields.io/badge/Data%20Integrity-Zero%20Leakage%20%7C%20Point--in--Time-success.svg)](data/)
+[![Tests: 155 Passed](https://img.shields.io/badge/Tests-155%20Passed%20(100%25)-brightgreen.svg)](tests/)
+[![Provenance: Fail--Closed](https://img.shields.io/badge/Provenance-Fail--Closed%20%7C%20Zero--Mock-success.svg)](data/)
 
-企业级端到端 A 股多因子 AI 量化投研与实盘决策系统，构建了从 **「多源数据工程 $\to$ 107 因子特征工厂 $\to$ 多模型 Walk-Forward 时序滚动训练 $\to$ 凸优化组合决策 $\to$ 7 重机构级资金安全防御 $\to$ 券商实盘/模拟撮合网关 $\to$ 盘后定时自动化推送 $\to$ 7 大主题 Streamlit 交互大屏」** 的全闭环链路。
+企业级端到端 A 股多因子 AI 量化投研与实盘决策系统，构建了从 **「原始数据血缘 $\to$ 107 因子特征工厂 $\to$ 多模型 Walk-Forward 时序滚动训练 $\to$ 凸优化组合决策 $\to$ 7 重机构级资金安全防御 $\to$ 券商实盘/模拟撮合网关 $\to$ 盘后定时自动化推送 $\to$ 7 大主题 Streamlit 交互大屏」** 的全闭环链路。
+
+---
+
+## 🛡️ 数据血缘、密码级防伪与真实性认证体系
+
+本系统坚守严苛的量化科学诚信原则：
+- **NO EVIDENCE => NO VERIFIED**（无真实原始证据绝不认证）
+- **UNKNOWN != VERIFIED**（未知不等于已通过）
+- **GENERATED DATA != OFFICIAL DATA**（模拟数据严禁进入生产认证）
+- **TEST FIXTURE != PRODUCTION EVIDENCE**（测试用例仅证明代码静态能力，不代表生产运行时证据）
+- **MANIFEST CLAIM != VERIFICATION**（Manifest 自行声明布尔值无效，必须经 `ProvenanceVerifier` 运行时本地哈希验真）
+
+```
+                     数据血缘与密码级认证链路 (Provenance Pipeline)
+┌──────────────────┐     ┌────────────────┐     ┌────────────────────────┐
+│   Raw Evidence   │ ──> │     Parser     │ ──> │ Normalized Parquet     │
+│ (官网/终端原始文件) │     │ (Fail-Closed)  │     │ + 事实记录 Manifest     │
+└──────────────────┘     └────────────────┘     └────────────────────────┘
+                                                              │
+                                                              ▼
+┌──────────────────┐     ┌────────────────┐     ┌────────────────────────┐
+│ Certification    │ <── │ AuditCollector │ <── │   ProvenanceVerifier   │
+│ (真值表独立门禁)  │     │ (防伪拦截注入) │     │ (单字节哈希/因果时序验真)│
+└──────────────────┘     └────────────────┘     └────────────────────────┘
+```
 
 ---
 

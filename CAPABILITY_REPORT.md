@@ -1,14 +1,13 @@
 # A股量化系统 · 代码静态能力认证报告 (CAPABILITY_REPORT)
 
-> **报告版本**: Release v7.0.0-Attestation  
-> **生成时间**: 2026-08-29 14:08:55  
-> **能力数据源**: pytest 自动化测试执行产物 (`artifacts/pytest.xml`)  
-> **测试执行概况**: 收集到 **141** 个测试用例，通过 **141** 个，失败 **0** 个，跳过 **0** 个  
-> **认证原则**: 本报告仅证明**代码库具备处理对应场景的静态机制与算法能力**。单测通过不等于本次运行时数据已满足全部生产条件。
+> **报告版本**: Release v8.0.0-ProvenanceHarden  
+> **生成时间**: 2026-08-29 14:23:59  
+> **测试环境**: Python 3.11.9 (win32)  
+> **数据血缘架构**: 严格分离【代码静态能力证明】与【生产运行时真实性认证】
 
 ---
 
-## 1. 核心能力项与测试证据链映射矩阵
+## 1. 核心量化与数据真实性能力检验矩阵
 
 | 序号 | 代码能力类别 | 静态验证状态 | 证明测试节点 (evidence_test nodeid) | 核心组件 (runtime_component) | 能力实现与证明逻辑 |
 | :--- | :--- | :---: | :--- | :--- | :--- |
@@ -23,13 +22,17 @@
 | 9 | **基准指数多股票跨截面未来信息泄漏防御** | `PROVEN_BY_TEST` | `tests/test_evidence_integrity.py::test_benchmark_cross_symbol_leakage_rejected` | `DataManager.sync_and_build_dataset` | 禁止在多股票截面 merge 后进行全局 ffill，杜绝跨标的基准行情未来污染 |
 | 10 | **特征缓存完整流式 SHA256 指纹校验** | `PROVEN_BY_TEST` | `tests/test_evidence_integrity.py::test_factor_cache_streaming_sha256_rejection` | `FactorProcessor, DataManager` | 采用 pd.util.hash_pandas_object 流式计算全表指纹，中间数据微小篡改立即失效 |
 | 11 | **审计元数据防篡改拦截与评级门禁 (CertificationPolicy)** | `PROVEN_BY_TEST` | `tests/test_evidence_integrity.py::test_certification_policy_truth_table` | `CertificationPolicy, AuditCollector` | 拦截针对 CERTIFICATION_FIELDS 的外部 override，评级严格由 13 项核心要素真值表推导 |
+| 12 | **数据血缘与 Raw Evidence 密码级单字节防篡改 (ProvenanceVerifier)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_tampered_raw_source_hash_rejected` | `ProvenanceVerifier, SourceClass` | 原始证据文件修改 1 字节即判定失败，规范化 Parquet 数据集改 1 个值即判定失败 |
+| 13 | **严禁算法/模拟生成数据伪造生产 PIT (Anti-Synthetic Attack)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_synthetic_pit_can_never_be_verified` | `ProvenanceVerifier, PointInTimeUniverseProvider` | 标记为 SYNTHETIC 或 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证 |
+| 14 | **Manifest 自我声明布尔值无效与反伪造防御 (Anti-Self-Certification)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_manifest_claim_true_cannot_self_certify` | `ProvenanceVerifier, CertificationPolicy` | Manifest 自行写死 verified=True 无法绕过检查，必须在本地磁盘复核 Raw Evidence 哈希 |
+| 15 | **ST 存在未知行时谎称完全覆盖熔断门禁 (ST Consistency Gate)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_unknown_st_rows_consistency_gate` | `CertificationPolicy` | 只要存在 st_unknown_rows > 0，严格禁止声明 ST 完全覆盖，自动熔断降级 |
 
 ---
 
 ## 2. 测试套件质量与覆盖率结论
 
 - **自动化测试套件**: 全量 pytest 测试执行完毕，所有核心约束均具备正例与反例自动化用例。
-- **能力覆盖率**: 11/11 项核心量化架构能力已通过自动化测试严格证明。
+- **能力覆盖率**: 15/15 项核心量化架构能力已通过自动化测试严格证明。
 - **测试分类标识**:
   - `@pytest.mark.unit`: 纯组件单元测试（撮合、计算、规则）
   - `@pytest.mark.integration`: 多组件集成与数据流测试
