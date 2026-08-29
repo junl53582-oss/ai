@@ -1,0 +1,31 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+.pytest_cache/
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Data storage & large datasets (Parquet / Raw downloads)
+data_storage/
+data_storage/factors/*.parquet
+data_storage/parquet/*.parquet
+data_storage/raw/
+saved_models/*.pkl
+saved_models/*.txt
+
+# Logs and temporary files
+*.log
+*.tmp
+.system_generated/
+scratch/
+
+# IDE files
+.vscode/
+.idea/
+*.swp

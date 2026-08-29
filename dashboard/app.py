@@ -1,0 +1,736 @@
+"""
+企业级 A股多因子量化决策看板 (Streamlit Dashboard)
+严格遵循 T日收盘信号 -> T+1日开盘执行机制，展示今日选股、策略净值、Alpha 归因、真实性审计与实盘级风控
+"""
+import sys
+from pathlib import Path
+
+root_dir = Path(__file__).resolve().parent.parent
+if str(root_dir) not in sys.path:
+    sys.path.insert(0, str(root_dir))
+
+import streamlit as st
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
+
+from config.settings import settings
+from data.universe_provider import create_universe_provider
+from data.data_manager import DataManager
+from factors.processor import FactorProcessor
+from models.labeler import TargetLabeler
+from models.walk_forward import WalkForwardTrainer
+from models.evaluator import ModelEvaluator
+from strategy.corporate_actions import create_corporate_action_provider
+from strategy.portfolio import PortfolioBuilder
+from backtest.engine import BacktestEngine
+from backtest.performance import PerformanceAnalyzer
+from backtest.audit import AuditCollector
+
+st.set_page_config(
+    page_title="A股多因子预测与量化决策看板",
+    page_icon="📈",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+<style>
+    .metric-card {
+        background-color: #f8f9fa;
+        border-radius: 8px;
+        padding: 15px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-left: 4px solid #1E88E5;
+    }
+    .audit-box {
+        background-color: #fdfefe;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 12px;
+        margin-bottom: 10px;
+    }
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 12px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        height: 48px;
+        white-space: pre-wrap;
+        background-color: #f0f2f6;
+        border-radius: 6px 6px 0px 0px;
+        padding: 8px 16px;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #1E88E5 !important;
+        color: white !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+def init_session_state():
+    """初始化 Session 状态并自动快速预加载已有回测与时序预测数据"""
+    keys = ["market_df", "factor_df", "oos_df", "equity_df", "orders_df", "perf_metrics", "latest_model", "eval_metrics", "factor_processor", "data_manager", "top_df"]
+    for k in keys:
+        if k not in st.session_state:
+            st.session_state[k] = None
+
+    # 秒级快速恢复已有投研回测大屏
+    if st.session_state.equity_df is None:
+        try:
+            eq_path = settings.REPORTS_DIR / "equity_curve_latest.csv"
+            ord_path = settings.REPORTS_DIR / "orders_latest.csv"
+            perf_path = settings.REPORTS_DIR / "performance_latest.json"
+            oos_path = settings.DATA_DIR / "oos_predictions.parquet"
+            if eq_path.exists() and ord_path.exists() and perf_path.exists() and oos_path.exists():
+                st.session_state.equity_df = pd.read_csv(eq_path)
+                st.session_state.orders_df = pd.read_csv(ord_path)
+                with open(perf_path, "r", encoding="utf-8") as f:
+                    st.session_state.perf_metrics = json.load(f)
+                st.session_state.oos_df = pd.read_parquet(oos_path)
+                if "date" in st.session_state.oos_df.columns:
+                    st.session_state.oos_df["date"] = pd.to_datetime(st.session_state.oos_df["date"])
+        except Exception:
+            pass
+
+
+init_session_state()
+
+# ---------------- 侧边栏参数控制 ----------------
+st.sidebar.title("🎛️ 策略与回测配置")
+st.sidebar.markdown("---")
+
+profile_map = {
+    "沪深300 核心蓝筹 (HS300_CORE)": "HS300_CORE",
+    "中证500 优质成长 (ZZ500_GROWTH)": "ZZ500_GROWTH",
+    "科技创新与先进制造 (TECH_INNOVATION)": "TECH_INNOVATION",
+    "高股息红利低波 (HIGH_DIVIDEND)": "HIGH_DIVIDEND"
+}
+prof_label = st.sidebar.selectbox("🎯 选股股票池 Profile", list(profile_map.keys()), index=0)
+selected_profile = profile_map[prof_label]
+settings.set_universe_profile(selected_profile)
+
+optimizer_map = {
+    "等权基准 (Equal)": "equal",
+    "波动率倒数 (Inv Vol)": "inv_vol",
+    "预测打分加权 (Score Softmax)": "score_weighted",
+    "风险平价优化 (Risk Parity)": "risk_parity",
+    "约束二次规划 (Constrained QP)": "qp"
+}
+opt_label = st.sidebar.selectbox("📐 组合优化算法 (Portfolio Optimizer)", list(optimizer_map.keys()), index=0)
+selected_optimizer = optimizer_map[opt_label]
+
+top_k_buy = st.sidebar.slider("Top-K 买入阈值 (Top K Buy)", min_value=3, max_value=15, value=settings.TOP_K_BUY, step=1)
+top_k_hold = st.sidebar.slider("Top-K 持仓缓冲区 (Top K Hold)", min_value=top_k_buy, max_value=30, value=max(settings.TOP_K_HOLD, top_k_buy), step=1)
+rebalance_freq = st.sidebar.slider("调仓周期 (交易日)", min_value=1, max_value=20, value=settings.REBALANCE_FREQ, step=1)
+initial_cash = st.sidebar.number_input("初始资金 (元)", min_value=100_000, max_value=10_000_000, value=int(settings.INITIAL_CASH), step=100_000)
+stop_loss_pct = st.sidebar.slider("个股止损阈值 (%)", min_value=3.0, max_value=15.0, value=float(settings.STOP_LOSS_PCT * 100), step=0.5) / 100.0
+trailing_stop_pct = st.sidebar.slider("跟踪止盈回撤 (%)", min_value=2.0, max_value=10.0, value=float(settings.TRAILING_STOP_PCT * 100), step=0.5) / 100.0
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 🌐 数据源与仿真模式")
+allow_synthetic = st.sidebar.checkbox(
+    "🧪 允许离线仿真数据 (Demo Mode)",
+    value=settings.ALLOW_SYNTHETIC_DATA,
+    help="若当前网络环境/代理受限导致无法从 AKShare 获取真实 A 股数据，勾选此项将自动生成受控仿真数据以便完整体验全套看板功能"
+)
+
+st.sidebar.markdown("---")
+st.sidebar.markdown("### 📌 A股实盘硬规则执行说明")
+st.sidebar.caption(
+    "• **严格时序**: T日收盘生成信号 ➔ T+1日真实交易日开盘价撮合\n"
+    "• **T+1 机制**: 当日买入可用卖出股数为 0\n"
+    "• **ST 5%与涨跌停**: 涨停禁买，跌停卖单自动延期 (DEFERRED)，ST股票 5% 限制\n"
+    "• **历史税费**: 2023-08-28 前单边 1‰ 印花税，此后 0.5‰；含过户费与佣金\n"
+    "• **流动性约束**: 单日买卖量不超过可用成交量的 5%\n"
+    "• **公司行为**: 现金分红与送转股按批次价值守恒自动调整\n"
+    "• **逐日中性化**: 每日独立计算行业覆盖率，<50% 动态降级为纯市值中性化"
+)
+
+
+def run_full_pipeline_if_needed(allow_synthetic_mode: bool = False):
+    """执行全套量化管线"""
+    from data.data_fetcher import DataFetcher
+    fetcher = DataFetcher(allow_synthetic=allow_synthetic_mode)
+
+    with st.spinner("1/4 正在获取与清洗 A 股市场行情数据 (SecurityMaster 元信息与真实上市日)..."):
+        manager = DataManager(universe_provider=create_universe_provider(settings), fetcher=fetcher)
+        market_df = manager.sync_and_build_dataset()
+        st.session_state.data_manager = manager
+        st.session_state.market_df = market_df
+
+    # 1.5 基本面财务因子注入 (质量/成长异源信号, 季度->日频 PIT 对齐)
+    if getattr(settings, "ENABLE_FUNDAMENTALS", False):
+        with st.spinner("注入基本面财务因子 (质量/成长)..."):
+            from data.fundamentals import FundamentalsProvider
+            fund = FundamentalsProvider(delay_days=settings.FUNDAMENTAL_DELAY_DAYS)
+            fund_daily = fund.build_daily_fundamental_matrix(market_df, start_year=settings.FUNDAMENTAL_START_YEAR)
+            before_cols = set(market_df.columns)
+            market_df = market_df.merge(fund_daily, on=["symbol", "date"], how="left")
+            new_cols = [c for c in fund_daily.columns if c not in before_cols and c not in ("symbol", "date")]
+            cov = fund_daily[new_cols].notna().mean().mean() * 100 if new_cols else 0.0
+            st.info(f"基本面因子: {len(new_cols)} 个 (覆盖率 {cov:.1f}%, 拉取统计 {fund.source_counts})")
+
+    with st.spinner("2/4 正在计算 Alpha 因子并执行【逐日行业 + 市值截面中性化】..."):
+        processor = FactorProcessor()
+        factor_df = processor.build_and_save_factor_matrix(market_df)
+        labeler = TargetLabeler()
+        factor_df = labeler.compute_excess_return_label(factor_df, canonical_dates=manager.get_trading_calendar())
+        st.session_state.factor_processor = processor
+        st.session_state.factor_df = factor_df
+
+    with st.spinner("3/4 正在执行 Walk-Forward 滚动时序训练 (含 Purged Gap 隔离)..."):
+        trainer = WalkForwardTrainer()
+        oos_df, latest_model = trainer.run_walk_forward(factor_df)
+        evaluator = ModelEvaluator()
+        eval_metrics = evaluator.evaluate_predictions(oos_df)
+        st.session_state.oos_df = oos_df
+        st.session_state.latest_model = latest_model
+        st.session_state.eval_metrics = eval_metrics
+        try:
+            oos_df.to_parquet(settings.DATA_DIR / "oos_predictions.parquet")
+        except Exception:
+            pass
+
+    with st.spinner("4/4 正在执行 A股实盘级走步回测 (T日信号 -> T+1开盘撮合)..."):
+        corp_provider = create_corporate_action_provider(settings)
+        builder = PortfolioBuilder(
+            top_k_buy=top_k_buy,
+            top_k_hold=top_k_hold,
+            weight_method=selected_optimizer,
+            universe_provider=create_universe_provider(settings)
+        )
+        engine = BacktestEngine(
+            initial_cash=initial_cash,
+            top_k_buy=top_k_buy,
+            top_k_hold=top_k_hold,
+            rebalance_freq=rebalance_freq,
+            portfolio_builder=builder,
+            corporate_actions=corp_provider
+        )
+        equity_df, orders_df = engine.run(oos_df)
+        
+        audit_obj = AuditCollector.collect(
+            data_manager=manager,
+            factor_processor=processor,
+            portfolio_builder=engine.builder,
+            trainer=trainer,
+            engine=engine
+        )
+        
+        analyzer = PerformanceAnalyzer()
+        perf_metrics = analyzer.calculate_metrics(
+            equity_df,
+            orders_df,
+            closed_trades=engine.closed_trades,
+            audit_info=audit_obj
+        )
+        
+        st.session_state.equity_df = equity_df
+        st.session_state.orders_df = orders_df
+        st.session_state.perf_metrics = perf_metrics
+
+
+# 主标题
+st.title("🚀 A股多因子涨跌预测与量化决策系统 (Enterprise v8.0)")
+st.caption("基于 Qlib Alpha158 + A股专属因子 + 另类资金流 + LightGBM 走步回测与现代凸优化组合决策引擎")
+
+if st.session_state.equity_df is None or st.session_state.oos_df is None:
+    st.info("💡 尚未检测到运行结果，请点击下方按钮一键初始化并运行全流程量化管线：")
+    if st.button("▶️ 一键运行全量化研究与回测管线", type="primary", use_container_width=True):
+        try:
+            run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
+            st.rerun()
+        except Exception as e:
+            st.error(f"❌ 运行异常: {e}")
+            if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
+                st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
+else:
+    # ---------------- 导航选项卡 ----------------
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+        "🎯 今日选股决策",
+        "📈 策略净值与回测",
+        "🔍 Alpha因子与可解释性",
+        "🛡️ 持仓监控与风控",
+        "🏭 因子工厂与特征库",
+        "📦 实盘网关与指令下发",
+        "⚙️ 研究可信度与审计"
+    ])
+
+    # ==========================================
+    # Tab 1: 今日选股决策
+    # ==========================================
+    with tab1:
+        st.subheader("🎯 最新交易日 Top-K 选股池与调仓建议")
+        
+        oos_df = st.session_state.oos_df
+        latest_date = oos_df["date"].max()
+        daily_df = oos_df[oos_df["date"] == latest_date].copy()
+
+        builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
+        top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
+        st.session_state.top_df = top_df
+
+        manager = st.session_state.data_manager or DataManager()
+        expected_exec_date = manager.get_next_trading_date(latest_date)
+        exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "已达日历末尾"
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("📅 信号产生日期 (T日收盘)", latest_date.strftime("%Y-%m-%d"))
+        col2.metric("⏱️ 预计撮合日期 (T+1 真实交易日)", exec_str)
+        col3.metric("🏆 目标买入标的数", f"{len(top_df)} 只")
+        col4.metric("📊 行业上限约束", "已启用 (30%硬上限)" if builder.sector_cap_enabled else "已关闭")
+
+        st.markdown("---")
+
+        if not top_df.empty:
+            cols_to_show = ["symbol"]
+            if "name" in top_df.columns:
+                cols_to_show.append("name")
+            if "industry" in top_df.columns:
+                cols_to_show.append("industry")
+            cols_to_show.extend(["close", "pred_score", "target_weight", "is_suspended", "is_limit_up_locked", "TURNOVER_SURGE_5"])
+
+            display_df = top_df[[c for c in cols_to_show if c in top_df.columns]].copy()
+
+            _prob_col = f"{settings.LABEL_HORIZON}日上涨概率"
+            _excess_col = f"{settings.LABEL_HORIZON}日预期超额收益"
+            rename_map = {
+                "symbol": "股票代码",
+                "name": "股票简称",
+                "industry": "所属行业",
+                "close": "T日基准收盘价 (元)",
+                "pred_score": (_prob_col if settings.is_classification else _excess_col),
+                "target_weight": "目标分配权重",
+                "is_suspended": "是否停牌",
+                "is_limit_up_locked": "是否一字涨停",
+                "TURNOVER_SURGE_5": "换手率异动倍数"
+            }
+            display_df.rename(columns=rename_map, inplace=True)
+
+            if settings.is_classification:
+                if _prob_col in display_df.columns:
+                    display_df[_prob_col] = (display_df[_prob_col] * 100).map("{:.2f}%".format)
+            else:
+                if _excess_col in display_df.columns:
+                    display_df[_excess_col] = (display_df[_excess_col] * 100).map("{:+.2f}%".format)
+            if "目标分配权重" in display_df.columns:
+                display_df["目标分配权重"] = (display_df["目标分配权重"] * 100).map("{:.1f}%".format)
+            if "T日基准收盘价 (元)" in display_df.columns:
+                display_df["T日基准收盘价 (元)"] = display_df["T日基准收盘价 (元)"].map("{:.2f}".format)
+            if "换手率异动倍数" in display_df.columns:
+                display_df["换手率异动倍数"] = display_df["换手率异动倍数"].map("{:.2f}x".format)
+
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+            fig_pie = px.pie(
+                top_df,
+                values="target_weight",
+                names="symbol",
+                title="🎯 最新目标组合持仓权重分布",
+                hole=0.4,
+                color_discrete_sequence=px.colors.qualitative.Safe
+            )
+            st.plotly_chart(fig_pie, use_container_width=True)
+        else:
+            st.warning("最新交易日无可交易标的")
+
+    # ==========================================
+    # Tab 2: 策略净值与回测分析
+    # ==========================================
+    with tab2:
+        st.subheader("📈 策略净值表现 vs 沪深300基准 (T+1 Open撮合真实走步回测)")
+        
+        equity_df = st.session_state.equity_df
+        orders_df = st.session_state.orders_df
+        perf = st.session_state.perf_metrics
+
+        # KPI 指标卡片
+        kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
+        kpi1.metric("策略累计收益", f"{perf.get('cum_strategy_return', 0):+.2f}%", f"基准: {perf.get('cum_benchmark_return', 0):+.2f}%")
+        kpi2.metric("年化收益率 (CAGR)", f"{perf.get('cagr', 0):+.2f}%", f"Alpha (CAPM): {perf.get('alpha', 0):+.2f}%")
+        kpi3.metric("夏普比率 (Sharpe)", f"{perf.get('sharpe_ratio', 0):.2f}")
+        kpi4.metric("最大回撤 (Max DD)", f"{perf.get('max_drawdown', 0):.2f}%")
+        kpi5.metric("年化换手率 (Turnover)", f"{perf.get('annualized_turnover', 0):.2f}x")
+        kpi6.metric("净胜率 (Net Win Rate)", f"{perf.get('net_win_rate', 0):.1f}%", f"毛胜率: {perf.get('gross_win_rate', 0):.1f}%")
+
+        st.markdown("---")
+
+        # 1. 累计净值曲线
+        fig_nav = go.Figure()
+        fig_nav.add_trace(go.Scatter(
+            x=equity_df["date"],
+            y=(equity_df["total_equity"] / equity_df["total_equity"].iloc[0]),
+            mode="lines",
+            name="LightGBM 多因子策略 (T+1 Open撮合)",
+            line=dict(color="#1E88E5", width=2.5)
+        ))
+        fig_nav.add_trace(go.Scatter(
+            x=equity_df["date"],
+            y=(equity_df["benchmark_equity"] / equity_df["benchmark_equity"].iloc[0]),
+            mode="lines",
+            name="沪深300基准 (000300.SH)",
+            line=dict(color="#757575", width=1.5, dash="dash")
+        ))
+        fig_nav.update_layout(
+            title="<b>策略与基准累计净值走势 (已扣除历史印花税、过户费、佣金与滑点)</b>",
+            xaxis_title="日期",
+            yaxis_title="累计净值 (起点=1.0)",
+            hovermode="x unified",
+            template="plotly_white"
+        )
+        st.plotly_chart(fig_nav, use_container_width=True)
+
+        # 2. 动态水下回撤图
+        cummax = equity_df["total_equity"].cummax()
+        drawdown_series = (equity_df["total_equity"] - cummax) / cummax * 100.0
+
+        fig_dd = go.Figure()
+        fig_dd.add_trace(go.Scatter(
+            x=equity_df["date"],
+            y=drawdown_series,
+            fill="tozeroy",
+            mode="lines",
+            name="策略回撤",
+            line=dict(color="#E53935", width=1.5)
+        ))
+        fig_dd.update_layout(
+            title="<b>历史动态水下回撤 (Underwater Drawdown)</b>",
+            xaxis_title="日期",
+            yaxis_title="回撤百分比 (%)",
+            hovermode="x unified",
+            template="plotly_white"
+        )
+        st.plotly_chart(fig_dd, use_container_width=True)
+
+    # ==========================================
+    # Tab 3: Alpha 因子与可解释性
+    # ==========================================
+    with tab3:
+        st.subheader("🔍 LightGBM 因子重要性与模型质量分析")
+        
+        latest_model = st.session_state.latest_model
+        eval_metrics = st.session_state.eval_metrics
+
+        if settings.is_classification:
+            col_ic1, col_ic2, col_ic3, col_ic4 = st.columns(4)
+            col_ic1.metric("AUC-ROC", f"{eval_metrics.get('auc', 0):.4f}")
+            col_ic2.metric("Accuracy 准确率", f"{eval_metrics.get('accuracy', 0)*100:.2f}%")
+            col_ic3.metric("F1 分数", f"{eval_metrics.get('f1', 0):.4f}")
+            col_ic4.metric("Brier Score", f"{eval_metrics.get('brier_score', 0):.4f}")
+
+            col_p, col_r, col_cm1, col_cm2 = st.columns(4)
+            col_p.metric("Precision 精确率", f"{eval_metrics.get('precision', 0)*100:.2f}%")
+            col_r.metric("Recall 召回率", f"{eval_metrics.get('recall', 0)*100:.2f}%")
+            cm = eval_metrics.get("confusion_matrix", [[0,0],[0,0]])
+            cm_tn, cm_fp = cm[0][0], cm[0][1]
+            cm_fn, cm_tp = cm[1][0], cm[1][1]
+            col_cm1.metric("TN (正确看跌)", cm_tn)
+            col_cm2.metric("TP (正确看涨)", cm_tp)
+            st.caption(f"混淆矩阵: TN={cm_tn} (真跌), FP={cm_fp} (假涨), FN={cm_fn} (漏涨), TP={cm_tp} (真涨) | 上涨样本占比: {eval_metrics.get('positive_rate', 0)*100:.1f}%")
+        else:
+            col_ic1, col_ic2, col_ic3, col_ic4 = st.columns(4)
+            col_ic1.metric("Mean RankIC", f"{eval_metrics.get('rank_ic_mean', 0):+.4f}")
+            col_ic2.metric("RankICIR", f"{eval_metrics.get('rank_icir', 0):.4f}")
+            col_ic3.metric("RankIC > 0 胜率", f"{eval_metrics.get('rank_ic_win_rate', 0):.1f}%")
+            col_ic4.metric("20D 滚动 RankIC", f"{eval_metrics.get('rolling_rank_ic_20d', 0):+.4f}")
+
+        st.markdown("---")
+
+        col_feat, col_quant = st.columns(2)
+
+        with col_feat:
+            st.markdown("#### 🏆 Top 15 核心因子重要度 (Gain 增益)")
+            if latest_model is not None:
+                imp_df = latest_model.get_feature_importance(top_n=15)
+                fig_imp = px.bar(
+                    imp_df,
+                    x="importance_pct",
+                    y="feature",
+                    orientation="h",
+                    title="因子贡献度占比 (%)",
+                    color="importance_pct",
+                    color_continuous_scale="Blues"
+                )
+                fig_imp.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
+                st.plotly_chart(fig_imp, use_container_width=True)
+
+        with col_quant:
+            st.markdown("#### 📊 5 分层组合年化收益单调性 (Q1 ~ Q5)")
+            q_rets = eval_metrics.get("quantile_returns", {})
+            if q_rets:
+                q_df = pd.DataFrame(list(q_rets.items()), columns=["分组", "年化收益率 (%)"])
+                fig_q = px.bar(
+                    q_df,
+                    x="分组",
+                    y="年化收益率 (%)",
+                    color="年化收益率 (%)",
+                    color_continuous_scale="Viridis",
+                    title="Q5 (得分最高) vs Q1 (得分最低)"
+                )
+                fig_q.update_layout(template="plotly_white")
+                st.plotly_chart(fig_q, use_container_width=True)
+
+        # Barra 风格归因与收益拆解
+        st.markdown("---")
+        st.markdown("#### 🧬 投资组合 Barra 风格暴露与宏观收益归因 (Style & CAPM Attribution)")
+        from factors.attribution import BarraFactorAttribution
+        
+        factor_df = getattr(st.session_state, "factor_df", None)
+        top_df = getattr(st.session_state, "top_df", None)
+        equity_df = getattr(st.session_state, "equity_df", None)
+        
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            if factor_df is not None and top_df is not None and not top_df.empty:
+                exp_dict = BarraFactorAttribution.compute_portfolio_style_exposure(top_df, factor_df)
+                exp_df = pd.DataFrame(list(exp_dict.items()), columns=["Barra 风格因子", "加权 Z-Score 暴露"])
+                fig_exp = px.bar(
+                    exp_df,
+                    x="加权 Z-Score 暴露",
+                    y="Barra 风格因子",
+                    orientation="h",
+                    title="当前组合 Barra 风格暴露",
+                    color="加权 Z-Score 暴露",
+                    color_continuous_scale="RdBu"
+                )
+                fig_exp.update_layout(yaxis=dict(autorange="reversed"), template="plotly_white")
+                st.plotly_chart(fig_exp, use_container_width=True)
+        with col_b2:
+            if equity_df is not None and len(equity_df) > 10:
+                p_ret = equity_df["total_equity"].pct_change().dropna()
+                b_ret = equity_df["benchmark_equity"].pct_change().dropna()
+                decomp = BarraFactorAttribution.decompose_returns(p_ret, b_ret)
+                st.markdown("**收益宏观拆解 (CAPM Decomposition)**")
+                st.write(f"• **总收益率**: `{decomp['total_return']*100:+.2f}%`")
+                st.write(f"• **无风险收益 (Rf)**: `{decomp['rf_component']*100:+.2f}%`")
+                st.write(f"• **基准 Beta 市场收益**: `{decomp['market_beta_component']*100:+.2f}%` (Beta: `{decomp['beta']:.2f}`)")
+                st.write(f"• **纯特质 Alpha 收益**: `{decomp['specific_alpha_component']*100:+.2f}%` (年化 Alpha: `{decomp['alpha_annualized']*100:+.2f}%`)")
+
+    # ==========================================
+    # Tab 4: 持仓监控与风控
+    # ==========================================
+    with tab4:
+        st.subheader("🛡️ 实时持仓风控监控、订单流水与费用统计")
+        
+        orders_df = st.session_state.orders_df
+        perf = st.session_state.perf_metrics
+
+        col_cost1, col_cost2, col_cost3, col_cost4 = st.columns(4)
+        col_cost1.metric("累计印花税", f"{perf.get('total_stamp_tax', 0):,.2f} 元")
+        col_cost2.metric("累计券商佣金", f"{perf.get('total_commission', 0):,.2f} 元")
+        col_cost3.metric("累计过户费", f"{perf.get('total_transfer_fee', 0):,.2f} 元")
+        col_cost4.metric("总交易摩擦成本", f"{perf.get('total_costs', 0):,.2f} 元")
+
+        st.markdown("---")
+
+        # 宏观市场状态判别
+        from strategy.risk_manager import MarketRegimeDetector, DynamicDrawdownController
+        market_df = getattr(st.session_state, "market_df", None)
+        equity_df = getattr(st.session_state, "equity_df", None)
+
+        bench_s = None
+        if market_df is not None and "benchmark_close" in market_df.columns:
+            bench_s = market_df.groupby("date")["benchmark_close"].first()
+        elif equity_df is not None and "benchmark_close" in equity_df.columns:
+            bench_s = equity_df.set_index("date")["benchmark_close"]
+
+        if bench_s is not None and len(bench_s) > 10:
+            regime_res = MarketRegimeDetector.detect_regime(bench_s)
+            r_col1, r_col2, r_col3 = st.columns(3)
+            r_col1.metric("宏观市场状态", regime_res["regime"])
+            r_col2.metric("推荐基准仓位上限", f"{regime_res['recommended_gross_exposure']*100:.0f}%")
+            r_col3.metric("基准年化波动率", f"{regime_res['realized_vol_annual']*100:.1f}%")
+            st.info(f"💡 **状态判定说明**: {regime_res['reason']}")
+
+        st.markdown("---")
+
+        col_t1, col_t2 = st.columns([1, 1])
+        with col_t1:
+            st.markdown("#### 📋 订单状态与交易流水明细 (最新 25 笔)")
+            if not orders_df.empty:
+                st.dataframe(orders_df.tail(25), use_container_width=True, hide_index=True)
+            else:
+                st.info("暂无订单记录")
+
+        with col_t2:
+            st.markdown("#### 🛡️ 风控与撮合状态")
+            st.success("✅ **个股硬止损**: 跌幅达到 -8% 生成次日开盘止损单")
+            st.info("ℹ️ **跟踪止盈**: 盈利超过 5% 后，从最高点 (High) 回撤 5% 锁定利润")
+            st.warning("⚠️ **最大回撤熔断**: 策略回撤超 12% 时自动降仓至 30% 目标暴露")
+            st.caption(
+                f"FIFO 真实平仓批次: {perf.get('closed_pair_trades', 0)} 笔 | "
+                f"平均持仓交易日: {perf.get('average_holding_days', 0):.1f} 天 | "
+                f"流动性限制触发: 部分成交 {perf.get('audit_metadata', {}).get('partial_fill_count', 0)} 次, 拒绝 {perf.get('audit_metadata', {}).get('liquidity_rejected_count', 0)} 次"
+            )
+
+    # ==========================================
+    # Tab 5: 因子工厂与特征库
+    # ==========================================
+    with tab5:
+        st.subheader("🏭 动态因子工厂与特征仓库 (Factor Factory & Feature Store)")
+        from factors.registry import FactorRegistry
+        
+        meta_df = FactorRegistry.get_metadata_df()
+        
+        col_f1, col_f2, col_f3 = st.columns(3)
+        col_f1.metric("已注册扩展因子数", f"{len(meta_df)} 个")
+        col_f2.metric("涵盖特征维度类别", f"{len(meta_df['category'].unique()) if not meta_df.empty else 0} 类")
+        col_f3.metric("Alpha158 + A股定制因子", "59 个")
+
+        st.markdown("---")
+        
+        if not meta_df.empty:
+            col_tbl, col_chart = st.columns([3, 2])
+            with col_tbl:
+                st.markdown("#### 📋 因子元数据注册清单")
+                st.dataframe(meta_df, use_container_width=True, hide_index=True)
+            with col_chart:
+                st.markdown("#### 📊 因子类别分布")
+                cat_counts = meta_df["category"].value_counts().reset_index()
+                cat_counts.columns = ["类别", "数量"]
+                fig_cat = px.pie(cat_counts, names="类别", values="数量", hole=0.4, title="因子分类构成")
+                st.plotly_chart(fig_cat, use_container_width=True)
+        else:
+            st.info("当前未注册扩展因子")
+
+    # ==========================================
+    # Tab 6: 实盘网关与指令下发
+    # ==========================================
+    with tab6:
+        st.subheader("📦 实盘/模拟券商交易网关与指令下发 (Execution & Dispatch)")
+        oos_df = getattr(st.session_state, "oos_df", None)
+        if oos_df is not None and not oos_df.empty:
+            latest_date = oos_df["date"].max()
+            daily_df = oos_df[oos_df["date"] == latest_date].copy()
+
+            builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold, weight_method=selected_optimizer)
+            top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
+            
+            manager = st.session_state.data_manager or DataManager()
+            expected_exec_date = manager.get_next_trading_date(latest_date)
+            exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "次一交易日"
+
+            col_gw1, col_gw2 = st.columns([3, 2])
+            with col_gw1:
+                st.markdown(f"#### 🎯 明日开盘 ({exec_str}) 计划下单指令表 (基于 {opt_label})")
+                if not top_df.empty:
+                    exec_df = top_df.copy()
+                    exec_df["建议买入股数"] = ((initial_cash * exec_df["target_weight"] / (exec_df["close"] * 100)).astype(int)) * 100
+                    exec_df["预估金额(元)"] = exec_df["建议买入股数"] * exec_df["close"]
+                    show_cols = ["symbol", "name", "close", "pred_score", "target_weight", "建议买入股数", "预估金额(元)"]
+                    disp_df = exec_df[[c for c in show_cols if c in exec_df.columns]].copy()
+                    st.dataframe(disp_df, use_container_width=True, hide_index=True)
+
+                    csv = disp_df.to_csv(index=False).encode('utf_8_sig')
+                    st.download_button(
+                        label="📥 导出明日券商批量下单 CSV",
+                        data=csv,
+                        file_name=f"orders_{exec_str}.csv",
+                        mime="text/csv",
+                        use_container_width=True
+                    )
+                else:
+                    st.info("今日无推荐买入标的")
+
+            with col_gw2:
+                st.markdown("#### 🚀 机器人消息一键推送")
+                webhook_in = st.text_input("Webhook 地址 (飞书 / 企业微信 / 钉钉)", placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/...")
+                channel_in = st.selectbox("推送渠道", ["feishu (飞书卡片)", "wechat (企业微信)", "dingtalk (钉钉)"])
+                
+                if st.button("📤 发送今日选股决策推送", type="primary", use_container_width=True):
+                    if webhook_in:
+                        from scheduler.notifier import MessageNotifier
+                        ch_type = channel_in.split(" ")[0]
+                        md_text = MessageNotifier.format_daily_report_markdown(
+                            signal_date=latest_date.strftime("%Y-%m-%d"),
+                            execution_date=exec_str,
+                            top_df=top_df,
+                            macro_status="正常多头持仓"
+                        )
+                        success = False
+                        if ch_type == "feishu":
+                            success = MessageNotifier.send_feishu_card(webhook_in, f"A股量化决策报告", md_text)
+                        elif ch_type == "wechat":
+                            success = MessageNotifier.send_wechat_work(webhook_in, md_text)
+                        elif ch_type == "dingtalk":
+                            success = MessageNotifier.send_dingtalk(webhook_in, "A股量化决策报告", md_text)
+                        
+                        if success:
+                            st.success("✅ 推送成功！已向机器人群组下发决策报告！")
+                        else:
+                            st.error("❌ 推送失败，请检查 Webhook 地址是否正确且网络通畅。")
+                    else:
+                        st.warning("⚠️ 请先输入机器人的 Webhook 地址")
+        else:
+            st.info("💡 尚未生成选股信号，请先运行回测管线以生成最新调仓指令表")
+
+    # ==========================================
+    # Tab 7: 研究可信度与审计
+    # ==========================================
+    with tab7:
+        st.subheader("⚙️ 研究可信度与量化回测真实性审计 (Audit Dashboard)")
+        perf = getattr(st.session_state, "perf_metrics", None) or {}
+        audit = perf.get("audit_metadata", {})
+
+        if audit.get("survivorship_bias_risk", False):
+            st.warning("⚠️ **幸存者偏差风险提示 (Survivorship Bias Risk)**: 当前策略使用 STATIC 固定股票池回测历史时期，存在幸存者偏差风险。生产实盘建议接入 POINT_IN_TIME 动态指数成分股。")
+
+        col_a1, col_a2, col_a3, col_a4 = st.columns(4)
+        with col_a1:
+            st.markdown("##### 📁 数据源与日历资质")
+            st.write(f"• **数据来源**: `{audit.get('data_source')}`")
+            st.write(f"• **来源明细**: `{audit.get('data_source_breakdown')}`")
+            st.write(f"• **交易日历**: `{audit.get('calendar_source')}`")
+            st.write(f"• **日历提供方**: `{audit.get('calendar_provider')}`")
+            st.write(f"• **交易所官方认证**: `{'✅ 交易所官方' if audit.get('calendar_is_exchange_official') else '❌ 否 (第三方镜像/近似)'}`")
+            st.write(f"• **日历品质等级**: `{audit.get('calendar_quality')}`")
+
+        with col_a2:
+            st.markdown("##### 🏢 行业覆盖与逐日中性化")
+            st.write(f"• **逐日行业中性化模式**: `{audit.get('industry_neutralization_enabled')}`")
+            st.write(f"• **行业覆盖率均值**: `{(audit.get('industry_coverage_ratio_mean') or 0)*100:.1f}%`")
+            st.write(f"• **行业覆盖率最低**: `{(audit.get('industry_coverage_ratio_min') or 0)*100:.1f}%`")
+            st.write(f"• **行业中性化执行天数占比**: `{(audit.get('industry_neutralization_day_ratio') or 0)*100:.1f}%`")
+            st.write(f"• **行业集中度硬上限**: `{'✅ 严格30%上限' if audit.get('sector_cap_enabled') else '已关闭'}`")
+            st.write(f"• **UNKNOWN行业权重**: `{audit.get('unknown_industry_weight', 0)*100:.1f}%`")
+
+        with col_a3:
+            st.markdown("##### 📅 上市日期与 ST 状态")
+            st.write(f"• **上市日期覆盖率**: `{(audit.get('listing_date_coverage_ratio') or 0)*100:.1f}%`")
+            st.write(f"• **历史逐日 ST 可用性**: `{'可用' if audit.get('historical_st_available') else '❌ 缺失 (杜绝回填历史)'}`")
+            st.write(f"• **停牌超期警告事件**: `{audit.get('stale_price_warning_events', 0)} 次`")
+            st.write(f"• **停牌影响股票数**: `{len(audit.get('stale_price_affected_symbols', []))} 只`")
+            st.write(f"• **最大停牌天数**: `{audit.get('max_stale_price_days', 0)} 天`")
+
+        with col_a4:
+            st.markdown("##### 🎯 股票池与撮合摩擦")
+            st.write(f"• **股票池模式**: `{audit.get('universe_mode')}`")
+            st.write(f"• **幸存者偏差风险**: `{'⚠️ 存在 (STATIC)' if audit.get('survivorship_bias_risk') else '已消除'}`")
+            st.write(f"• **流动性部分成交**: `{audit.get('partial_fill_count', 0)} 次`")
+            st.write(f"• **流动性挂单拒绝**: `{audit.get('liquidity_rejected_count', 0)} 次`")
+            st.write(f"• **回测结束撤销订单**: `{audit.get('cancelled_order_count', 0)} 笔`")
+            st.write(f"• **除权除息处理**: `{'✅ 已支持' if audit.get('corporate_action_adjustment_available') else '⚠️ 缺失'}`")
+
+        st.markdown("---")
+        st.markdown("#### 🔄 手动触发管线重算")
+        c_btn1, c_btn2, c_btn3 = st.columns(3)
+        if c_btn1.button("🔄 重新同步数据", use_container_width=True):
+            manager = DataManager()
+            st.session_state.market_df = manager.sync_and_build_dataset(force_update=True)
+            st.success("数据同步完成！")
+
+        if c_btn2.button("⚡ 重新构建 Alpha 因子库", use_container_width=True):
+            processor = FactorProcessor()
+            market_df = st.session_state.market_df or DataManager().load_dataset()
+            factor_df = processor.build_and_save_factor_matrix(market_df, force_update=True)
+            labeler = TargetLabeler()
+            st.session_state.factor_df = labeler.compute_excess_return_label(factor_df)
+            st.session_state.factor_processor = processor
+            st.success("因子库重算完成！")
+
+        if c_btn3.button("🚀 重新运行完整回测", use_container_width=True):
+            run_full_pipeline_if_needed()
+            st.success("全流程回测完成！")
+            st.rerun()
