@@ -6,72 +6,72 @@
     "VSTD_60",
     "STD60",
     "STD10",
-    "ROC20",
     "MAX_RATIO_250",
-    "MAX_RATIO_30",
+    "ROC20",
     "ROC_STD_20",
+    "MAX_RATIO_30",
     "STD20",
     "MOM_ACC_60_120",
     "STD30",
-    "CORR_PV_20",
-    "ROC30",
-    "STD120",
     "MAX_RATIO_60",
-    "MA_RATIO_60",
+    "CORR_PV_20",
+    "STD120",
+    "ROC30",
     "WVMA_10",
+    "MA_RATIO_60",
     "VSTD_20",
     "CORR_PV_10",
     "ATR_RATIO_20",
     "MA_RATIO_30",
     "ATR_RATIO_60",
     "MAX_RATIO_20",
-    "STD5",
     "MIN_RATIO_120",
+    "STD5",
     "MA_RATIO_120",
     "WVMA_5",
+    "MIN_RATIO_60",
     "MOM_ACC_20_60",
     "LIMIT_UP_SPACE",
     "VSTD_10",
-    "MIN_RATIO_60",
     "EFFICIENCY_RATIO_10",
-    "MA_RATIO_5",
     "AMOUNT_RATIO_5_20",
-    "MAX_RATIO_5",
     "ROC60",
     "MAX_RATIO_120",
+    "MA_RATIO_5",
     "ROC_STD_60",
     "WVMA_20",
-    "MA_RATIO_250",
     "KLOW",
     "LOWER_SHADOW_RATIO",
     "KSFT",
     "INTRADAY_CLOSE_LOC",
+    "STD250",
+    "MAX_RATIO_5",
+    "MA_RATIO_250",
     "VMA_RATIO_10",
     "MA_RATIO_20",
     "ROC_STD_120",
-    "ROC10",
-    "STD250",
-    "ROC120",
     "MIN_RATIO_250",
+    "ROC120",
     "UPPER_SHADOW_RATIO",
+    "ROC10",
+    "ATR_RATIO_5",
     "MIN_RATIO_30",
     "MIN_RATIO_20",
-    "ATR_RATIO_5",
-    "KUP",
     "MIN_RATIO_5",
-    "VMA_RATIO_5",
+    "KUP",
     "MIN_RATIO_10",
     "VSTD_5",
     "ENTITY_RATIO",
     "KLEN",
-    "MA_RATIO_10",
+    "ROC250",
+    "VMA_RATIO_5",
     "MAX_RATIO_10",
     "KMID2",
     "CORR_PV_5",
-    "ROC250",
-    "ROC5",
+    "MA_RATIO_10",
     "VMA_RATIO_60",
     "ROC_STD_250",
+    "ROC5",
     "VMA_RATIO_20",
     "KMID",
     "AMIHUD_20_LN",
@@ -87,72 +87,72 @@
     "VSTD_60": 1,
     "STD60": -1,
     "STD10": -1,
-    "ROC20": 1,
     "MAX_RATIO_250": -1,
-    "MAX_RATIO_30": -1,
+    "ROC20": 1,
     "ROC_STD_20": 1,
+    "MAX_RATIO_30": -1,
     "STD20": -1,
     "MOM_ACC_60_120": -1,
     "STD30": -1,
-    "CORR_PV_20": 1,
-    "ROC30": 1,
-    "STD120": -1,
     "MAX_RATIO_60": -1,
-    "MA_RATIO_60": -1,
+    "CORR_PV_20": 1,
+    "STD120": -1,
+    "ROC30": 1,
     "WVMA_10": -1,
+    "MA_RATIO_60": -1,
     "VSTD_20": 1,
     "CORR_PV_10": 1,
     "ATR_RATIO_20": -1,
     "MA_RATIO_30": -1,
     "ATR_RATIO_60": -1,
     "MAX_RATIO_20": -1,
-    "STD5": -1,
     "MIN_RATIO_120": -1,
+    "STD5": -1,
     "MA_RATIO_120": -1,
     "WVMA_5": -1,
+    "MIN_RATIO_60": -1,
     "MOM_ACC_20_60": 1,
     "LIMIT_UP_SPACE": 1,
     "VSTD_10": 1,
-    "MIN_RATIO_60": -1,
     "EFFICIENCY_RATIO_10": -1,
-    "MA_RATIO_5": 1,
     "AMOUNT_RATIO_5_20": 1,
-    "MAX_RATIO_5": 1,
     "ROC60": 1,
     "MAX_RATIO_120": -1,
+    "MA_RATIO_5": 1,
     "ROC_STD_60": 1,
     "WVMA_20": -1,
-    "MA_RATIO_250": -1,
     "KLOW": 1,
     "LOWER_SHADOW_RATIO": 1,
     "KSFT": 1,
     "INTRADAY_CLOSE_LOC": 1,
+    "STD250": -1,
+    "MAX_RATIO_5": 1,
+    "MA_RATIO_250": -1,
     "VMA_RATIO_10": 1,
     "MA_RATIO_20": -1,
     "ROC_STD_120": 1,
-    "ROC10": 1,
-    "STD250": -1,
-    "ROC120": 1,
     "MIN_RATIO_250": -1,
+    "ROC120": 1,
     "UPPER_SHADOW_RATIO": -1,
+    "ROC10": 1,
+    "ATR_RATIO_5": 1,
     "MIN_RATIO_30": -1,
     "MIN_RATIO_20": -1,
-    "ATR_RATIO_5": 1,
-    "KUP": -1,
     "MIN_RATIO_5": 1,
-    "VMA_RATIO_5": 1,
+    "KUP": -1,
     "MIN_RATIO_10": 1,
     "VSTD_5": 1,
     "ENTITY_RATIO": -1,
     "KLEN": 1,
-    "MA_RATIO_10": -1,
+    "ROC250": -1,
+    "VMA_RATIO_5": 1,
     "MAX_RATIO_10": -1,
     "KMID2": 1,
     "CORR_PV_5": 1,
-    "ROC250": -1,
-    "ROC5": -1,
+    "MA_RATIO_10": -1,
     "VMA_RATIO_60": 1,
     "ROC_STD_250": -1,
+    "ROC5": -1,
     "VMA_RATIO_20": 1,
     "KMID": -1,
     "AMIHUD_20_LN": 1,
@@ -168,72 +168,72 @@
     "VSTD_60": "20D",
     "STD60": "20D",
     "STD10": "20D",
-    "ROC20": "20D",
     "MAX_RATIO_250": "20D",
-    "MAX_RATIO_30": "20D",
+    "ROC20": "20D",
     "ROC_STD_20": "20D",
+    "MAX_RATIO_30": "20D",
     "STD20": "10D",
     "MOM_ACC_60_120": "20D",
     "STD30": "10D",
-    "CORR_PV_20": "10D",
-    "ROC30": "5D",
-    "STD120": "10D",
     "MAX_RATIO_60": "20D",
-    "MA_RATIO_60": "20D",
+    "CORR_PV_20": "10D",
+    "STD120": "10D",
+    "ROC30": "5D",
     "WVMA_10": "20D",
+    "MA_RATIO_60": "20D",
     "VSTD_20": "20D",
     "CORR_PV_10": "10D",
     "ATR_RATIO_20": "20D",
     "MA_RATIO_30": "20D",
     "ATR_RATIO_60": "20D",
     "MAX_RATIO_20": "20D",
-    "STD5": "10D",
     "MIN_RATIO_120": "20D",
+    "STD5": "10D",
     "MA_RATIO_120": "20D",
     "WVMA_5": "10D",
+    "MIN_RATIO_60": "20D",
     "MOM_ACC_20_60": "5D",
     "LIMIT_UP_SPACE": "20D",
     "VSTD_10": "20D",
-    "MIN_RATIO_60": "20D",
     "EFFICIENCY_RATIO_10": "5D",
-    "MA_RATIO_5": "20D",
     "AMOUNT_RATIO_5_20": "10D",
-    "MAX_RATIO_5": "20D",
     "ROC60": "10D",
     "MAX_RATIO_120": "20D",
+    "MA_RATIO_5": "20D",
     "ROC_STD_60": "10D",
     "WVMA_20": "10D",
-    "MA_RATIO_250": "10D",
     "KLOW": "10D",
     "LOWER_SHADOW_RATIO": "20D",
     "KSFT": "20D",
     "INTRADAY_CLOSE_LOC": "20D",
+    "STD250": "20D",
+    "MAX_RATIO_5": "20D",
+    "MA_RATIO_250": "10D",
     "VMA_RATIO_10": "5D",
     "MA_RATIO_20": "20D",
     "ROC_STD_120": "20D",
-    "ROC10": "20D",
-    "STD250": "20D",
-    "ROC120": "20D",
     "MIN_RATIO_250": "10D",
+    "ROC120": "20D",
     "UPPER_SHADOW_RATIO": "5D",
+    "ROC10": "20D",
+    "ATR_RATIO_5": "10D",
     "MIN_RATIO_30": "3D",
     "MIN_RATIO_20": "20D",
-    "ATR_RATIO_5": "10D",
-    "KUP": "1D",
     "MIN_RATIO_5": "10D",
-    "VMA_RATIO_5": "3D",
+    "KUP": "1D",
     "MIN_RATIO_10": "1D",
     "VSTD_5": "3D",
     "ENTITY_RATIO": "1D",
     "KLEN": "10D",
-    "MA_RATIO_10": "3D",
+    "ROC250": "5D",
+    "VMA_RATIO_5": "3D",
     "MAX_RATIO_10": "5D",
     "KMID2": "3D",
     "CORR_PV_5": "10D",
-    "ROC250": "5D",
-    "ROC5": "10D",
+    "MA_RATIO_10": "3D",
     "VMA_RATIO_60": "3D",
     "ROC_STD_250": "10D",
+    "ROC5": "10D",
     "VMA_RATIO_20": "5D",
     "KMID": "3D",
     "AMIHUD_20_LN": "1D",
@@ -249,72 +249,72 @@
     "VSTD_60": "REJECT",
     "STD60": "REJECT",
     "STD10": "REJECT",
-    "ROC20": "REJECT",
     "MAX_RATIO_250": "REJECT",
-    "MAX_RATIO_30": "REJECT",
+    "ROC20": "REJECT",
     "ROC_STD_20": "REJECT",
+    "MAX_RATIO_30": "REJECT",
     "STD20": "REJECT",
     "MOM_ACC_60_120": "REJECT",
     "STD30": "REJECT",
-    "CORR_PV_20": "REJECT",
-    "ROC30": "REJECT",
-    "STD120": "REJECT",
     "MAX_RATIO_60": "REJECT",
-    "MA_RATIO_60": "REJECT",
+    "CORR_PV_20": "REJECT",
+    "STD120": "REJECT",
+    "ROC30": "REJECT",
     "WVMA_10": "REJECT",
+    "MA_RATIO_60": "REJECT",
     "VSTD_20": "REJECT",
     "CORR_PV_10": "REJECT",
     "ATR_RATIO_20": "REJECT",
     "MA_RATIO_30": "REJECT",
     "ATR_RATIO_60": "REJECT",
     "MAX_RATIO_20": "REJECT",
-    "STD5": "REJECT",
     "MIN_RATIO_120": "REJECT",
+    "STD5": "REJECT",
     "MA_RATIO_120": "REJECT",
     "WVMA_5": "REJECT",
+    "MIN_RATIO_60": "REJECT",
     "MOM_ACC_20_60": "REJECT",
     "LIMIT_UP_SPACE": "REJECT",
     "VSTD_10": "REJECT",
-    "MIN_RATIO_60": "REJECT",
     "EFFICIENCY_RATIO_10": "REJECT",
-    "MA_RATIO_5": "REJECT",
     "AMOUNT_RATIO_5_20": "REJECT",
-    "MAX_RATIO_5": "REJECT",
     "ROC60": "REJECT",
     "MAX_RATIO_120": "REJECT",
+    "MA_RATIO_5": "REJECT",
     "ROC_STD_60": "REJECT",
     "WVMA_20": "REJECT",
-    "MA_RATIO_250": "REJECT",
     "KLOW": "REJECT",
     "LOWER_SHADOW_RATIO": "REJECT",
     "KSFT": "REJECT",
     "INTRADAY_CLOSE_LOC": "REJECT",
+    "STD250": "REJECT",
+    "MAX_RATIO_5": "REJECT",
+    "MA_RATIO_250": "REJECT",
     "VMA_RATIO_10": "REJECT",
     "MA_RATIO_20": "REJECT",
     "ROC_STD_120": "REJECT",
-    "ROC10": "REJECT",
-    "STD250": "REJECT",
-    "ROC120": "REJECT",
     "MIN_RATIO_250": "REJECT",
+    "ROC120": "REJECT",
     "UPPER_SHADOW_RATIO": "REJECT",
+    "ROC10": "REJECT",
+    "ATR_RATIO_5": "REJECT",
     "MIN_RATIO_30": "REJECT",
     "MIN_RATIO_20": "REJECT",
-    "ATR_RATIO_5": "REJECT",
-    "KUP": "REJECT",
     "MIN_RATIO_5": "REJECT",
-    "VMA_RATIO_5": "REJECT",
+    "KUP": "REJECT",
     "MIN_RATIO_10": "REJECT",
     "VSTD_5": "REJECT",
     "ENTITY_RATIO": "REJECT",
     "KLEN": "REJECT",
-    "MA_RATIO_10": "REJECT",
+    "ROC250": "REJECT",
+    "VMA_RATIO_5": "REJECT",
     "MAX_RATIO_10": "REJECT",
     "KMID2": "REJECT",
     "CORR_PV_5": "REJECT",
-    "ROC250": "REJECT",
-    "ROC5": "REJECT",
+    "MA_RATIO_10": "REJECT",
     "VMA_RATIO_60": "REJECT",
     "ROC_STD_250": "REJECT",
+    "ROC5": "REJECT",
     "VMA_RATIO_20": "REJECT",
     "KMID": "REJECT",
     "AMIHUD_20_LN": "REJECT",
@@ -328,180 +328,185 @@
   },
   "rejection_reasons": {
     "VSTD_60": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "STD60": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "STD10": [
-      "fdr_rejected_pval_0.914"
-    ],
-    "ROC20": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "MAX_RATIO_250": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
-    "MAX_RATIO_30": [
-      "fdr_rejected_pval_0.914"
+    "ROC20": [
+      "fdr_rejected_pval_1.000"
     ],
     "ROC_STD_20": [
-      "high_redundancy_in_cluster_3"
+      "high_redundancy_in_cluster_6"
+    ],
+    "MAX_RATIO_30": [
+      "fdr_rejected_pval_1.000"
     ],
     "STD20": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "MOM_ACC_60_120": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.958"
+      "fdr_rejected_pval_1.000"
     ],
     "STD30": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
+    ],
+    "MAX_RATIO_60": [
+      "fdr_rejected_pval_1.000"
     ],
     "CORR_PV_20": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
+    ],
+    "STD120": [
+      "fdr_rejected_pval_1.000"
     ],
     "ROC30": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "STD120": [
-      "fdr_rejected_pval_0.914"
-    ],
-    "MAX_RATIO_60": [
-      "fdr_rejected_pval_0.914"
-    ],
-    "MA_RATIO_60": [
-      "high_redundancy_in_cluster_6"
+      "fdr_rejected_pval_1.000"
     ],
     "WVMA_10": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
+    ],
+    "MA_RATIO_60": [
+      "high_redundancy_in_cluster_9"
     ],
     "VSTD_20": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "CORR_PV_10": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "ATR_RATIO_20": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "MA_RATIO_30": [
-      "fdr_rejected_pval_0.914"
+      "high_redundancy_in_cluster_6"
     ],
     "ATR_RATIO_60": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "MAX_RATIO_20": [
-      "high_redundancy_in_cluster_4"
+      "high_redundancy_in_cluster_7"
+    ],
+    "MIN_RATIO_120": [
+      "fdr_rejected_pval_1.000"
     ],
     "STD5": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "MIN_RATIO_120": [
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "MA_RATIO_120": [
-      "high_redundancy_in_cluster_8"
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
     ],
     "WVMA_5": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
+    ],
+    "MIN_RATIO_60": [
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
     ],
     "MOM_ACC_20_60": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.926"
+      "fdr_rejected_pval_1.000"
     ],
     "LIMIT_UP_SPACE": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "VSTD_10": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "MIN_RATIO_60": [
-      "high_redundancy_in_cluster_6"
+      "fdr_rejected_pval_1.000"
     ],
     "EFFICIENCY_RATIO_10": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "MA_RATIO_5": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "AMOUNT_RATIO_5_20": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "MAX_RATIO_5": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "ROC60": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.966"
+      "high_redundancy_in_cluster_10"
     ],
     "MAX_RATIO_120": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.986"
+      "fdr_rejected_pval_1.000"
+    ],
+    "MA_RATIO_5": [
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
     ],
     "ROC_STD_60": [
-      "high_redundancy_in_cluster_5"
+      "high_redundancy_in_cluster_10"
     ],
     "WVMA_20": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "MA_RATIO_250": [
-      "high_redundancy_in_cluster_10"
+      "fdr_rejected_pval_1.000"
     ],
     "KLOW": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "LOWER_SHADOW_RATIO": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "KSFT": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "INTRADAY_CLOSE_LOC": [
       "high_redundancy_in_cluster_2"
     ],
-    "VMA_RATIO_10": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "MA_RATIO_20": [
-      "high_redundancy_in_cluster_4"
-    ],
-    "ROC_STD_120": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.966"
-    ],
-    "ROC10": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.986"
-    ],
     "STD250": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.966"
+      "fdr_rejected_pval_1.000"
     ],
-    "ROC120": [
-      "high_redundancy_in_cluster_7"
+    "MAX_RATIO_5": [
+      "high_redundancy_in_cluster_4"
+    ],
+    "MA_RATIO_250": [
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
+    ],
+    "VMA_RATIO_10": [
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
+    ],
+    "MA_RATIO_20": [
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
+    ],
+    "ROC_STD_120": [
+      "high_redundancy_in_cluster_11"
     ],
     "MIN_RATIO_250": [
-      "high_redundancy_in_cluster_10"
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
+    ],
+    "ROC120": [
+      "high_redundancy_in_cluster_11"
     ],
     "UPPER_SHADOW_RATIO": [
       "insignificant_rank_ic",
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
+    ],
+    "ROC10": [
+      "high_redundancy_in_cluster_5"
+    ],
+    "ATR_RATIO_5": [
       "low_icir_stability",
       "fdr_rejected_pval_1.000"
     ],
@@ -511,24 +516,14 @@
       "fdr_rejected_pval_1.000"
     ],
     "MIN_RATIO_20": [
-      "low_icir_stability",
-      "fdr_rejected_pval_1.000"
-    ],
-    "ATR_RATIO_5": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.914"
-    ],
-    "KUP": [
-      "low_icir_stability",
-      "fdr_rejected_pval_0.963"
+      "high_redundancy_in_cluster_8"
     ],
     "MIN_RATIO_5": [
       "insignificant_rank_ic",
       "low_icir_stability",
       "fdr_rejected_pval_1.000"
     ],
-    "VMA_RATIO_5": [
-      "insignificant_rank_ic",
+    "KUP": [
       "low_icir_stability",
       "fdr_rejected_pval_1.000"
     ],
@@ -549,12 +544,14 @@
     ],
     "KLEN": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
-    "MA_RATIO_10": [
-      "insignificant_rank_ic",
+    "ROC250": [
       "low_icir_stability",
       "fdr_rejected_pval_1.000"
+    ],
+    "VMA_RATIO_5": [
+      "high_redundancy_in_cluster_13"
     ],
     "MAX_RATIO_10": [
       "insignificant_rank_ic",
@@ -563,30 +560,31 @@
     ],
     "KMID2": [
       "low_icir_stability",
-      "fdr_rejected_pval_0.914"
+      "fdr_rejected_pval_1.000"
     ],
     "CORR_PV_5": [
       "insignificant_rank_ic",
       "low_icir_stability",
       "fdr_rejected_pval_1.000"
     ],
-    "ROC250": [
-      "low_icir_stability",
-      "fdr_rejected_pval_1.000"
-    ],
-    "ROC5": [
+    "MA_RATIO_10": [
       "insignificant_rank_ic",
       "low_icir_stability",
       "fdr_rejected_pval_1.000"
     ],
     "VMA_RATIO_60": [
-      "high_redundancy_in_cluster_11"
+      "insignificant_rank_ic",
+      "low_icir_stability",
+      "fdr_rejected_pval_1.000"
     ],
     "ROC_STD_250": [
-      "high_redundancy_in_cluster_9"
+      "high_redundancy_in_cluster_12"
+    ],
+    "ROC5": [
+      "high_redundancy_in_cluster_3"
     ],
     "VMA_RATIO_20": [
-      "high_redundancy_in_cluster_11"
+      "high_redundancy_in_cluster_14"
     ],
     "KMID": [
       "high_redundancy_in_cluster_1"
@@ -597,7 +595,7 @@
       "fdr_rejected_pval_1.000"
     ],
     "AMIHUD_20": [
-      "high_redundancy_in_cluster_12"
+      "high_redundancy_in_cluster_15"
     ],
     "IS_LIMIT_UP_LAG1": [
       "insignificant_rank_ic",
@@ -631,7 +629,7 @@
     ]
   },
   "walk_forward_stability": {
-    "walk_forward_status": "OOS_PRELIMINARY",
+    "walk_forward_status": "DEVELOPMENT_SAMPLE",
     "total_folds": 1,
     "min_folds_required": 3,
     "folds_detail": [
