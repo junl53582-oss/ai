@@ -95,7 +95,7 @@ def main():
         "configured_default_symbols": settings.DEFAULT_UNIVERSE,
         "configured_default_symbols_count": len(settings.DEFAULT_UNIVERSE),
         "universe_profile": getattr(settings, "UNIVERSE_PROFILE", "HS300_CORE"),
-        "provider_mode": dm.universe_provider.get_mode(),
+        "provider_mode": getattr(dm, "universe_provider", None).get_mode() if hasattr(dm, "universe_provider") else "STATIC_CONFIG",
         "market_dataset_symbols_count": int(market_df["symbol"].nunique()) if "symbol" in market_df.columns else 0,
         "factor_matrix_symbols_count": int(factor_df["symbol"].nunique()) if "symbol" in factor_df.columns else 0,
         "factor_matrix_rows": len(factor_df),
