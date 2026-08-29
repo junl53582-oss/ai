@@ -2,11 +2,11 @@
   "schema_version": "1.5",
   "research_validity_status": "DEVELOPMENT_SAMPLE",
   "production_readiness_status": "NOT_READY_DEVELOPMENT_SAMPLE",
-  "research_source_commit": "beb33cdc753d5179478df7a81299c18eae044770",
-  "research_source_tree_hash": "7421162063a20451ebc25bc4f8409e8531c33764",
+  "research_source_commit": "b7bc4d912abdd0fb5b045f8568e46bd37b24bef8",
+  "research_source_tree_hash": "8da4b5d4ac4ef9a1384110fd7d974207fdf96bd2",
   "research_source_working_tree_clean": true,
   "requirements_hash": "a49f986dc96bd6081e9c820823cb7cd926bea7811b6f127cb42b3ca73c7bf42f",
-  "parent_market_manifest_hash": null,
+  "parent_market_manifest_hash": "a912ee3720a201400220f6435649d03fa4d706144400735753cc00827f38cc3b",
   "parent_factor_manifest_hash": "c76e32d11ae566fe04c85110f6c7138be2dadaeb439460ed2aedb42256cda4c8",
   "factor_matrix_hash": "d8b0ebaab8b3e4c297f1bb01a26950377da1016a1e403f0545c2439fdd65ac44",
   "factor_columns_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
@@ -46,5 +46,5 @@
   "walk_forward_status": "DEVELOPMENT_SAMPLE",
   "selected_strong_count": 0,
   "selected_useful_count": 0,
-  "generated_at": "2026-08-29T17:41:09.915182+00:00"
+  "generated_at": "2026-08-29T18:04:45.459859+00:00"
 }
