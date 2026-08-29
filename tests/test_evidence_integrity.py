@@ -687,6 +687,7 @@ def test_certification_policy_truth_table():
         corporate_action_coverage_complete=True,
         corporate_action_bias_risk=False,
         corporate_action_adjustment_available=True,
+        corporate_action_dataset_hash_verified=True,
         corporate_action_coverage_ratio=1.0,
         cache_fingerprint_verified=True,
         raw_data_provenance_preserved=True,

@@ -266,7 +266,7 @@ class DataManager:
                     self.data_source_breakdown = cached_manifest.get("raw_data_source_breakdown", {"parquet_cache": len(df["symbol"].unique())})
                     self.synthetic_data_used = bool(cached_manifest.get("synthetic_data_used", False))
                     self.cache_fingerprint_verified = True
-                    self.raw_data_provenance_preserved = True
+                    self._restore_raw_provenance_state_from_manifest(cached_manifest)
                     return df
                 else:
                     logger.info("行情缓存指纹与当前配置不匹配，强制重新拉取构建...")
@@ -513,30 +513,46 @@ class DataManager:
             self.data_source_breakdown = manifest.get("raw_data_source_breakdown", {"parquet_cache": len(df["symbol"].unique())})
             self.synthetic_data_used = bool(manifest.get("synthetic_data_used", False))
             self.cache_fingerprint_verified = True
-
-            # P1-5: 物理 Raw 证据验证 (绝不自动将缓存推导为 Provenance Preserved)
-            source_files = manifest.get("source_files", [])
-            source_hashes = manifest.get("source_hashes", {})
-            raw_dir = settings.DATA_DIR / "raw" / "market"
-            has_raw = False
-            if source_files and source_hashes and raw_dir.exists():
-                all_exist = True
-                for sf in source_files:
-                    rf = raw_dir / sf
-                    if not rf.exists():
-                        all_exist = False
-                        break
-                has_raw = all_exist
-
-            self.raw_data_provenance_preserved = bool(has_raw and manifest.get("raw_data_provenance_preserved", False))
-            self.market_raw_evidence_verified = self.raw_data_provenance_preserved
-            self.market_data_provenance_verified = False  # 必须经 verify_market_manifest 独立核验
+            self._restore_raw_provenance_state_from_manifest(manifest)
             return df
         except Exception as e:
             if strict:
                 raise
             logger.warning(f"读取行情缓存异常: {e}，重新构建...")
             return self.sync_and_build_dataset(force_update=True)
+
+    def _restore_raw_provenance_state_from_manifest(
+        self,
+        manifest: Dict[str, Any],
+        raw_evidence_dir: Optional[Union[str, Path]] = None
+    ) -> bool:
+        """
+        根据 Manifest 中的 source_files、source_hashes 与物理磁盘上的实际 Raw 文件校验并恢复 raw_data_provenance_preserved (P1-2)
+        绝不允许仅凭 Parquet 缓存存在就默认 raw_data_provenance_preserved=True
+        """
+        source_files = manifest.get("source_files", [])
+        source_hashes = manifest.get("source_hashes", {})
+        raw_dir = Path(raw_evidence_dir) if raw_evidence_dir else (settings.DATA_DIR / "raw" / "market")
+
+        has_raw = False
+        if source_files and source_hashes and raw_dir.exists() and raw_dir.is_dir():
+            all_exist_and_match = True
+            for sf in source_files:
+                rf = raw_dir / sf
+                if not rf.exists() or not rf.is_file():
+                    all_exist_and_match = False
+                    break
+                h = hashlib.sha256(rf.read_bytes()).hexdigest()
+                exp_h = source_hashes.get(sf, "")
+                if h.lower() != str(exp_h).lower():
+                    all_exist_and_match = False
+                    break
+            has_raw = all_exist_and_match
+
+        self.raw_data_provenance_preserved = bool(has_raw and manifest.get("raw_data_provenance_preserved", False))
+        self.market_raw_evidence_verified = self.raw_data_provenance_preserved
+        self.market_data_provenance_verified = False  # 必须经 verify_market_manifest 独立核验
+        return self.raw_data_provenance_preserved
 
     def _compute_coverage_stats(self, df: pd.DataFrame):
         """准确计算上市日期、行业分类与历史 ST 的股票覆盖率"""

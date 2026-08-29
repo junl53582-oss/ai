@@ -647,6 +647,12 @@ class CertificationPolicy:
             failed_checks.append("corporate_action_missing_adjustment_or_zero_event_proof")
             if not meta.corporate_action_coverage_complete:
                 failed_checks.append("corporate_action_coverage_incomplete")
+
+        # P0-1: 非空除权除息数据集必须满足 dataset_hash_verified == True 硬门禁
+        if meta.corporate_action_adjustment_available:
+            if not meta.corporate_action_dataset_hash_verified:
+                failed_checks.append("corporate_action_dataset_hash_unverified")
+
         if meta.corporate_action_bias_risk:
             failed_checks.append("corporate_action_bias_risk_present")
         if not meta.corporate_action_provenance_verified:
@@ -871,10 +877,20 @@ class AuditCollector:
             meta.corporate_action_bias_risk = bool(getattr(engine, "corporate_action_bias_risk", True))
             meta.corporate_action_adjustment_available = bool(getattr(engine, "corporate_action_adjustment_available", False))
             meta.corporate_action_zero_event_proof_verified = bool(getattr(engine, "corporate_action_zero_event_proof_verified", False))
-            meta.corporate_action_provenance_verified = bool(getattr(engine, "corporate_action_provenance_verified", False))
-            meta.corporate_action_dataset_hash_verified = bool(getattr(engine, "corporate_action_dataset_hash_verified", False))
 
-            corp_res = getattr(engine, "corporate_action_manifest_result", None)
+            # P0-1: 真实读取 Dataset Verification Result (杜绝覆盖与裸 bool 伪造)
+            corp_provider = getattr(engine, "corporate_actions", None)
+            dataset_res = getattr(corp_provider, "dataset_verification_result", None) if corp_provider else None
+            if dataset_res is not None:
+                meta.corporate_action_dataset_hash_verified = bool(getattr(dataset_res, "dataset_hash_verified", False))
+            else:
+                meta.corporate_action_dataset_hash_verified = bool(getattr(engine, "corporate_action_dataset_hash_verified", False))
+
+            meta.corporate_action_provenance_verified = bool(
+                getattr(corp_provider, "corporate_action_provenance_verified", False) if corp_provider else getattr(engine, "corporate_action_provenance_verified", False)
+            )
+
+            corp_res = getattr(engine, "corporate_action_manifest_result", None) or getattr(corp_provider, "corporate_action_manifest_result", None)
             if corp_res and isinstance(corp_res, ManifestVerificationResult):
                 meta.corporate_action_manifest_hash = corp_res.actual_hash
                 meta.corporate_action_manifest_hash_verified = corp_res.hash_verified and corp_res.schema_verified

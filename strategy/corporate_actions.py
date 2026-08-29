@@ -93,10 +93,46 @@ class CorporateActionProvider:
         self.corporate_action_dataset_hash_verified: bool = False
         self.corporate_action_manifest_hash: Optional[str] = None
         self.corporate_action_manifest_hash_verified: bool = False
-        self.verification_result: Optional[CorporateActionVerificationResult] = None
+        
+        # P0-1: 拆分三大独立认证结果实体 (Dataset / Coverage / Manifest)
+        self.dataset_verification_result: Optional[CorporateActionVerificationResult] = None
+        self.coverage_verification_result: Optional[CorporateActionVerificationResult] = None
         self.manifest_verification_result: Optional[Any] = None
         self.corporate_action_manifest_result: Optional[Any] = None
+        self.verification_result: Optional[CorporateActionVerificationResult] = None
         self._action_count: int = 0
+
+    def _update_provenance_verified(self):
+        """组合推导公司行为整体数据真实性认证状态 (P0-1: 绝不被覆盖)"""
+        has_actions = self.has_actions_data() or self._action_count > 0
+        manifest_res = self.manifest_verification_result or self.corporate_action_manifest_result
+        manifest_ok = bool(
+            manifest_res is not None
+            and getattr(manifest_res, "hash_verified", False)
+            and getattr(manifest_res, "schema_verified", False)
+            and getattr(manifest_res, "parent_chain_verified", False)
+        )
+        coverage_res = self.coverage_verification_result
+        coverage_ok = bool(
+            coverage_res is not None
+            and getattr(coverage_res, "coverage_verified", False)
+            and getattr(coverage_res, "source_authentication_verified", False)
+        )
+
+        if has_actions:
+            dataset_res = self.dataset_verification_result
+            dataset_ok = bool(
+                dataset_res is not None
+                and getattr(dataset_res, "dataset_hash_verified", False)
+                and getattr(dataset_res, "source_authentication_verified", False)
+                and getattr(dataset_res, "trust_anchor_verified", False)
+            )
+            self.corporate_action_dataset_hash_verified = bool(dataset_res and getattr(dataset_res, "dataset_hash_verified", False))
+            self.corporate_action_provenance_verified = bool(dataset_ok and coverage_ok and manifest_ok)
+        else:
+            # Zero Event 模式: 无除权除息流水时，只要零事件证明成立、覆盖完整且 Manifest 认证通过即可
+            zero_ok = bool(self.zero_event_proof_verified and coverage_ok)
+            self.corporate_action_provenance_verified = bool(zero_ok and manifest_ok)
 
     def verify_corporate_action_manifest(
         self,
@@ -120,7 +156,8 @@ class CorporateActionProvider:
         self.corporate_action_manifest_result = res
         self.manifest_verification_result = res
         self.corporate_action_manifest_hash = res.actual_hash
-        self.corporate_action_manifest_hash_verified = res.hash_verified and res.schema_verified and res.parent_chain_verified
+        self.corporate_action_manifest_hash_verified = bool(res.hash_verified and res.schema_verified and res.parent_chain_verified)
+        self._update_provenance_verified()
         return res
 
     def register_action(self, action: CorporateAction):
@@ -181,7 +218,16 @@ class CorporateActionProvider:
         if not self.required_symbols:
             self.coverage_ratio = 1.0
             self.coverage_complete = True
-            self.corporate_action_provenance_verified = True
+            self.coverage_verification_result = CorporateActionVerificationResult(
+                dataset_hash_verified=getattr(self.dataset_verification_result, "dataset_hash_verified", False) if self.dataset_verification_result else False,
+                manifest_hash_verified=self.corporate_action_manifest_hash_verified,
+                source_authentication_verified=True,
+                coverage_verified=True,
+                trust_anchor_verified=True,
+                failed_checks=[]
+            )
+            self.verification_result = self.coverage_verification_result
+            self._update_provenance_verified()
             return True
 
         s_date = pd.to_datetime(start_date).strftime("%Y-%m-%d") if start_date else "2000-01-01"
@@ -226,16 +272,18 @@ class CorporateActionProvider:
         self.coverage_ratio = len(validly_covered) / len(self.required_symbols) if self.required_symbols else 0.0
         self.coverage_complete = len(validly_covered) == len(self.required_symbols)
         self.zero_event_proof_verified = bool(self.coverage_complete and all_zero_event_proven and self._action_count == 0)
-        self.corporate_action_provenance_verified = bool(self.coverage_complete and all_provenance_ok)
 
-        self.verification_result = CorporateActionVerificationResult(
-            dataset_hash_verified=self.corporate_action_dataset_hash_verified,
+        # 仅写入 coverage_verification_result，绝不覆盖 dataset_verification_result (P0-1)
+        self.coverage_verification_result = CorporateActionVerificationResult(
+            dataset_hash_verified=getattr(self.dataset_verification_result, "dataset_hash_verified", False) if self.dataset_verification_result else False,
             manifest_hash_verified=self.corporate_action_manifest_hash_verified,
             source_authentication_verified=all_provenance_ok,
             coverage_verified=self.coverage_complete,
             trust_anchor_verified=all_provenance_ok,
             failed_checks=failed_checks
         )
+        self.verification_result = self.coverage_verification_result
+        self._update_provenance_verified()
 
         return self.coverage_complete
 

@@ -259,9 +259,9 @@ def run_pipeline(
         manifest_data=corp_manifest_data,
         raw_evidence_dir=getattr(corp_provider, "evidence_dir", None)
     )
+    corp_provider.dataset_verification_result = dataset_ver_res
     corp_provider.verification_result = dataset_ver_res
-    corp_provider.corporate_action_provenance_verified = dataset_ver_res.source_authentication_verified and dataset_ver_res.trust_anchor_verified
-    corp_provider.corporate_action_dataset_hash_verified = dataset_ver_res.dataset_hash_verified
+    corp_provider._update_provenance_verified()
 
     engine = BacktestEngine(
         initial_cash=settings.INITIAL_CASH,

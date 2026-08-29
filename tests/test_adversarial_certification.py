@@ -2967,3 +2967,168 @@ class TestAdversarialCertification:
         assert res.parse_success is True
         assert res.event_count == 1
         assert res.events[0]["symbol"] == "600519.SH"
+
+    def test_corporate_dataset_failure_cannot_be_overwritten_by_coverage_success(self, tmp_path):
+        """P0-1: Dataset VerificationResult 失败不得被 validate_coverage 成功所覆盖"""
+        from strategy.corporate_actions import CorporateActionProvider, CorporateActionVerificationResult, CorporateAction
+        
+        cp = CorporateActionProvider(evidence_dir=tmp_path)
+        cp.register_action(CorporateAction(symbol="600519.SH", ex_date="2023-05-15", action_type="CASH_DIVIDEND", cash_dividend_per_share=25.0))
+        
+        cp.dataset_verification_result = CorporateActionVerificationResult(
+            dataset_hash_verified=False,
+            manifest_hash_verified=True,
+            source_authentication_verified=False,
+            coverage_verified=True,
+            trust_anchor_verified=False,
+            failed_checks=["dataset_hash_mismatch"]
+        )
+        cp._update_provenance_verified()
+        assert cp.corporate_action_provenance_verified is False
+
+        cp.validate_coverage([], "2023-01-01", "2023-12-31")
+
+        assert cp.dataset_verification_result is not None
+        assert cp.dataset_verification_result.dataset_hash_verified is False
+        assert cp.corporate_action_provenance_verified is False
+
+    def test_corporate_nonempty_actions_require_dataset_hash_verified(self):
+        """P0-1: 非空公司行为数据集必须通过 Dataset Hash 硬门禁，否则 CertificationPolicy 拦截"""
+        from backtest.audit import AuditMetadata, CertificationPolicy
+
+        meta = AuditMetadata()
+        meta.runtime_config_hash = "a" * 64
+        meta.runtime_config_hash_verified = True
+        meta.manifest_chain_verified = True
+        meta.market_manifest_hash = "b" * 64
+        meta.market_manifest_hash_verified = True
+        meta.universe_manifest_hash = "c" * 64
+        meta.universe_manifest_hash_verified = True
+        meta.factor_manifest_hash = "d" * 64
+        meta.factor_manifest_hash_verified = True
+        meta.corporate_action_manifest_hash = "e" * 64
+        meta.corporate_action_manifest_hash_verified = True
+
+        meta.synthetic_data_used = False
+        meta.market_data_provenance_verified = True
+        meta.actual_backtest_start_date = "2023-01-01"
+        meta.actual_backtest_end_date = "2023-12-31"
+        meta.universe_coverage_start = "2020-01-01"
+        meta.universe_coverage_end = "2025-12-31"
+        meta.universe_coverage_complete = True
+        meta.universe_provenance_verified = True
+        meta.universe_raw_evidence_verified = True
+        meta.universe_dataset_hash_verified = True
+        meta.universe_source_class = "OFFICIAL_PRIMARY"
+        meta.survivorship_bias_risk = False
+
+        meta.historical_st_coverage_complete = True
+        meta.historical_st_bias_risk = False
+        meta.st_unknown_rows = 0
+
+        meta.corporate_action_coverage_complete = True
+        meta.corporate_action_adjustment_available = True
+        meta.corporate_action_coverage_ratio = 1.0
+        meta.corporate_action_bias_risk = False
+        meta.corporate_action_provenance_verified = True
+        meta.corporate_action_dataset_hash_verified = False
+
+        meta.cache_fingerprint_verified = True
+        meta.raw_data_provenance_preserved = True
+        meta.adjustment_point_in_time_safe = True
+        meta.future_adjustment_leakage_test_passed = True
+        meta.data_source = "AKShare"
+        meta.benchmark_source = "akshare"
+        meta.benchmark_coverage_ratio = 1.0
+        meta.benchmark_missing_date_count = 0
+        meta.order_quantity_conservation_passed = True
+
+        status, failed = CertificationPolicy.evaluate(meta)
+        assert status != "VERIFIED"
+        assert "corporate_action_dataset_hash_unverified" in failed
+
+    def test_sync_cache_hit_does_not_imply_raw_provenance(self, tmp_path):
+        """P1-2: sync_and_build_dataset 缓存命中时，若磁盘无 Raw 文件，绝不得将 raw_data_provenance_preserved 置为 True"""
+        from data.data_manager import DataManager
+        from config.settings import settings
+
+        dm = DataManager()
+        dm.parquet_dir = tmp_path
+        p = tmp_path / "market_daily.parquet"
+        m = tmp_path / "market_daily.manifest.json"
+
+        df = pd.DataFrame({
+            "date": pd.to_datetime(["2023-01-03"]),
+            "symbol": ["600519.SH"],
+            "open": [100.0],
+            "high": [105.0],
+            "low": [99.0],
+            "close": [103.0],
+            "volume": [1000.0],
+            "amount": [103000.0],
+            "benchmark_close": [5000.0],
+            "in_universe": [True],
+            "is_st": [False],
+            "is_suspended": [False]
+        })
+        df.to_parquet(p)
+
+        manifest_fp = dm._compute_manifest_fingerprint(["600519.SH"], settings.BENCHMARK_SYMBOL, settings.START_DATE, settings.END_DATE)
+        manifest_fp.update({
+            "source_files": ["600519_SH_raw.csv"],
+            "source_hashes": {"600519_SH_raw.csv": "abc"},
+            "raw_data_provenance_preserved": True
+        })
+        m.write_text(json.dumps(manifest_fp), encoding="utf-8")
+
+        loaded_df = dm.sync_and_build_dataset(symbols=["600519.SH"])
+        assert dm.cache_fingerprint_verified is True
+        assert dm.raw_data_provenance_preserved is False
+        assert dm.market_data_provenance_verified is False
+
+    def test_raw_provenance_false_if_raw_files_deleted_after_cache_created(self, tmp_path):
+        """P1-2: 当 Raw 文件在缓存创建后被物理删除时，缓存加载必须将 raw_data_provenance_preserved 判定为 False"""
+        from data.data_manager import DataManager
+        from config.settings import settings
+
+        raw_dir = tmp_path / "raw"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_file = raw_dir / "600519_raw.csv"
+        raw_bytes = b"date,open,close\n2023-01-03,100,103\n"
+        raw_file.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        dm = DataManager()
+        dm.parquet_dir = tmp_path
+        p = tmp_path / "market_daily.parquet"
+        m = tmp_path / "market_daily.manifest.json"
+
+        df = pd.DataFrame({
+            "date": pd.to_datetime(["2023-01-03"]),
+            "symbol": ["600519.SH"],
+            "open": [100.0],
+            "high": [105.0],
+            "low": [99.0],
+            "close": [103.0],
+            "volume": [1000.0],
+            "amount": [103000.0],
+            "benchmark_close": [5000.0],
+            "in_universe": [True],
+            "is_st": [False],
+            "is_suspended": [False]
+        })
+        df.to_parquet(p)
+
+        manifest_fp = dm._compute_manifest_fingerprint(["600519.SH"], settings.BENCHMARK_SYMBOL, settings.START_DATE, settings.END_DATE)
+        manifest_fp.update({
+            "source_files": ["600519_raw.csv"],
+            "source_hashes": {"600519_raw.csv": raw_h},
+            "raw_data_provenance_preserved": True
+        })
+        m.write_text(json.dumps(manifest_fp), encoding="utf-8")
+
+        raw_file.unlink()
+
+        dm._restore_raw_provenance_state_from_manifest(manifest_fp, raw_evidence_dir=raw_dir)
+        assert dm.raw_data_provenance_preserved is False
+        assert dm.market_data_provenance_verified is False
