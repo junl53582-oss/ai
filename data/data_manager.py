@@ -92,6 +92,9 @@ class DataManager:
         self.cache_fingerprint_verified: bool = False
         self.cache_manifest_version: str = "3.1"
         self.raw_data_provenance_preserved: bool = False
+        self.market_raw_evidence_verified: bool = False
+        self.market_source_authentication_verified: bool = False
+        self.market_data_provenance_verified: bool = False
         self.manifest_hash: Optional[str] = None
         self.manifest_hash_verified: bool = False
         self.manifest_verification_result: Optional[Any] = None
@@ -100,9 +103,11 @@ class DataManager:
         self,
         manifest_path: Optional[Union[str, Path]] = None,
         expected_hash: Optional[str] = None,
-        parent_runtime_config_hash: Optional[str] = None
+        parent_runtime_config_hash: Optional[str] = None,
+        raw_evidence_dir: Optional[Union[str, Path]] = None,
+        production_mode: bool = True
     ) -> Any:
-        """从磁盘实际校验行情 Manifest 物理文件、严格 Schema 与父链"""
+        """从磁盘实际校验行情 Manifest 物理文件、严格 Schema、父链与物理 Raw Source 文件"""
         from backtest.audit import ManifestVerifier, ManifestType
         target_path = Path(manifest_path) if manifest_path else self.parquet_dir / "market_daily.manifest.json"
         parents = {"parent_runtime_config_hash": parent_runtime_config_hash} if parent_runtime_config_hash else None
@@ -110,11 +115,20 @@ class DataManager:
             manifest_path=target_path,
             expected_hash=expected_hash,
             expected_parents=parents,
-            manifest_type=ManifestType.MARKET
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=raw_evidence_dir or (settings.DATA_DIR / "raw" / "market"),
+            production_mode=production_mode
         )
         self.manifest_verification_result = res
         self.manifest_hash = res.actual_hash
-        self.manifest_hash_verified = res.hash_verified and res.schema_verified
+        self.manifest_hash_verified = res.hash_verified and res.schema_verified and res.parent_chain_verified
+        self.market_raw_evidence_verified = getattr(res, "raw_evidence_verified", False)
+        self.market_source_authentication_verified = getattr(res, "source_authentication_verified", False)
+        self.market_data_provenance_verified = (
+            self.manifest_hash_verified and 
+            self.market_raw_evidence_verified and 
+            self.market_source_authentication_verified
+        )
         return res
 
     def get_trading_calendar(self) -> List[pd.Timestamp]:
@@ -374,11 +388,62 @@ class DataManager:
         logger.info(f"正在将清洗后的数据集写入 Parquet: {parquet_file} (总行数: {len(merged_df)})...")
         merged_df.to_parquet(parquet_file, index=False, engine="pyarrow", compression="snappy")
 
-        # 写入 Manifest JSON (严格满足 ManifestType.MARKET Schema 与血缘追溯)
+        # 写入真实 Manifest JSON (严格满足 ManifestType.MARKET Schema 与血缘追溯，严禁伪造 SHA256(symbol))
+        self._write_market_manifest(
+            merged_df=merged_df,
+            curr_fingerprint=curr_fingerprint,
+            start_date=start_date,
+            end_date=end_date,
+            req_symbols=req_symbols
+        )
+        return merged_df
+
+    def _write_market_manifest(
+        self,
+        merged_df: pd.DataFrame,
+        curr_fingerprint: Dict[str, Any],
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        raw_evidence_dir: Optional[Union[str, Path]] = None,
+        req_symbols: Optional[List[str]] = None
+    ) -> Dict[str, Any]:
+        """
+        物理写入行情 Manifest JSON 文件 (严格满足 ManifestType.MARKET Schema 与真实血缘追溯)
+        绝对禁止伪造 SHA256(symbol) 等占位哈希：
+        - 仅当物理 Raw Source 文件真实存在于磁盘时，提取真实文件名与实际字节流 SHA256 哈希；
+        - 若未落盘 Raw Evidence (如在线爬虫直接清洗)，则 source_files=[]，source_hashes={}，
+          且 raw_data_provenance_preserved=False / market_data_provenance_verified=False。
+        """
+        manifest_file = self.parquet_dir / "market_daily.manifest.json"
         from backtest.audit import compute_canonical_runtime_config_hash
-        source_files = [f"{s}.parquet" for s in req_symbols]
-        source_hashes = {f"{s}.parquet": hashlib.sha256(s.encode("utf-8")).hexdigest() for s in req_symbols}
+
+        # 检查物理 Raw Evidence 文件
+        source_files = []
+        source_hashes = {}
+        raw_dir = Path(raw_evidence_dir) if raw_evidence_dir else (settings.DATA_DIR / "raw" / "market")
+        
+        has_physical_raw = False
+        if raw_dir.exists() and raw_dir.is_dir():
+            symbols_to_check = req_symbols or (list(merged_df["symbol"].unique()) if not merged_df.empty else [])
+            for sym in symbols_to_check:
+                patterns = [f"*{sym}*.*", f"*{sym.replace('.', '_')}*.*", f"*{sym.split('.')[0]}*.*"]
+                for pat in patterns:
+                    matched_files = list(raw_dir.glob(pat))
+                    for rf in matched_files:
+                        if rf.is_file() and not rf.name.endswith((".manifest.json", ".receipt.json", ".source.json")):
+                            fname = rf.name
+                            if fname not in source_hashes:
+                                h = hashlib.sha256(rf.read_bytes()).hexdigest()
+                                source_files.append(fname)
+                                source_hashes[fname] = h
+            if source_files:
+                has_physical_raw = True
+
         parent_config_hash = compute_canonical_runtime_config_hash(settings)
+
+        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "volume", "amount", "benchmark_close", "in_universe", "is_st", "is_suspended"] if c in merged_df.columns]
+        h_series = pd.util.hash_pandas_object(merged_df[critical_cols], index=False)
+        market_content_sha256 = hashlib.sha256(h_series.values.tobytes()).hexdigest()
 
         manifest_data = dict(curr_fingerprint)
         manifest_data.update({
@@ -406,12 +471,15 @@ class DataManager:
             "empty_universe_day_count": self.empty_universe_day_count,
             "unknown_membership_row_count": self.unknown_membership_row_count
         })
+
         with open(manifest_file, "w", encoding="utf-8") as f:
             json.dump(manifest_data, f, ensure_ascii=False, indent=2)
 
         self.cache_fingerprint_verified = True
-        self.raw_data_provenance_preserved = True
-        return merged_df
+        self.raw_data_provenance_preserved = has_physical_raw
+        self.market_raw_evidence_verified = has_physical_raw
+        self.market_data_provenance_verified = False  # 必须经 verify_market_manifest 完整核验
+        return manifest_data
 
     def load_dataset(self, expected_context: Optional[Dict[str, Any]] = None, strict: bool = False) -> pd.DataFrame:
         """加载本地 Parquet 行情缓存 (P0-8 严格指纹校验)"""

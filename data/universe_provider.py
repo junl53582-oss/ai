@@ -75,7 +75,30 @@ class StaticUniverseProvider(UniverseProvider):
         self.universe_raw_evidence_verified = False
         self.universe_dataset_hash_verified = False
         self.universe_manifest_hash: Optional[str] = None
+        self.universe_manifest_hash_verified: bool = False
+        self.manifest_verification_result: Optional[Any] = None
         self.universe_verification_failures: List[str] = ["static_universe_has_survivorship_bias"]
+
+    def verify_universe_manifest(
+        self,
+        manifest_path: Optional[Union[str, Path]] = None,
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None,
+        raw_evidence_dir: Optional[Union[str, Path]] = None,
+        production_mode: bool = True
+    ) -> Any:
+        from backtest.audit import ManifestVerificationResult
+        res = ManifestVerificationResult(
+            manifest_path=str(manifest_path or "static"),
+            manifest_type="UNIVERSE",
+            hash_verified=False,
+            schema_verified=False,
+            parent_chain_verified=False,
+            failed_checks=["static_universe_no_manifest"]
+        )
+        self.manifest_verification_result = res
+        self.universe_manifest_hash_verified = False
+        return res
 
     def get_universe(self, date: Optional[Union[str, pd.Timestamp]] = None) -> List[str]:
         return list(self.symbols)
@@ -314,6 +337,32 @@ class PointInTimeUniverseProvider(UniverseProvider):
                 active_symbols.discard(sym)
 
         return sorted(list(active_symbols))
+
+    def verify_universe_manifest(
+        self,
+        manifest_path: Optional[Union[str, Path]] = None,
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None,
+        raw_evidence_dir: Optional[Union[str, Path]] = None,
+        production_mode: bool = True
+    ) -> Any:
+        """物理校验股票池 Manifest 文件、严格 Schema 与父链"""
+        from backtest.audit import ManifestVerifier, ManifestType
+        from config.settings import settings
+        target_path = Path(manifest_path) if manifest_path else (settings.DATA_DIR / "universe" / "csi300" / "normalized" / "universe_pit_events.manifest.json")
+        parents = {"parent_runtime_config_hash": parent_runtime_config_hash} if parent_runtime_config_hash else None
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=target_path,
+            expected_hash=expected_hash,
+            expected_parents=parents,
+            manifest_type=ManifestType.UNIVERSE,
+            raw_evidence_dir=raw_evidence_dir,
+            production_mode=production_mode
+        )
+        self.manifest_verification_result = res
+        self.universe_manifest_hash = res.actual_hash
+        self.universe_manifest_hash_verified = res.hash_verified and res.schema_verified and res.parent_chain_verified
+        return res
 
     def get_universe(self, date: Optional[Union[str, pd.Timestamp]] = None) -> List[str]:
         """获取指定日期点位生效的成分股列表"""

@@ -2014,3 +2014,311 @@ class TestAdversarialCertification:
         status, failed = CertificationPolicy.evaluate(meta)
         assert status == "HIGH_RISK"
         assert "market_data_provenance_unverified" in failed
+
+    def test_real_market_writer_matches_manifest_schema(self, tmp_path):
+        """物理 Manifest: DataManager._write_market_manifest 产物必须严格满足 ManifestType.MARKET Schema"""
+        from data.data_manager import DataManager
+        from backtest.audit import ManifestVerifier, ManifestType, compute_canonical_runtime_config_hash
+        dm = DataManager()
+        dm.parquet_dir = tmp_path
+        
+        df = pd.DataFrame({
+            "date": pd.to_datetime(["2021-01-04", "2021-01-05"]),
+            "symbol": ["600519.SH", "600519.SH"],
+            "open": [100.0, 101.0],
+            "high": [105.0, 106.0],
+            "low": [99.0, 100.0],
+            "close": [103.0, 104.0],
+            "volume": [1000.0, 1200.0],
+            "amount": [103000.0, 124800.0],
+            "benchmark_close": [5000.0, 5050.0],
+            "in_universe": [True, True],
+            "is_st": [False, False],
+            "is_suspended": [False, False]
+        })
+        m_data = dm._write_market_manifest(
+            merged_df=df,
+            curr_fingerprint={"data_version": "1.0"},
+            start_date="2021-01-04",
+            end_date="2021-01-05",
+            raw_evidence_dir=tmp_path / "non_existent_raw",
+            req_symbols=["600519.SH"]
+        )
+        manifest_file = tmp_path / "market_daily.manifest.json"
+        assert manifest_file.exists()
+        
+        exp_h = ManifestVerifier.compute_manifest_hash(manifest_file)
+        v_res = ManifestVerifier.verify_manifest_file(
+            manifest_file,
+            expected_hash=exp_h,
+            expected_parents={"parent_runtime_config_hash": compute_canonical_runtime_config_hash(settings)},
+            manifest_type=ManifestType.MARKET,
+            production_mode=True
+        )
+        assert v_res.schema_verified is True
+        assert v_res.hash_verified is True
+        assert v_res.parent_chain_verified is True
+        assert m_data["source_files"] == []
+        assert m_data["source_hashes"] == {}
+
+    def test_real_market_writer_uses_physical_source_hashes(self, tmp_path):
+        """真实性防伪: 当磁盘存在物理 Raw 文件时，Manifest 必须记录真实物理字节哈希，绝非 SHA256(symbol)"""
+        from data.data_manager import DataManager
+        from backtest.audit import ManifestVerifier, ManifestType
+        
+        raw_dir = tmp_path / "raw" / "market"
+        raw_dir.mkdir(parents=True, exist_ok=True)
+        raw_file = raw_dir / "600519_SH_raw.csv"
+        raw_bytes = b"date,open,close\n2021-01-04,100,103\n"
+        raw_file.write_bytes(raw_bytes)
+        real_file_hash = hashlib.sha256(raw_bytes).hexdigest()
+        fake_sym_hash = hashlib.sha256("600519.SH".encode("utf-8")).hexdigest()
+
+        dm = DataManager()
+        dm.parquet_dir = tmp_path
+        df = pd.DataFrame({
+            "date": pd.to_datetime(["2021-01-04"]),
+            "symbol": ["600519.SH"],
+            "open": [100.0],
+            "high": [105.0],
+            "low": [99.0],
+            "close": [103.0],
+            "volume": [1000.0],
+            "amount": [103000.0],
+            "benchmark_close": [5000.0],
+            "in_universe": [True],
+            "is_st": [False],
+            "is_suspended": [False]
+        })
+        m_data = dm._write_market_manifest(
+            merged_df=df,
+            curr_fingerprint={"data_version": "1.0"},
+            raw_evidence_dir=raw_dir,
+            req_symbols=["600519.SH"]
+        )
+        assert "600519_SH_raw.csv" in m_data["source_files"]
+        assert m_data["source_hashes"]["600519_SH_raw.csv"] == real_file_hash
+        assert m_data["source_hashes"]["600519_SH_raw.csv"] != fake_sym_hash
+
+        manifest_file = tmp_path / "market_daily.manifest.json"
+        v_res = ManifestVerifier.verify_manifest_file(
+            manifest_file,
+            expected_hash=ManifestVerifier.compute_manifest_hash(manifest_file),
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=raw_dir,
+            production_mode=False
+        )
+        assert v_res.raw_evidence_verified is True
+        assert v_res.source_authentication_verified is True
+
+    def test_corporate_error_json_not_zero_event(self):
+        """Fail-Closed 漏洞防御: API 错误 JSON (如 {'error': 'server busy'}) 绝不得被解析为 0 事件"""
+        from data.source_registry import CorporateActionResponseParser, SSECorporateActionParser
+        err_payload = json.dumps({"error": "server busy", "code": 500}).encode("utf-8")
+        res = SSECorporateActionParser.parse(err_payload)
+        assert res.parse_success is False
+        assert res.query_success is False
+        assert any("corporate_action_api_error" in e for e in res.failed_checks)
+
+        events, failed = CorporateActionResponseParser.parse_response_content(err_payload)
+        assert len(events) == 0
+        assert len(failed) > 0
+
+    def test_corporate_empty_dict_not_zero_event(self):
+        """Fail-Closed 漏洞防御: 空字典 {} 绝不得被默认解析为 Valid Zero Event"""
+        from data.source_registry import CorporateActionResponseParser, SSECorporateActionParser
+        empty_payload = b"{}"
+        res = SSECorporateActionParser.parse(empty_payload)
+        assert res.parse_success is False
+        assert any("empty_dict" in e for e in res.failed_checks)
+
+    def test_corporate_empty_bytes_not_zero_event(self):
+        """Fail-Closed 漏洞防御: 0 字节文件必须判定为截断或无效响应"""
+        from data.source_registry import CorporateActionResponseParser, SSECorporateActionParser
+        res = SSECorporateActionParser.parse(b"")
+        assert res.parse_success is False
+        assert any("empty_or_truncated" in e for e in res.failed_checks)
+
+    def test_corporate_valid_empty_json_is_zero_event(self):
+        """规范解析: 包含标准合法空数据结构的响应应被正确解析为 0 事件且成功"""
+        from data.source_registry import SSECorporateActionParser
+        valid_zero_payload = json.dumps({"code": 0, "data": []}).encode("utf-8")
+        res = SSECorporateActionParser.parse(valid_zero_payload)
+        assert res.parse_success is True
+        assert res.query_success is True
+        assert res.event_count == 0
+        assert len(res.events) == 0
+        assert len(res.failed_checks) == 0
+
+    def test_corporate_receipt_query_symbol_binding(self, tmp_path):
+        """Query Context 防重放: 回执中标的 (symbol) 与审计证据标的不匹配必须 Fail-Closed"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        from data.provenance import SourceEvidenceMetadata
+        
+        raw_p = tmp_path / "sse_corp.json"
+        raw_bytes = json.dumps({"code": 0, "data": []}).encode("utf-8")
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "sse_corp.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/corp.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        # 回执绑定的 symbol 为 600519.SH
+        rec = AcquisitionReceipt(
+            receipt_id="rec_001",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/corp.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="sse_corp.json",
+            query_context={"symbol": "600519.SH", "query_start": "2020-01-01", "query_end": "2026-12-31"}
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "sse_corp.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        # 证据却声称是 000001.SZ 的证明
+        ev = CorporateActionCoverageEvidence(
+            symbol="000001.SZ",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="sse_corp.json",
+            raw_result_hash=raw_h,
+            response_file="sse_corp.json",
+            response_hash=raw_h,
+            source_metadata_file="sse_corp.json.source.json",
+            acquisition_receipt_file="sse_corp.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("000001.SZ", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_query_context_symbol_mismatch" in e for e in errs)
+
+    def test_corporate_receipt_query_window_binding(self, tmp_path):
+        """Query Context 防重放: 回执中查询时间窗口比回测区间短必须 Fail-Closed"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        
+        raw_p = tmp_path / "sse_corp2.json"
+        raw_bytes = json.dumps({"code": 0, "data": []}).encode("utf-8")
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "sse_corp2.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/corp2.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        # 回执绑定的 query_start 为 2022-01-01 (晚于回测开始 2020-01-01)
+        rec = AcquisitionReceipt(
+            receipt_id="rec_002",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/corp2.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="sse_corp2.json",
+            query_context={"symbol": "600519.SH", "query_start": "2022-01-01", "query_end": "2026-12-31"}
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "sse_corp2.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="sse_corp2.json",
+            raw_result_hash=raw_h,
+            response_file="sse_corp2.json",
+            response_hash=raw_h,
+            source_metadata_file="sse_corp2.json.source.json",
+            acquisition_receipt_file="sse_corp2.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_query_context_start_mismatch" in e for e in errs)
+
+    def test_corporate_csv_parser_valid_and_invalid(self):
+        """CSV 规范解析: 包含标准合法除权列头的 CSV 正确解析，缺失关键列则拦截"""
+        from data.source_registry import CSVCorporateActionParser
+        valid_csv = b"symbol,ex_date,action_type,cash_dividend_per_share,share_ratio\n600519.SH,2021-06-15,CASH_DIVIDEND,1.0,0.0\n"
+        res_valid = CSVCorporateActionParser.parse(valid_csv)
+        assert res_valid.parse_success is True
+        assert res_valid.event_count == 1
+        assert res_valid.events[0]["symbol"] == "600519.SH"
+
+        invalid_csv = b"random_col_1,random_col_2\n1,2\n"
+        res_invalid = CSVCorporateActionParser.parse(invalid_csv)
+        assert res_invalid.parse_success is False
+        assert any("corporate_action_csv_schema_invalid" in e for e in res_invalid.failed_checks)
+
+    def test_pipeline_runtime_evidence_inputs_from_env(self, monkeypatch):
+        """输入完整性: RuntimeEvidenceInputs 必须忠实从外部环境变量提取 expected hashes"""
+        from run_pipeline import RuntimeEvidenceInputs
+        monkeypatch.setenv("QUANT_EXPECTED_MARKET_MANIFEST_SHA256", "1" * 64)
+        monkeypatch.setenv("QUANT_EXPECTED_UNIVERSE_MANIFEST_SHA256", "2" * 64)
+        monkeypatch.setenv("QUANT_EXPECTED_FACTOR_MANIFEST_SHA256", "3" * 64)
+        monkeypatch.setenv("QUANT_EXPECTED_CORPORATE_ACTION_MANIFEST_SHA256", "4" * 64)
+
+        inputs = RuntimeEvidenceInputs.from_env()
+        assert inputs.expected_market_manifest_hash == "1" * 64
+        assert inputs.expected_universe_manifest_hash == "2" * 64
+        assert inputs.expected_factor_manifest_hash == "3" * 64
+        assert inputs.expected_corporate_action_manifest_hash == "4" * 64
+
+    def test_pipeline_unauthenticated_manifests_fail_closed_to_high_risk(self):
+        """流水线验证: 外部环境变量未配置 expected hashes 时，所有 Manifest 校验器 Fail-Closed 判定为 HIGH_RISK"""
+        from data.data_manager import DataManager
+        from data.universe_provider import StaticUniverseProvider
+        from factors.processor import FactorProcessor
+        from strategy.corporate_actions import CorporateActionProvider
+        from backtest.audit import AuditCollector, CertificationPolicy
+
+        dm = DataManager()
+        up = StaticUniverseProvider(symbols=["600519.SH"])
+        fp = FactorProcessor()
+        cp = CorporateActionProvider()
+
+        # 未提供 expected hash 进行校验
+        up.verify_universe_manifest()
+        dm.verify_market_manifest()
+        fp.verify_factor_manifest()
+        cp.verify_corporate_action_manifest()
+
+        meta = AuditCollector.collect(
+            data_manager=dm,
+            factor_processor=fp,
+            engine=None,
+            config=settings
+        )
+        assert meta.market_manifest_hash_verified is False
+        assert meta.universe_manifest_hash_verified is False
+        assert meta.factor_manifest_hash_verified is False
+        assert meta.manifest_chain_verified is False
+
+        status, _ = CertificationPolicy.evaluate(meta)
+        assert status == "HIGH_RISK"

@@ -8,6 +8,7 @@ import argparse
 import logging
 import subprocess
 from typing import Optional, Dict, Any, List, Union, Tuple
+from dataclasses import dataclass
 from pathlib import Path
 import json
 import pandas as pd
@@ -34,15 +35,36 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - 
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class RuntimeEvidenceInputs:
+    """运行时外部传入的证据指纹输入 (P0-11: 绝不自我计算 expected hash 作为自证)"""
+    expected_market_manifest_hash: Optional[str] = None
+    expected_universe_manifest_hash: Optional[str] = None
+    expected_factor_manifest_hash: Optional[str] = None
+    expected_corporate_action_manifest_hash: Optional[str] = None
+
+    @classmethod
+    def from_env(cls) -> "RuntimeEvidenceInputs":
+        import os
+        return cls(
+            expected_market_manifest_hash=os.environ.get("QUANT_EXPECTED_MARKET_MANIFEST_SHA256"),
+            expected_universe_manifest_hash=os.environ.get("QUANT_EXPECTED_UNIVERSE_MANIFEST_SHA256"),
+            expected_factor_manifest_hash=os.environ.get("QUANT_EXPECTED_FACTOR_MANIFEST_SHA256"),
+            expected_corporate_action_manifest_hash=os.environ.get("QUANT_EXPECTED_CORPORATE_ACTION_MANIFEST_SHA256")
+        )
+
+
 def run_pipeline(
     force_update: bool = False,
     audit_json_path: Optional[str] = None,
     optimizer_type: str = "equal",
     model_type: str = "lightgbm",
     webhook_url: Optional[str] = None,
-    channel: str = "feishu"
+    channel: str = "feishu",
+    evidence_inputs: Optional[RuntimeEvidenceInputs] = None
 ):
     """端到端执行全套量化预测与回测流水线"""
+    evidence_inputs = evidence_inputs or RuntimeEvidenceInputs.from_env()
     print("\n" + "=" * 75)
     print(">> 启动 A股多因子机器学习预测与实盘回测流水线 (Enterprise Quant Pipeline)")
     print("=" * 75)
@@ -104,10 +126,38 @@ def run_pipeline(
         cov = fund_daily[new_cols].notna().mean().mean() * 100 if new_cols else 0.0
         print(f"   * 基本面因子注入完成: {len(new_cols)} 个 (覆盖率均值 {cov:.1f}%, 拉取 {fund.source_counts})")
 
+    # 1.8 校验全链路数据血缘与 Manifest 证书 (Data Lineage & Manifest Verification)
+    print("\n[Step 1.8/5] 校验全链路数据血缘与 Manifest 证书 (Fail-Closed Lineage Checks)...")
+    from backtest.audit import compute_canonical_runtime_config_hash
+    runtime_cfg_hash = compute_canonical_runtime_config_hash(settings)
+
+    if hasattr(univ_provider, "verify_universe_manifest"):
+        u_res = univ_provider.verify_universe_manifest(
+            expected_hash=evidence_inputs.expected_universe_manifest_hash,
+            parent_runtime_config_hash=runtime_cfg_hash
+        )
+        print(f"   * 股票池 Manifest: {u_res.actual_hash[:12] if u_res.actual_hash else 'None'}... (Verified={univ_provider.universe_manifest_hash_verified})")
+
+    if hasattr(data_manager, "verify_market_manifest"):
+        m_res = data_manager.verify_market_manifest(
+            expected_hash=evidence_inputs.expected_market_manifest_hash,
+            parent_runtime_config_hash=runtime_cfg_hash
+        )
+        print(f"   * 行情 Manifest: {m_res.actual_hash[:12] if m_res.actual_hash else 'None'}... (Verified={data_manager.manifest_hash_verified}, Provenance={data_manager.market_data_provenance_verified})")
+
     # 2. 特征工程与截面标准化/中性化 (逐日行业 + 市值)
     print("\n[Step 2/5] 计算 Alpha 因子并执行【逐日行业 + 市值截面中性化】...")
     processor = FactorProcessor()
     factor_df = processor.build_and_save_factor_matrix(market_df, force_update=force_update)
+    
+    if hasattr(processor, "verify_factor_manifest"):
+        f_res = processor.verify_factor_manifest(
+            expected_hash=evidence_inputs.expected_factor_manifest_hash,
+            parent_runtime_config_hash=runtime_cfg_hash,
+            parent_market_manifest_hash=data_manager.manifest_hash,
+            parent_universe_manifest_hash=getattr(univ_provider, "universe_manifest_hash", None)
+        )
+        print(f"   * 因子 Manifest: {f_res.actual_hash[:12] if f_res.actual_hash else 'None'}... (Verified={processor.manifest_hash_verified})")
     
     labeler = TargetLabeler(horizon=settings.LABEL_HORIZON)
     factor_df = labeler.compute_excess_return_label(factor_df, canonical_dates=data_manager.get_trading_calendar())
@@ -175,6 +225,13 @@ def run_pipeline(
     # 5. A股实盘级走步回测 (T日信号 -> T+1日开盘撮合)
     print("\n[Step 5/5] 执行 A股实盘级走步回测 (T+1 / 历史税费 / 流动性容量 / FIFO净胜率 / 公司行为)...")
     corp_provider = create_corporate_action_provider(settings)
+    if hasattr(corp_provider, "verify_corporate_action_manifest"):
+        c_res = corp_provider.verify_corporate_action_manifest(
+            expected_hash=evidence_inputs.expected_corporate_action_manifest_hash,
+            parent_runtime_config_hash=runtime_cfg_hash
+        )
+        print(f"   * 公司行为 Manifest: {c_res.actual_hash[:12] if c_res.actual_hash else 'None'}... (Verified={corp_provider.corporate_action_manifest_hash_verified})")
+
     engine = BacktestEngine(
         initial_cash=settings.INITIAL_CASH,
         top_k_buy=settings.TOP_K_BUY,

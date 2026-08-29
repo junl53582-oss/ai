@@ -151,6 +151,9 @@ class ManifestVerificationResult:
     hash_verified: bool = False
     schema_verified: bool = False
     parent_chain_verified: bool = False
+    raw_evidence_verified: bool = False
+    source_authentication_verified: bool = False
+    provenance_verified: bool = False
     failed_checks: List[str] = field(default_factory=list)
 
 
@@ -176,6 +179,7 @@ class ManifestVerifier:
         expected_hash: Optional[str] = None,
         expected_parents: Optional[Dict[str, str]] = None,
         manifest_type: Optional[Union[ManifestType, str]] = None,
+        raw_evidence_dir: Optional[Union[str, Path]] = None,
         production_mode: bool = True
     ) -> ManifestVerificationResult:
         """
@@ -184,6 +188,7 @@ class ManifestVerifier:
         2. 必须实际比对实际文件 SHA256。
         3. 必须通过 ManifestType 强类型 Schema 校验 (拒绝 {} 或字段缺失)。
         4. 生产模式下必须验证 Parent Chain 级联依赖锚点与一致性。
+        5. 验证物理 Raw Source 文件与其实际字节 SHA256 哈希。
         """
         p = Path(manifest_path)
         m_type_str = manifest_type.value if isinstance(manifest_type, ManifestType) else str(manifest_type) if manifest_type else None
@@ -247,11 +252,11 @@ class ManifestVerifier:
                         elif val and not HEX_64_PATTERN.match(str(val)):
                             res.failed_checks.append(f"manifest_schema_invalid_hash_format_in_{hf}")
                             hash_err = True
-                    # 检查 source_files 与 source_hashes 集合一致性
+                    # 检查 source_files 与 source_hashes 集合一致性 (允许均为 0 元素)
                     if "source_files" in data and "source_hashes" in data:
                         s_files = set(data.get("source_files", []))
                         s_hashes = set(data.get("source_hashes", {}).keys())
-                        if not s_files or s_files != s_hashes:
+                        if s_files != s_hashes:
                             res.failed_checks.append("manifest_schema_source_files_hashes_mismatch")
                             hash_err = True
 
@@ -291,6 +296,42 @@ class ManifestVerifier:
                 res.parent_chain_verified = not production_mode
                 if production_mode and m_type_enum:
                     res.failed_checks.append("manifest_parent_anchor_missing")
+
+            # 4. 物理 Raw Source 文件核验 (Physical Source Evidence Verification)
+            raw_files_list = data.get("source_files", [])
+            raw_hashes_dict = data.get("source_hashes", {})
+            if raw_files_list and raw_hashes_dict:
+                ev_dir = Path(raw_evidence_dir) if raw_evidence_dir else p.parent
+                all_raw_ok = True
+                for sf in raw_files_list:
+                    from data.crypto_anchor import safe_resolve_path
+                    rf_path = safe_resolve_path(ev_dir, sf)
+                    if not rf_path or not rf_path.exists():
+                        res.failed_checks.append(f"market_source_file_missing_{sf}")
+                        all_raw_ok = False
+                    else:
+                        h = hashlib.sha256()
+                        with open(rf_path, "rb") as f:
+                            while chunk := f.read(65536):
+                                h.update(chunk)
+                        actual_rf_hash = h.hexdigest()
+                        exp_rf_hash = raw_hashes_dict.get(sf, "")
+                        if actual_rf_hash.lower() != str(exp_rf_hash).lower():
+                            res.failed_checks.append(f"market_source_hash_mismatch_{sf}")
+                            all_raw_ok = False
+                res.raw_evidence_verified = all_raw_ok and len(raw_files_list) > 0
+                res.source_authentication_verified = all_raw_ok and len(raw_files_list) > 0
+            else:
+                res.raw_evidence_verified = False
+                res.source_authentication_verified = False
+
+            res.provenance_verified = bool(
+                res.hash_verified and 
+                res.schema_verified and 
+                res.parent_chain_verified and 
+                res.raw_evidence_verified and 
+                res.source_authentication_verified
+            )
 
         except Exception as e:
             res.schema_verified = False
@@ -684,9 +725,14 @@ class AuditCollector:
             if market_res and isinstance(market_res, ManifestVerificationResult):
                 meta.market_manifest_hash = market_res.actual_hash
                 meta.market_manifest_hash_verified = market_res.hash_verified and market_res.schema_verified
+                meta.market_data_provenance_verified = bool(
+                    getattr(market_res, "provenance_verified", False) and 
+                    getattr(data_manager, "market_data_provenance_verified", False)
+                )
             else:
                 meta.market_manifest_hash = getattr(data_manager, "manifest_hash", None)
                 meta.market_manifest_hash_verified = False
+                meta.market_data_provenance_verified = False
 
             # 股票池提供器数据采集
             provider = getattr(data_manager, "universe_provider", None)

@@ -88,10 +88,35 @@ class CorporateActionProvider:
         self.corporate_action_dataset_hash_verified: bool = False
         self.corporate_action_manifest_hash: Optional[str] = None
         self.corporate_action_manifest_hash_verified: bool = False
-        
         self.verification_result: Optional[CorporateActionVerificationResult] = None
         self.manifest_verification_result: Optional[Any] = None
+        self.corporate_action_manifest_result: Optional[Any] = None
         self._action_count: int = 0
+
+    def verify_corporate_action_manifest(
+        self,
+        manifest_path: Optional[Union[str, Path]] = None,
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None,
+        production_mode: bool = True
+    ) -> Any:
+        """物理校验公司行为 Manifest 文件、严格 Schema 与父链"""
+        from backtest.audit import ManifestVerifier, ManifestType
+        from config.settings import settings
+        target_path = Path(manifest_path) if manifest_path else (getattr(settings, "DATA_DIR", Path("data_storage")) / "corporate_actions" / "csi300" / "normalized" / "corporate_actions.manifest.json")
+        parents = {"parent_runtime_config_hash": parent_runtime_config_hash} if parent_runtime_config_hash else None
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=target_path,
+            expected_hash=expected_hash,
+            expected_parents=parents,
+            manifest_type=ManifestType.CORPORATE_ACTION,
+            production_mode=production_mode
+        )
+        self.corporate_action_manifest_result = res
+        self.manifest_verification_result = res
+        self.corporate_action_manifest_hash = res.actual_hash
+        self.corporate_action_manifest_hash_verified = res.hash_verified and res.schema_verified and res.parent_chain_verified
+        return res
 
     def register_action(self, action: CorporateAction):
         """注册单笔除权除息事件"""
@@ -317,6 +342,11 @@ class CorporateActionDatasetProvenanceVerifier:
                             if not r_ok:
                                 failed_checks.extend(v_errs)
                                 all_trust_ok = False
+                            if s_meta:
+                                b_ok, b_errs = receipt.verify_exact_binding(s_meta, f_path)
+                                if not b_ok:
+                                    failed_checks.extend(b_errs)
+                                    all_trust_ok = False
                             if not receipt.trust_anchor_verified:
                                 failed_checks.append(f"corporate_action_raw_receipt_trust_anchor_unverified_{sf}")
                                 all_trust_ok = False

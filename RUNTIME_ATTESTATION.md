@@ -1,12 +1,12 @@
 # A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
-> **运行时实例 ID**: `DIRTY_WORKTREE_run_bf2de943`  
+> **运行时实例 ID**: `DIRTY_WORKTREE_run_835bc8e4`  
 > **认证类型**: `CURRENT_RUNTIME_ATTESTATION`  
-> **执行代码 Commit (CODE_COMMIT_SHA)**: `a47e2e917efbee38ce70c51ef7e17b693a0a4570`  
+> **执行代码 Commit (CODE_COMMIT_SHA)**: `29220ffadc1c6fa9ddddf11c5ad4e1b2536b268d`  
 > **构建产物归档类型 (ARTIFACT_STORAGE)**: `BUILD_ARTIFACT / REPOSITORY_GENERATED_OUTPUT`  
 > **启动时源码纯净状态 (RUNTIME_START_SOURCE_DIRTY)**: `True`  
 > **外部信任根锚定状态 (TRUST_ROOT_VERIFIED)**: `False`  
-> **认证评估时间**: 2026-08-29 18:34:32  
+> **认证评估时间**: 2026-08-29 19:08:59  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 

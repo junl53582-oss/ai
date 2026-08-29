@@ -267,6 +267,7 @@ class AcquisitionReceipt:
     content_length: int = 0
     raw_sha256: str = ""
     original_filename: str = ""
+    query_context: Optional[Dict[str, Any]] = None
     receipt_integrity_digest: Optional[str] = None
     trust_anchor_type: str = "SELF_DIGEST"
     signing_key_id: Optional[str] = None
@@ -275,11 +276,12 @@ class AcquisitionReceipt:
     trust_anchor_verified: bool = False
 
     def compute_integrity_digest(self) -> str:
-        """确定性计算回执的完整性哈希 (Canonical Integrity Digest)"""
+        """确定性计算回执的完整性哈希 (Canonical Integrity Digest，强制绑定 query_context)"""
+        qc_str = json.dumps(self.query_context, sort_keys=True, separators=(',', ':')) if self.query_context else ""
         raw_str = (
             f"{self.receipt_id}|{self.source_id}|{self.source_url}|"
             f"{self.requested_at}|{self.downloaded_at}|{self.http_status}|"
-            f"{self.content_length}|{self.raw_sha256.lower()}|{self.original_filename}"
+            f"{self.content_length}|{self.raw_sha256.lower()}|{self.original_filename}|{qc_str}"
         )
         return hashlib.sha256(raw_str.encode("utf-8")).hexdigest()
 
@@ -416,47 +418,253 @@ class AcquisitionReceipt:
 # 4. 公司行为响应独立解析器与审计证据实体 (Fail-Closed)
 # =========================================================================
 
-class CorporateActionResponseParser:
-    """对原始数据文件/API响应内容进行独立解析，提取事件数并推导真实 Zero Event 结论 (P0 Derived Proof)"""
+HEX_64_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+@dataclass
+class CorporateActionParseResult:
+    """公司行为响应解析结果强类型实体 (P0 Fail-Closed)"""
+    parser_name: str
+    schema_id: str
+    parse_success: bool = False
+    query_success: bool = False
+    symbol: str = ""
+    query_start: str = ""
+    query_end: str = ""
+    events: List[Dict[str, Any]] = field(default_factory=list)
+    event_count: int = 0
+    response_status: str = "UNKNOWN"
+    failed_checks: List[str] = field(default_factory=list)
+
+
+class SSECorporateActionParser:
+    """上交所官方企业行为 JSON 响应规范解析器"""
     @classmethod
-    def parse_response_content(cls, content_bytes: bytes, file_format: str = "json") -> Tuple[List[Dict[str, Any]], List[str]]:
-        errors = []
-        events = []
+    def parse(cls, content_bytes: bytes, symbol: str = "", query_start: str = "", query_end: str = "") -> CorporateActionParseResult:
+        res = CorporateActionParseResult(parser_name="SSECorporateActionParser", schema_id="SSE_CORP_ACTION_V1", symbol=symbol, query_start=query_start, query_end=query_end)
         if not content_bytes or len(content_bytes.strip()) == 0:
-            return [], []
+            res.failed_checks.append("response_empty_or_truncated")
+            return res
+        try:
+            trimmed = content_bytes.strip()
+            data = json.loads(trimmed.decode("utf-8"))
+            if not isinstance(data, (dict, list)):
+                res.failed_checks.append("unrecognized_corporate_action_response_schema_not_dict_or_list")
+                return res
+            if isinstance(data, dict):
+                if len(data) == 0:
+                    res.failed_checks.append("unrecognized_corporate_action_response_schema_empty_dict")
+                    return res
+                if data.get("error") or data.get("message") == "system busy" or (data.get("code") not in (0, None, 200) and "code" in data):
+                    err_msg = data.get("error") or data.get("message") or data.get("code")
+                    res.failed_checks.append(f"corporate_action_api_error_{err_msg}")
+                    res.response_status = "API_ERROR"
+                    return res
+                if data.get("success") is False:
+                    res.failed_checks.append("corporate_action_api_success_false")
+                    res.response_status = "API_FAILED"
+                    return res
+                raw_events = None
+                for k in ["data", "result", "items", "events", "rows"]:
+                    if k in data and isinstance(data[k], list):
+                        raw_events = data[k]
+                        break
+                if raw_events is None:
+                    if "symbol" in data and "ex_date" in data:
+                        raw_events = [data]
+                    else:
+                        res.failed_checks.append("unrecognized_corporate_action_response_schema_missing_data_field")
+                        return res
+                res.events = raw_events
+                res.event_count = len(raw_events)
+                res.parse_success = True
+                res.query_success = True
+                res.response_status = "SUCCESS"
+            elif isinstance(data, list):
+                res.events = data
+                res.event_count = len(data)
+                res.parse_success = True
+                res.query_success = True
+                res.response_status = "SUCCESS"
+        except Exception as e:
+            res.failed_checks.append(f"response_parsing_error_{str(e)}")
+        return res
+
+
+class SZSECorporateActionParser:
+    """深交所官方企业行为 JSON 响应规范解析器"""
+    @classmethod
+    def parse(cls, content_bytes: bytes, symbol: str = "", query_start: str = "", query_end: str = "") -> CorporateActionParseResult:
+        res = CorporateActionParseResult(parser_name="SZSECorporateActionParser", schema_id="SZSE_CORP_ACTION_V1", symbol=symbol, query_start=query_start, query_end=query_end)
+        if not content_bytes or len(content_bytes.strip()) == 0:
+            res.failed_checks.append("response_empty_or_truncated")
+            return res
+        try:
+            trimmed = content_bytes.strip()
+            data = json.loads(trimmed.decode("utf-8"))
+            if not isinstance(data, (dict, list)):
+                res.failed_checks.append("unrecognized_corporate_action_response_schema_not_dict_or_list")
+                return res
+            if isinstance(data, dict):
+                if len(data) == 0:
+                    res.failed_checks.append("unrecognized_corporate_action_response_schema_empty_dict")
+                    return res
+                if data.get("error") or data.get("message") == "system busy" or (data.get("code") not in (0, None, 200) and "code" in data):
+                    err_msg = data.get("error") or data.get("message") or data.get("code")
+                    res.failed_checks.append(f"corporate_action_api_error_{err_msg}")
+                    res.response_status = "API_ERROR"
+                    return res
+                if data.get("success") is False:
+                    res.failed_checks.append("corporate_action_api_success_false")
+                    res.response_status = "API_FAILED"
+                    return res
+                raw_events = None
+                for k in ["data", "result", "items", "events", "rows"]:
+                    if k in data and isinstance(data[k], list):
+                        raw_events = data[k]
+                        break
+                if raw_events is None:
+                    if "symbol" in data and "ex_date" in data:
+                        raw_events = [data]
+                    else:
+                        res.failed_checks.append("unrecognized_corporate_action_response_schema_missing_data_field")
+                        return res
+                res.events = raw_events
+                res.event_count = len(raw_events)
+                res.parse_success = True
+                res.query_success = True
+                res.response_status = "SUCCESS"
+            elif isinstance(data, list):
+                res.events = data
+                res.event_count = len(data)
+                res.parse_success = True
+                res.query_success = True
+                res.response_status = "SUCCESS"
+        except Exception as e:
+            res.failed_checks.append(f"response_parsing_error_{str(e)}")
+        return res
+
+
+class WindCorporateActionParser:
+    """万得终端企业行为导出解析器"""
+    @classmethod
+    def parse(cls, content_bytes: bytes, symbol: str = "", query_start: str = "", query_end: str = "") -> CorporateActionParseResult:
+        res = CorporateActionParseResult(parser_name="WindCorporateActionParser", schema_id="WIND_CORP_ACTION_V1", symbol=symbol, query_start=query_start, query_end=query_end)
+        if not content_bytes or len(content_bytes.strip()) == 0:
+            res.failed_checks.append("response_empty_or_truncated")
+            return res
         try:
             trimmed = content_bytes.strip()
             if trimmed.startswith(b"{") or trimmed.startswith(b"["):
-                data = json.loads(content_bytes.decode("utf-8"))
-                if isinstance(data, list):
-                    events = data
-                elif isinstance(data, dict):
-                    if "data" in data and isinstance(data["data"], list):
-                        events = data["data"]
-                    elif "items" in data and isinstance(data["items"], list):
-                        events = data["items"]
-                    elif "events" in data and isinstance(data["events"], list):
-                        events = data["events"]
-                    elif "result" in data and isinstance(data["result"], list):
-                        events = data["result"]
-                    elif len(data) == 0:
-                        events = []
+                data = json.loads(trimmed.decode("utf-8"))
+                if isinstance(data, dict):
+                    if len(data) == 0:
+                        res.failed_checks.append("unrecognized_corporate_action_response_schema_empty_dict")
+                        return res
+                    if data.get("error") or data.get("ErrorCode", 0) != 0:
+                        res.failed_checks.append("corporate_action_wind_error")
+                        return res
+                    raw_events = data.get("Data", data.get("data", []))
+                    if isinstance(raw_events, list):
+                        res.events = raw_events
+                        res.event_count = len(raw_events)
+                        res.parse_success = True
+                        res.query_success = True
                     else:
-                        if "symbol" in data and "ex_date" in data:
-                            events = [data]
-                        else:
-                            events = []
-            elif b"," in trimmed or b"\n" in trimmed:
-                import io
-                import pandas as pd
-                df = pd.read_csv(io.BytesIO(content_bytes))
-                if not df.empty:
-                    events = df.to_dict(orient="records")
-                else:
-                    events = []
+                        res.failed_checks.append("unrecognized_corporate_action_response_schema")
+                elif isinstance(data, list):
+                    res.events = data
+                    res.event_count = len(data)
+                    res.parse_success = True
+                    res.query_success = True
+            else:
+                return CSVCorporateActionParser.parse(content_bytes, symbol=symbol, query_start=query_start, query_end=query_end)
         except Exception as e:
-            errors.append(f"response_parsing_error_{str(e)}")
-        return events, errors
+            res.failed_checks.append(f"response_parsing_error_{str(e)}")
+        return res
+
+
+class ChoiceCorporateActionParser:
+    """Choice 终端企业行为导出解析器"""
+    @classmethod
+    def parse(cls, content_bytes: bytes, symbol: str = "", query_start: str = "", query_end: str = "") -> CorporateActionParseResult:
+        return WindCorporateActionParser.parse(content_bytes, symbol=symbol, query_start=query_start, query_end=query_end)
+
+
+class CSVCorporateActionParser:
+    """CSV 格式企业行为响应规范解析器 (严格验证关键列头与 Schema)"""
+    @classmethod
+    def parse(cls, content_bytes: bytes, symbol: str = "", query_start: str = "", query_end: str = "") -> CorporateActionParseResult:
+        res = CorporateActionParseResult(parser_name="CSVCorporateActionParser", schema_id="CSV_CORP_ACTION_V1", symbol=symbol, query_start=query_start, query_end=query_end)
+        if not content_bytes or len(content_bytes.strip()) == 0:
+            res.failed_checks.append("response_empty_or_truncated")
+            return res
+        try:
+            import io
+            import pandas as pd
+            df = pd.read_csv(io.BytesIO(content_bytes))
+            cols_lower = [str(c).lower().strip() for c in df.columns]
+            has_sym = any(c in cols_lower for c in ["symbol", "code", "sec_code", "ticker", "wind_code"])
+            has_date = any(c in cols_lower for c in ["ex_date", "date", "exdate", "record_date"])
+            has_type = any(c in cols_lower for c in ["action_type", "type", "event_type", "cash", "cash_dividend_per_share", "share_ratio"])
+            if not (has_sym or has_date or has_type):
+                res.failed_checks.append("corporate_action_csv_schema_invalid")
+                return res
+            res.events = df.to_dict(orient="records") if not df.empty else []
+            res.event_count = len(res.events)
+            res.parse_success = True
+            res.query_success = True
+            res.response_status = "SUCCESS"
+        except Exception as e:
+            res.failed_checks.append(f"corporate_action_csv_schema_invalid_{str(e)}")
+        return res
+
+
+CORPORATE_ACTION_RESPONSE_PARSERS: Dict[str, Any] = {
+    "SSE": SSECorporateActionParser,
+    "SZSE": SZSECorporateActionParser,
+    "WIND": WindCorporateActionParser,
+    "CHOICE": ChoiceCorporateActionParser,
+    "CSV": CSVCorporateActionParser,
+    "CSI": SSECorporateActionParser
+}
+
+
+class CorporateActionResponseParser:
+    """对原始数据文件/API响应内容进行独立解析，提取事件数并推导真实 Zero Event 结论 (P0 Derived Proof)"""
+    @classmethod
+    def parse_response_content(
+        cls,
+        content_bytes: bytes,
+        file_format: str = "json",
+        source_id: str = "SSE",
+        symbol: str = "",
+        query_start: str = "",
+        query_end: str = ""
+    ) -> Tuple[List[Dict[str, Any]], List[str]]:
+        s_id = str(source_id).strip().upper()
+        if file_format.lower() == "csv" or (content_bytes and not content_bytes.strip().startswith((b"{", b"[")) and b"," in content_bytes):
+            res = CSVCorporateActionParser.parse(content_bytes, symbol=symbol, query_start=query_start, query_end=query_end)
+        else:
+            parser_cls = CORPORATE_ACTION_RESPONSE_PARSERS.get(s_id, SSECorporateActionParser)
+            res = parser_cls.parse(content_bytes, symbol=symbol, query_start=query_start, query_end=query_end)
+        return res.events, res.failed_checks
+
+    @classmethod
+    def parse(
+        cls,
+        content_bytes: bytes,
+        file_format: str = "json",
+        source_id: str = "SSE",
+        symbol: str = "",
+        query_start: str = "",
+        query_end: str = ""
+    ) -> CorporateActionParseResult:
+        s_id = str(source_id).strip().upper()
+        if file_format.lower() == "csv" or (content_bytes and not content_bytes.strip().startswith((b"{", b"[")) and b"," in content_bytes):
+            return CSVCorporateActionParser.parse(content_bytes, symbol=symbol, query_start=query_start, query_end=query_end)
+        parser_cls = CORPORATE_ACTION_RESPONSE_PARSERS.get(s_id, SSECorporateActionParser)
+        return parser_cls.parse(content_bytes, symbol=symbol, query_start=query_start, query_end=query_end)
 
 
 @dataclass
@@ -556,12 +764,18 @@ class CorporateActionCoverageEvidence:
             # 2. 从响应真实内容解析推导 Zero Event (拒绝裸布尔自证)
             with open(resp_p, "rb") as f:
                 resp_bytes = f.read()
-            parsed_events, parse_errs = CorporateActionResponseParser.parse_response_content(resp_bytes)
-            if parse_errs:
-                errors.extend(parse_errs)
+            parse_res = CorporateActionResponseParser.parse(
+                resp_bytes,
+                source_id=self.source_id,
+                symbol=self.symbol,
+                query_start=self.query_start,
+                query_end=self.query_end
+            )
+            if not parse_res.parse_success or not parse_res.query_success:
+                errors.extend(parse_res.failed_checks)
                 self.empty_result_verified = False
-            elif len(parsed_events) > 0:
-                errors.append(f"response_contains_{len(parsed_events)}_events_cannot_claim_zero_event")
+            elif parse_res.event_count > 0:
+                errors.append(f"response_contains_{parse_res.event_count}_events_cannot_claim_zero_event")
                 self.empty_result_verified = False
             else:
                 self.empty_result_verified = True
@@ -579,7 +793,7 @@ class CorporateActionCoverageEvidence:
                 elif s_meta.source_id.strip().upper() != self.source_id.strip().upper():
                     errors.append(f"source_metadata_id_mismatch_{s_meta.source_id}_vs_{self.source_id}")
 
-        # 4. 可信采集回执 AcquisitionReceipt & Trust Anchor 强核验
+        # 4. 可信采集回执 AcquisitionReceipt & Trust Anchor & Query Context 强核验
         if self.acquisition_receipt_file and raw_p and raw_p.exists():
             rec_p = safe_resolve_path(evidence_dir, self.acquisition_receipt_file)
             if not rec_p or not rec_p.exists():
@@ -600,6 +814,22 @@ class CorporateActionCoverageEvidence:
                         errors.append("corporate_action_trust_anchor_unverified")
                     if receipt.source_id.strip().upper() != self.source_id.strip().upper():
                         errors.append(f"receipt_source_id_mismatch_{receipt.source_id}_vs_{self.source_id}")
+
+                    # 5. Query Context 强绑定校验 (防重放与篡改)
+                    if receipt.query_context:
+                        qc = receipt.query_context
+                        qc_sym = str(qc.get("symbol", "")).strip().upper()
+                        if qc_sym and qc_sym != self.symbol.strip().upper():
+                            errors.append(f"corporate_action_query_context_symbol_mismatch_{qc_sym}_vs_{self.symbol}")
+                        qc_start = str(qc.get("query_start", "")).strip()
+                        if qc_start and qc_start > self.query_start:
+                            errors.append(f"corporate_action_query_context_start_mismatch_{qc_start}_after_{self.query_start}")
+                        qc_end = str(qc.get("query_end", "")).strip()
+                        if qc_end and qc_end < self.query_end:
+                            errors.append(f"corporate_action_query_context_end_mismatch_{qc_end}_before_{self.query_end}")
+                        req_fp = qc.get("request_params_sha256") or qc.get("request_fingerprint_sha256")
+                        if req_fp and not HEX_64_PATTERN.match(str(req_fp)):
+                            errors.append(f"corporate_action_invalid_request_params_hash_{req_fp}")
 
         return len(errors) == 0, errors
 
@@ -702,5 +932,21 @@ class CorporateActionCoverageEvidence:
                         errors.append("corporate_action_trust_anchor_unverified")
                     if receipt.source_id.strip().upper() != self.source_id.strip().upper():
                         errors.append(f"receipt_source_id_mismatch_{receipt.source_id}_vs_{self.source_id}")
+
+                    # Query Context 强绑定校验
+                    if receipt.query_context:
+                        qc = receipt.query_context
+                        qc_sym = str(qc.get("symbol", "")).strip().upper()
+                        if qc_sym and qc_sym != self.symbol.strip().upper():
+                            errors.append(f"corporate_action_query_context_symbol_mismatch_{qc_sym}_vs_{self.symbol}")
+                        qc_start = str(qc.get("query_start", "")).strip()
+                        if qc_start and qc_start > self.query_start:
+                            errors.append(f"corporate_action_query_context_start_mismatch_{qc_start}_after_{self.query_start}")
+                        qc_end = str(qc.get("query_end", "")).strip()
+                        if qc_end and qc_end < self.query_end:
+                            errors.append(f"corporate_action_query_context_end_mismatch_{qc_end}_before_{self.query_end}")
+                        req_fp = qc.get("request_params_sha256") or qc.get("request_fingerprint_sha256")
+                        if req_fp and not HEX_64_PATTERN.match(str(req_fp)):
+                            errors.append(f"corporate_action_invalid_request_params_hash_{req_fp}")
 
         return len(errors) == 0, errors

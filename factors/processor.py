@@ -660,6 +660,38 @@ class FactorProcessor:
         df = pd.read_parquet(factor_file)
         return df
 
+    def verify_factor_manifest(
+        self,
+        manifest_path: Optional[Union[str, Path]] = None,
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None,
+        parent_market_manifest_hash: Optional[str] = None,
+        parent_universe_manifest_hash: Optional[str] = None,
+        production_mode: bool = True
+    ) -> Any:
+        """物理校验因子 Manifest 文件、严格 Schema 与父链"""
+        from backtest.audit import ManifestVerifier, ManifestType
+        target_path = Path(manifest_path) if manifest_path else self.factor_dir / "factor_matrix.manifest.json"
+        parents = {}
+        if parent_runtime_config_hash:
+            parents["parent_runtime_config_hash"] = parent_runtime_config_hash
+        if parent_market_manifest_hash:
+            parents["parent_market_manifest_hash"] = parent_market_manifest_hash
+        if parent_universe_manifest_hash:
+            parents["parent_universe_manifest_hash"] = parent_universe_manifest_hash
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=target_path,
+            expected_hash=expected_hash,
+            expected_parents=parents if parents else None,
+            manifest_type=ManifestType.FACTOR,
+            production_mode=production_mode
+        )
+        self.manifest_verification_result = res
+        self.manifest_hash = res.actual_hash
+        self.manifest_hash_verified = res.hash_verified and res.schema_verified and res.parent_chain_verified
+        return res
+
     @classmethod
     def get_all_factor_cols(cls) -> List[str]:
         """获取全量因子特征名称集合 (Alpha158 + A股定制 + 另类高阶特征 + 基本面)"""
