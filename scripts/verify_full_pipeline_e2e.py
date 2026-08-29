@@ -101,10 +101,12 @@ def verify_all_routes():
     mock_market = pd.concat(dfs, ignore_index=True)
     mock_market.sort_values(by=["date", "symbol"], inplace=True)
 
-    proc = FactorProcessor()
-    factor_df = proc.build_and_save_factor_matrix(mock_market, force_update=True)
-    labeler = TargetLabeler(horizon=5)
-    factor_df = labeler.compute_excess_return_label(factor_df)
+    import tempfile
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        proc = FactorProcessor(factor_dir=Path(tmp_dir))
+        factor_df = proc.build_and_save_factor_matrix(mock_market, force_update=True)
+        labeler = TargetLabeler(horizon=5)
+        factor_df = labeler.compute_excess_return_label(factor_df)
 
     # 走步时序滚动训练 (测试复合加权 + 多模型集成)
     trainer = WalkForwardTrainer(train_years=1.0, val_months=3, test_months=3, purge_gap_days=5, model_type="ensemble")
