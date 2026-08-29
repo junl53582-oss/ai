@@ -456,8 +456,8 @@ def generate_master_report(junit_info: Dict[str, Any], audit_data: Optional[Dict
 
 def main():
     parser = argparse.ArgumentParser(description="生成量化系统双认证报告")
-    parser.add_argument("--xml", type=str, default="artifacts/pytest.xml", help="JUnit XML 路径")
-    parser.add_argument("--audit", type=str, default="artifacts/runtime_audit.json", help="Audit JSON 路径")
+    parser.add_argument("--xml", "--pytest-xml", dest="xml", type=str, default="artifacts/pytest.xml", help="JUnit XML 路径")
+    parser.add_argument("--audit", "--audit-json", dest="audit", type=str, default="artifacts/runtime_audit.json", help="Audit JSON 路径")
     parser.add_argument("--output-dir", type=str, default=".", help="输出根目录")
     args = parser.parse_args()
 

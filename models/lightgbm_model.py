@@ -103,8 +103,13 @@ class LightGBMQuantModel:
 
             callbacks = [lgb.log_evaluation(period=0)]
             if X_val is not None and y_val is not None and len(X_val) > 0:
-                callbacks.append(lgb.early_stopping(stopping_rounds=early_stopping_rounds, verbose=False))
-                eval_set = [(X_val[self.feature_names], y_val)]
+                y_tr_classes = set(np.unique(y_train))
+                y_val_classes = set(np.unique(y_val))
+                if self.task_type == "classification" and (y_val_classes - y_tr_classes):
+                    eval_set = None
+                else:
+                    callbacks.append(lgb.early_stopping(stopping_rounds=early_stopping_rounds, verbose=False))
+                    eval_set = [(X_val[self.feature_names], y_val)]
             else:
                 eval_set = None
 

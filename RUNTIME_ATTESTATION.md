@@ -1,7 +1,7 @@
 # A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
 > **运行时实例 ID**: `run_96cc62c1`  
-> **认证评估时间**: 2026-08-29 14:23:59  
+> **认证评估时间**: 2026-08-29 14:45:44  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 
@@ -34,6 +34,7 @@
 - `universe_dataset_hash_unverified`
 - `universe_source_class_ineligible_for_production_UNKNOWN`
 - `st_unknown_rows_462844_inconsistent_with_complete_coverage`
+- `corporate_action_missing_adjustment_or_zero_event_proof`
 
 ---
 

@@ -1,7 +1,7 @@
 # A股量化系统 · 代码静态能力认证报告 (CAPABILITY_REPORT)
 
 > **报告版本**: Release v8.0.0-ProvenanceHarden  
-> **生成时间**: 2026-08-29 14:23:59  
+> **生成时间**: 2026-08-29 14:45:44  
 > **测试环境**: Python 3.11.9 (win32)  
 > **数据血缘架构**: 严格分离【代码静态能力证明】与【生产运行时真实性认证】
 
@@ -24,15 +24,15 @@
 | 11 | **审计元数据防篡改拦截与评级门禁 (CertificationPolicy)** | `PROVEN_BY_TEST` | `tests/test_evidence_integrity.py::test_certification_policy_truth_table` | `CertificationPolicy, AuditCollector` | 拦截针对 CERTIFICATION_FIELDS 的外部 override，评级严格由 13 项核心要素真值表推导 |
 | 12 | **数据血缘与 Raw Evidence 密码级单字节防篡改 (ProvenanceVerifier)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_tampered_raw_source_hash_rejected` | `ProvenanceVerifier, SourceClass` | 原始证据文件修改 1 字节即判定失败，规范化 Parquet 数据集改 1 个值即判定失败 |
 | 13 | **严禁算法/模拟生成数据伪造生产 PIT (Anti-Synthetic Attack)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_synthetic_pit_can_never_be_verified` | `ProvenanceVerifier, PointInTimeUniverseProvider` | 标记为 SYNTHETIC 或 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证 |
-| 14 | **Manifest 自我声明布尔值无效与反伪造防御 (Anti-Self-Certification)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_manifest_claim_true_cannot_self_certify` | `ProvenanceVerifier, CertificationPolicy` | Manifest 自行写死 verified=True 无法绕过检查，必须在本地磁盘复核 Raw Evidence 哈希 |
-| 15 | **ST 存在未知行时谎称完全覆盖熔断门禁 (ST Consistency Gate)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_unknown_st_rows_consistency_gate` | `CertificationPolicy` | 只要存在 st_unknown_rows > 0，严格禁止声明 ST 完全覆盖，自动熔断降级 |
+| 14 | **Manifest 自我声明布尔值无效与反伪造防御 (Anti-Self-Certification)** | `UNKNOWN_NOT_PROVEN` | `tests/test_adversarial_certification.py::test_manifest_claim_true_cannot_self_certify` | `ProvenanceVerifier, CertificationPolicy` | Manifest 自行写死 verified=True 无法绕过检查，必须在本地磁盘复核 Raw Evidence 哈希 |
+| 15 | **ST 存在未知行时谎称完全覆盖熔断门禁 (ST Consistency Gate)** | `UNKNOWN_NOT_PROVEN` | `tests/test_adversarial_certification.py::test_unknown_st_rows_consistency_gate` | `CertificationPolicy` | 只要存在 st_unknown_rows > 0，严格禁止声明 ST 完全覆盖，自动熔断降级 |
 
 ---
 
 ## 2. 测试套件质量与覆盖率结论
 
 - **自动化测试套件**: 全量 pytest 测试执行完毕，所有核心约束均具备正例与反例自动化用例。
-- **能力覆盖率**: 15/15 项核心量化架构能力已通过自动化测试严格证明。
+- **能力覆盖率**: 13/15 项核心量化架构能力已通过自动化测试严格证明。
 - **测试分类标识**:
   - `@pytest.mark.unit`: 纯组件单元测试（撮合、计算、规则）
   - `@pytest.mark.integration`: 多组件集成与数据流测试

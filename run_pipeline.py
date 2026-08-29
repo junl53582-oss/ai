@@ -55,7 +55,16 @@ def run_pipeline(
     univ_provider = create_universe_provider(settings)
     data_manager = DataManager(universe_provider=univ_provider)
     market_df = data_manager.sync_and_build_dataset(force_update=force_update)
-    print(f"   * 行情数据加载就绪: {len(market_df)} 条记录，覆盖 {len(market_df['symbol'].unique())} 只股票")
+    if market_df is not None and not market_df.empty:
+        act_start = pd.to_datetime(market_df["date"].min()).strftime("%Y-%m-%d")
+        act_end = pd.to_datetime(market_df["date"].max()).strftime("%Y-%m-%d")
+        data_manager.actual_backtest_start_date = act_start
+        data_manager.actual_backtest_end_date = act_end
+        data_manager.requested_backtest_start_date = settings.START_DATE
+        data_manager.requested_backtest_end_date = settings.END_DATE
+        if hasattr(univ_provider, "set_actual_backtest_window"):
+            univ_provider.set_actual_backtest_window(act_start, act_end)
+    print(f"   * 行情数据加载就绪: {len(market_df)} 条记录，覆盖 {len(market_df['symbol'].unique())} 只股票 (实际区间: {getattr(data_manager, 'actual_backtest_start_date', 'N/A')} -> {getattr(data_manager, 'actual_backtest_end_date', 'N/A')})")
     print(f"   * 上市日期覆盖率: {data_manager.listing_date_coverage_ratio*100:.1f}% | 行业覆盖率: {data_manager.industry_coverage_ratio*100:.1f}%")
     print(f"   * 数据源明细: {data_manager.data_source_breakdown}")
 
