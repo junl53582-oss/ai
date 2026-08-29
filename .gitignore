@@ -11,11 +11,10 @@ venv/
 ENV/
 env/
 
-# Data storage & large datasets (Parquet / Raw downloads)
-data_storage/
-data_storage/factors/*.parquet
-data_storage/parquet/*.parquet
+# Data storage & large datasets
 data_storage/raw/
+data_storage/oos_predictions.parquet
+data_storage/fundamentals/
 saved_models/*.pkl
 saved_models/*.txt
 

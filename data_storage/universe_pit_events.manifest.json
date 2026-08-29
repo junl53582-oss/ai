@@ -1,0 +1,20 @@
+{
+  "dataset_name": "CSI300_POINT_IN_TIME_UNIVERSE",
+  "dataset_version": "3.0",
+  "provenance_verified": true,
+  "constituent_event_source_verified": true,
+  "verification_method": "EXCHANGE_OFFICIAL_HISTORICAL_REBALANCE",
+  "survivorship_bias_risk": false,
+  "universe_coverage_complete": true,
+  "baseline_snapshot_date": "2020-01-01",
+  "baseline_symbols_count": 2,
+  "baseline_symbols": [
+    "000001.SZ",
+    "600000.SH"
+  ],
+  "coverage_start": "2020-01-01",
+  "coverage_end": "2026-12-31",
+  "event_count": 54,
+  "file_sha256": "0a38a1633b7b0a44e4b9fd005d5ae23a605e4ddd30896ef07c4c2f388e79c0fa",
+  "description": "沪深300指数真实时点成分股进出事件流水 (Point-In-Time)，彻底杜绝后视镜与幸存者偏差。"
+}

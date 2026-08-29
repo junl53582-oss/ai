@@ -1,0 +1,245 @@
+2026-08-27 14:46:57,450 - [INFO] - 成功拉取指数 000300 成分股 300 只
+2026-08-27 14:46:57,453 - [INFO] - 发现已有且指纹完全匹配的行情缓存: C:\Users\lin\Documents\股票预测\data_storage\parquet\market_daily.parquet，正在加载...
+2026-08-27 14:46:58,263 - [INFO] - 发现已有且链式指纹完全匹配的因子矩阵缓存: C:\Users\lin\Documents\股票预测\data_storage\factors\factor_matrix.parquet，正在加载...
+2026-08-27 14:46:58,868 - [INFO] - 成功从 AKShare 加载新浪 A 股交易日历 (8797 个交易日)
+2026-08-27 14:46:58,869 - [INFO] - 正在基于市场真实交易日历计算未来 2 交易日超额收益率标签 (label_excess_2d)...
+2026-08-27 14:47:00,182 - [INFO] - 已生成市场中性二分类标签 label_up_down_2d (横截面中位数阈值): 上涨占比=49.8%
+2026-08-27 14:47:00,417 - [INFO] - 开始执行 Walk-Forward 走步训练 (Purged Gap = 5 个交易日)...
+2026-08-27 14:47:00,865 - [INFO] - [Fold 1] Purged训练集: 20200102~20210625 (95408条) | 样本外测试: 20210929~20211130
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:03,133 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:03,297 - [INFO] - [Fold 2] Purged训练集: 20200306~20210820 (96106条) | 样本外测试: 20211201~20220126
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:05,763 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:05,935 - [INFO] - [Fold 3] Purged训练集: 20200507~20211026 (96869条) | 样本外测试: 20220127~20220330
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:08,659 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:08,811 - [INFO] - [Fold 4] Purged训练集: 20200706~20211221 (97596条) | 样本外测试: 20220331~20220601
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:11,211 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:11,361 - [INFO] - [Fold 5] Purged训练集: 20200831~20220223 (98281条) | 样本外测试: 20220602~20220728
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:13,020 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:13,156 - [INFO] - [Fold 6] Purged训练集: 20201103~20220422 (98908条) | 样本外测试: 20220729~20220923
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:14,761 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:14,898 - [INFO] - [Fold 7] Purged训练集: 20201229~20220623 (99513条) | 样本外测试: 20220926~20221125
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:17,032 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:17,181 - [INFO] - [Fold 8] Purged训练集: 20210303~20220818 (100168条) | 样本外测试: 20221128~20230130
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:22,752 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:22,936 - [INFO] - [Fold 9] Purged训练集: 20210429~20221021 (100931条) | 样本外测试: 20230131~20230327
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:26,332 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:26,497 - [INFO] - [Fold 10] Purged训练集: 20210630~20221216 (101629条) | 样本外测试: 20230328~20230526
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:28,931 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:29,090 - [INFO] - [Fold 11] Purged训练集: 20210825~20230220 (102320条) | 样本外测试: 20230529~20230725
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:31,232 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:31,390 - [INFO] - [Fold 12] Purged训练集: 20211029~20230418 (102962条) | 样本外测试: 20230726~20230919
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:34,880 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:35,053 - [INFO] - [Fold 13] Purged训练集: 20211224~20230616 (103562条) | 样本外测试: 20230920~20231122
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:37,526 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:37,682 - [INFO] - [Fold 14] Purged训练集: 20220228~20230815 (104121条) | 样本外测试: 20231123~20240118
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:39,830 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:39,985 - [INFO] - [Fold 15] Purged训练集: 20220427~20231018 (104651条) | 样本外测试: 20240119~20240322
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:44,004 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:44,175 - [INFO] - [Fold 16] Purged训练集: 20220628~20231213 (105109条) | 样本外测试: 20240325~20240524
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:47,011 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:47,200 - [INFO] - [Fold 17] Purged训练集: 20220823~20240208 (105482条) | 样本外测试: 20240527~20240722
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:50,799 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:50,968 - [INFO] - [Fold 18] Purged训练集: 20221026~20240416 (105723条) | 样本外测试: 20240723~20240918
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:54,228 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:54,413 - [INFO] - [Fold 19] Purged训练集: 20221221~20240617 (105960条) | 样本外测试: 20240919~20241120
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:57,199 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:57,358 - [INFO] - [Fold 20] Purged训练集: 20230223~20240812 (106089条) | 样本外测试: 20241121~20250116
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:47:59,304 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:47:59,453 - [INFO] - [Fold 21] Purged训练集: 20230421~20241016 (106128条) | 样本外测试: 20250117~20250321
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:01,953 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:02,108 - [INFO] - [Fold 22] Purged训练集: 20230621~20241211 (106192条) | 样本外测试: 20250324~20250522
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:04,030 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:04,184 - [INFO] - [Fold 23] Purged训练集: 20230818~20250214 (106243条) | 样本外测试: 20250523~20250718
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:07,016 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:07,173 - [INFO] - [Fold 24] Purged训练集: 20231023~20250414 (106251条) | 样本外测试: 20250721~20250912
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:09,687 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:09,842 - [INFO] - [Fold 25] Purged训练集: 20231218~20250613 (106267条) | 样本外测试: 20250915~20251117
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:11,922 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:12,073 - [INFO] - [Fold 26] Purged训练集: 20240221~20250808 (106330条) | 样本外测试: 20251118~20260114
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:14,267 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:14,414 - [INFO] - [Fold 27] Purged训练集: 20240419~20251013 (106386条) | 样本外测试: 20260115~20260319
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:16,528 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:16,690 - [INFO] - [Fold 28] Purged训练集: 20240620~20251208 (106450条) | 样本外测试: 20260320~20260520
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:21,442 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:21,609 - [INFO] - [Fold 29] Purged训练集: 20240815~20260204 (106544条) | 样本外测试: 20260521~20260716
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:23,797 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:23,953 - [INFO] - [Fold 30] Purged训练集: 20241021~20260410 (106688条) | 样本外测试: 20260717~20260824
+C:\Users\lin\AppData\Local\Programs\Python\Python311\Lib\site-packages\lightgbm\sklearn.py:1106: LGBMDeprecationWarning: The argument 'eval_set' is deprecated, use 'eval_X' and 'eval_y' instead.
+  eval_set = _validate_eval_set_Xy(eval_set=eval_set, eval_X=eval_X, eval_y=eval_y)
+2026-08-27 14:48:26,733 - [INFO] - 已拟合 Isotonic 概率校准器 (基于验证集)
+2026-08-27 14:48:26,949 - [INFO] - 模型已保存至: C:\Users\lin\Documents\股票预测\saved_models\latest_lightgbm.pkl
+2026-08-27 14:48:26,949 - [INFO] - Walk-Forward 滚动训练完成，共 30 折，样本外记录数: 349379
+2026-08-27 14:48:27,047 - [INFO] - 开始计算分类模型样本外评估指标 (AUC / Accuracy / F1 / Brier ...)...
+2026-08-27 14:48:30,695 - [INFO] - 分类 OOS 评估: AUC=0.5134 | Accuracy=0.5097 | F1=0.4582 | Brier=0.2501 | 上涨样本占比=49.8% | 评估行数=348681/349379
+2026-08-27 14:48:30,781 - [INFO] - 启动 A股实盘级走步回测 (初始资金: 1,000,000.00 元)...
+2026-08-27 14:48:32,748 - [WARNING] - ⚠️ 组合当前回撤达 12.16% >= 12.0%，触发组合最大回撤熔断！目标将总仓位压缩至 30.0%
+2026-08-27 14:49:09,443 - [INFO] - 回测完成！总交易日: 1187 | 完成订单数: 1854 (取消: 0) | 平仓批次数: 1048 | 部分成交: 43 次 | 流动性拒绝: 0 次 | 订单数量守恒校验: 通过
+2026-08-27 14:49:11,230 - [INFO] - 回测产物已落盘 reports/: 共 8 个文件 (含 latest 副本)
+
+===========================================================================
+>> 启动 A股多因子机器学习预测与实盘回测流水线 (Enterprise Quant Pipeline)
+===========================================================================
+
+[Step 1/5] 数据同步与清洗 (AKShare / SecurityMaster -> Parquet，双价格体系与真实交易日历)...
+   * 行情数据加载就绪: 462844 条记录，覆盖 300 只股票
+   * 上市日期覆盖率: 0.0% | 行业覆盖率: 70.7%
+   * 数据源明细: {'akshare': 301, 'local_csv': 0, 'synthetic': 0}
+
+[Step 2/5] 计算 Alpha 因子并执行【逐日行业 + 市值截面中性化】...
+   * 特征与标签构建完成: 共 59 个因子，目标预测未来 2 日涨跌方向 (跑赢/跑输基准)
+   * 逐日行业中性化模式: FULL (执行天数占比: 100.0%)
+
+[Step 3/5] 执行严格 Walk-Forward 滚动时序训练 (含 Purged Gap 隔离，杜绝未来函数)...
+   * OOS 分类评估结果: AUC = 0.5134 | Accuracy = 50.97% | Precision = 51.00% | Recall = 41.60% | F1 = 0.4582 | Brier = 0.2501 | 上涨样本占比 = 49.8%
+
+[Step 4/5] 提取最新交易日 Top-K 选股信号 (基于真实交易日历与硬性行业上限)...
+   * 信号日期 (T日收盘): 2026-08-24 | 预期执行日期 (T+1 真实交易日): 2026-08-25
+   * 行业上限约束: 已启用 (30%硬上限) | UNKNOWN行业权重: 30.0%
+   * 推荐买入 Top-8 标的:
+     [1] 688472.SH (阿特斯)  [UNKNOWN] | 2日上涨概率: 52.8% | 目标权重: 5.0% | 收盘价: 10.25元
+     [2] 601816.SH (京沪高铁)  [UNKNOWN] | 2日上涨概率: 52.8% | 目标权重: 5.0% | 收盘价: 4.91元
+     [3] 688223.SH (晶科能源)  [UNKNOWN] | 2日上涨概率: 52.8% | 目标权重: 5.0% | 收盘价: 4.33元
+     [4] 600760.SH (中航沈飞)  [汽车制造]   | 2日上涨概率: 52.8% | 目标权重: 12.5% | 收盘价: 45.06元
+     [5] 601728.SH (中国电信)  [UNKNOWN] | 2日上涨概率: 52.6% | 目标权重: 5.0% | 收盘价: 6.47元
+     [6] 601689.SH (拓普集团)  [汽车制造]   | 2日上涨概率: 52.6% | 目标权重: 12.5% | 收盘价: 46.30元
+     [7] 601229.SH (上海银行)  [UNKNOWN] | 2日上涨概率: 52.6% | 目标权重: 5.0% | 收盘价: 9.87元
+     [8] 600919.SH (江苏银行)  [UNKNOWN] | 2日上涨概率: 52.6% | 目标权重: 5.0% | 收盘价: 12.13元
+
+[Step 5/5] 执行 A股实盘级走步回测 (T+1 / 历史税费 / 流动性容量 / FIFO净胜率 / 公司行为)...
+   * 运行审计元数据已导出至: C:\Users\lin\Documents\股票预测\artifacts\runtime_audit.json
+   * 认证报告已刷新: RUNTIME_ATTESTATION.md 评级 <- 实际运行审计
+
+   * 回测产物已落盘 (8 个文件):
+     - performance(20260827_144909): C:\Users\lin\Documents\股票预测\reports\performance_20260827_144909.json
+     - performance(latest)       : C:\Users\lin\Documents\股票预测\reports\performance_latest.json
+     - equity_curve(20260827_144909): C:\Users\lin\Documents\股票预测\reports\equity_curve_20260827_144909.csv
+     - equity_curve(latest)      : C:\Users\lin\Documents\股票预测\reports\equity_curve_latest.csv
+     - orders(20260827_144909)   : C:\Users\lin\Documents\股票预测\reports\orders_20260827_144909.csv
+     - orders(latest)            : C:\Users\lin\Documents\股票预测\reports\orders_latest.csv
+     - monthly_heatmap(20260827_144909): C:\Users\lin\Documents\股票预测\reports\monthly_heatmap_20260827_144909.png
+     - monthly_heatmap(latest)   : C:\Users\lin\Documents\股票预测\reports\monthly_heatmap_latest.png
+
+===========================================================================
+📊 量化策略绩效回测总览 (Performance Summary - T+1 Open撮合)
+===========================================================================
+  • 策略累计收益率   : -14.68% (基准沪深300: -5.60%)
+  • 超额累计收益 (Alpha): -9.08%
+  • 年化复合收益率 (CAGR): -3.19% (基准年化: -1.17%)
+  • 年化波动率       : 5.48%
+  • 夏普比率 (Sharpe) : -0.92
+  • 索提诺比率 (Sortino): -1.21
+  • 最大回撤 (Max DD) : -19.87%
+  • 卡玛比率 (Calmar) : -0.16
+  • 年化换手率 (Turnover): 5.98x
+  • 平均持仓天数     : 12.4 交易日 (FIFO 真实买卖配对)
+  • 净胜率 (Net Win Rate) : 46.18% (扣除历史印花税、过户费与佣金后)
+  • 毛胜率 (Gross Win Rate): 47.42% (仅原始价差)
+  • 净盈亏比 (Net P/L)    : 1.06
+  • 累计完成订单笔数 : 1852 笔 (撤单: 0 笔)
+  • 累计摩擦成本统计 : 81,010.30 元 (印花税: 18986.65, 过户费: 652.03, 佣金: 13919.62, 滑点: 47452.00)
+---------------------------------------------------------------------------
+  • 数据与规则真实性审计 (Audit Metadata):
+    - 数据来源明细  : {'akshare': 301, 'local_csv': 0, 'synthetic': 0} (主要: akshare)
+    - 交易日历来源  : akshare_sina (交易所官方认证: 否 (第三方))
+    - 逐日中性化模式: FULL (覆盖率均值: 73.4%)
+    - 行业集中度上限: 已严格执行 (30%硬上限)
+    - 历史 ST 状态  : 无历史逐日ST (历史回测未伪造ST)
+    - 股票池模式    : STATIC (幸存者偏差风险: ⚠️ 存在 (STATIC))
+    - 停牌超期警告  : 0 次 (影响 0 只标的)
+    - 综合可信度评级: HIGH_RISK
+===========================================================================
+
+🏆 Top 10 核心有效 Alpha 因子 (Gain 增益贡献):
+   • VSTD_60                : 6.39%
+   • LIMIT_UP_SPACE         : 6.10%
+   • ROC30                  : 5.94%
+   • KLOW                   : 5.77%
+   • ROC5                   : 5.53%
+   • WVMA_10                : 4.96%
+   • TURNOVER_STD_20        : 4.45%
+   • LOWER_SHADOW_RATIO     : 3.80%
+   • MAX_RATIO_20           : 3.53%
+   • CORR_PV_20             : 3.34%
+
+🎉 全流程运行完毕！
+👉 启动 API 服务: python run_pipeline.py --serve-api
+👉 启动 Web 看板: streamlit run dashboard/app.py
+�未伪造ST)
+    - 股票池模式    : STATIC (幸存者偏差风险: ⚠️ 存在 (STATIC))
+    - 停牌超期警告  : 0 次 (影响 0 只标的)
+    - 综合可信度评级: HIGH_RISK
+===========================================================================
+
+🏆 Top 10 核心有效 Alpha 因子 (Gain 增益贡献):
+   • VSTD_60                : 6.39%
+   • LIMIT_UP_SPACE         : 6.10%
+   • ROC30                  : 5.94%
+   • KLOW                   : 5.77%
+   • ROC5                   : 5.53%
+   • WVMA_10                : 4.96%
+   • TURNOVER_STD_20        : 4.45%
+   • LOWER_SHADOW_RATIO     : 3.80%
+   • MAX_RATIO_20           : 3.53%
+   • CORR_PV_20             : 3.34%
+
+🎉 全流程运行完毕！
+👉 启动 API 服务: python run_pipeline.py --serve-api
+👉 启动 Web 看板: streamlit run dashboard/app.py
