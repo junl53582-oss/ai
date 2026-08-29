@@ -578,12 +578,15 @@ def test_certification_policy_truth_table():
 
     # 1. 完美状态 -> VERIFIED
     meta_pass = AuditMetadata(
+        runtime_config_hash="a" * 64,
         universe_source_class="OFFICIAL_PRIMARY",
         universe_raw_evidence_verified=True,
         universe_dataset_hash_verified=True,
-        universe_manifest_hash="hash_univ",
-        factor_manifest_hash="hash_fact",
-        market_manifest_hash="hash_mkt",
+        universe_manifest_hash="b" * 64,
+        factor_manifest_hash="c" * 64,
+        market_manifest_hash="d" * 64,
+        data_source="csi_official_direct",
+        benchmark_source="csi_000300_official",
         actual_backtest_start_date="2020-01-01",
         actual_backtest_end_date="2024-12-31",
         universe_coverage_start="2020-01-01",
@@ -623,12 +626,15 @@ def test_certification_policy_truth_table():
 
     # 3. 仅日历为第三方 -> CONTROLLED_WITH_LIMITATIONS
     meta_lim = AuditMetadata(
+        runtime_config_hash="a" * 64,
         universe_source_class="OFFICIAL_PRIMARY",
         universe_raw_evidence_verified=True,
         universe_dataset_hash_verified=True,
-        universe_manifest_hash="hash_univ",
-        factor_manifest_hash="hash_fact",
-        market_manifest_hash="hash_mkt",
+        universe_manifest_hash="b" * 64,
+        factor_manifest_hash="c" * 64,
+        market_manifest_hash="d" * 64,
+        data_source="csi_official_direct",
+        benchmark_source="csi_000300_official",
         actual_backtest_start_date="2020-01-01",
         actual_backtest_end_date="2024-12-31",
         universe_coverage_start="2020-01-01",

@@ -2,11 +2,12 @@
 企业级量化系统双报告动态生成器 (tools/generate_audit_report.py)
 严格遵循 Single-Source-of-Truth 与 Evidence-Driven 原则：
 1. 解析 pytest 生成的真实 JUnit XML 文件，提取测试 nodeid 与执行状态
-2. 解析运行时导出的 runtime_audit.json 与 Manifest 指纹
-3. 输出两份职责清晰的报告：
+2. 解析运行时导出的 runtime_audit.json 与 RuntimeAttestationEnvelope 数字信封
+3. 校验信封防伪签名、Commit 绑定与 Canonical Audit Payload SHA256 哈希
+4. 输出两份职责清晰的报告：
    - CAPABILITY_REPORT.md: 代码能力证明 (由单元/集成/对抗性测试结果推导)
-   - RUNTIME_ATTESTATION.md: 运行时真实性认证 (由本次运行数据、Manifest、配置推导)
-4. 任何未在 XML 中通过或未在运行数据中证明的项目，自动降级为 UNKNOWN / CONTROLLED_WITH_LIMITATIONS / HIGH_RISK
+   - RUNTIME_ATTESTATION.md: 运行时真实性认证 (由本次运行数据、信封签名与门禁推导)
+5. 任何未在 XML 中通过或未在运行数据中证明的项目，自动降级为 UNKNOWN / CONTROLLED_WITH_LIMITATIONS / HIGH_RISK
 """
 import sys
 import os
@@ -16,17 +17,14 @@ import argparse
 import datetime
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Set
-
-if sys.platform.startswith("win"):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+from typing import Dict, Any, List, Optional, Set, Tuple
 
 root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from backtest.audit import CertificationPolicy, AuditMetadata
+from backtest.runtime_attestation import RuntimeAttestationEnvelope, compute_canonical_audit_payload_hash
 
 
 def parse_junit_xml(xml_path: Path) -> Dict[str, Any]:
@@ -112,11 +110,11 @@ def generate_capability_report(junit_info: Dict[str, Any], output_path: Path):
         },
         {
             "id": 2,
-            "category": "生产级 PIT E2E 全链路集成 (DataManager 触发)",
+            "category": "生产级 PIT E2E 全链路集成能力 (DataManager Fixture 验证)",
             "test_nodeid": "tests/test_evidence_integrity.py::test_true_production_pit_e2e",
             "test_short": "test_true_production_pit_e2e",
             "component": "DataManager.sync_and_build_dataset",
-            "desc": "通过 DataManager 真实拉取生成 in_universe 列，禁止手动打补丁"
+            "desc": "DataManager E2E fixture/integration capability proof: 证明流水线集成与时点数据构建能力"
         },
         {
             "id": 3,
@@ -188,39 +186,39 @@ def generate_capability_report(junit_info: Dict[str, Any], output_path: Path):
             "test_nodeid": "tests/test_evidence_integrity.py::test_certification_policy_truth_table",
             "test_short": "test_certification_policy_truth_table",
             "component": "CertificationPolicy, AuditCollector",
-            "desc": "拦截针对 CERTIFICATION_FIELDS 的外部 override，评级严格由 13 项核心要素真值表推导"
+            "desc": "拦截针对 CERTIFICATION_FIELDS 的外部 override，评级严格由全要素门禁推导"
         },
         {
             "id": 12,
-            "category": "数据血缘与 Raw Evidence 密码级单字节防篡改 (ProvenanceVerifier)",
-            "test_nodeid": "tests/test_adversarial_certification.py::test_tampered_raw_source_hash_rejected",
-            "test_short": "test_tampered_raw_source_hash_rejected",
+            "category": "数据血缘与 Raw CSV 防冒充官方校验 (Anti-Impersonation)",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_arbitrary_raw_csv_not_automatically_official",
+            "test_short": "test_arbitrary_raw_csv_not_automatically_official",
             "component": "ProvenanceVerifier, SourceClass",
-            "desc": "原始证据文件修改 1 字节即判定失败，规范化 Parquet 数据集改 1 个值即判定失败"
+            "desc": "非官方 CSV 即使具有正确哈希与格式，缺少受信任注册表登记一律拒绝官方认证"
         },
         {
             "id": 13,
-            "category": "严禁算法/模拟生成数据伪造生产 PIT (Anti-Synthetic Attack)",
-            "test_nodeid": "tests/test_adversarial_certification.py::test_synthetic_pit_can_never_be_verified",
-            "test_short": "test_synthetic_pit_can_never_be_verified",
+            "category": "测试 Fixture 严禁进入生产认证 (Test Fixture Demotion)",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_test_fixture_provider_never_production_verified",
+            "test_short": "test_test_fixture_provider_never_production_verified",
             "component": "ProvenanceVerifier, PointInTimeUniverseProvider",
-            "desc": "标记为 SYNTHETIC 或 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证"
+            "desc": "标记为 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证"
         },
         {
             "id": 14,
             "category": "Manifest 自我声明布尔值无效与反伪造防御 (Anti-Self-Certification)",
-            "test_nodeid": "tests/test_adversarial_certification.py::test_manifest_claim_true_cannot_self_certify",
-            "test_short": "test_manifest_claim_true_cannot_self_certify",
+            "test_nodeid": "tests/test_adversarial_certification.py::test_fake_source_metadata_boolean_cannot_self_certify",
+            "test_short": "test_fake_source_metadata_boolean_cannot_self_certify",
             "component": "ProvenanceVerifier, CertificationPolicy",
-            "desc": "Manifest 自行写死 verified=True 无法绕过检查，必须在本地磁盘复核 Raw Evidence 哈希"
+            "desc": "元数据自行写死 verified=True 无法绕过检查，必须通过 Trust Anchor 与物理证据闭环"
         },
         {
             "id": 15,
-            "category": "ST 存在未知行时谎称完全覆盖熔断门禁 (ST Consistency Gate)",
-            "test_nodeid": "tests/test_adversarial_certification.py::test_unknown_st_rows_consistency_gate",
-            "test_short": "test_unknown_st_rows_consistency_gate",
-            "component": "CertificationPolicy",
-            "desc": "只要存在 st_unknown_rows > 0，严格禁止声明 ST 完全覆盖，自动熔断降级"
+            "category": "ST 缺失显式判定为 UNKNOWN 门禁 (ST Explicit Unknown Gate)",
+            "test_nodeid": "tests/test_trading_rules.py::test_missing_historical_st_is_explicitly_unknown",
+            "test_short": "test_missing_historical_st_is_explicitly_unknown",
+            "component": "DataManager, CertificationPolicy",
+            "desc": "缺失历史 ST 状态时严格标记为 UNKNOWN 并触发偏差风险门禁，拒绝乐观假定非 ST"
         }
     ]
 
@@ -273,11 +271,11 @@ def generate_capability_report(junit_info: Dict[str, Any], output_path: Path):
     print(f"成功生成代码能力报告: {output_path}")
 
 
-def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_path: Path):
-    """根据真实运行时导出的 runtime_audit.json 生成本次运行认证报告 RUNTIME_ATTESTATION.md"""
+def generate_runtime_attestation(raw_input_data: Optional[Dict[str, Any]], output_path: Path):
+    """根据真实运行时导出的数字信封与 audit metadata 生成本次运行认证报告 RUNTIME_ATTESTATION.md"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    if audit_data is None:
+    if raw_input_data is None:
         report = f"""# A股量化系统 · 运行时回测真实性认证证书 (RUNTIME_ATTESTATION)
 
 > **生成时间**: {timestamp}  
@@ -288,14 +286,40 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
             f.write(report)
         return
 
-    # 构造 AuditMetadata 实例并调用 CertificationPolicy 动态评估
+    envelope_valid = False
+    envelope_errors = []
+    audit_data = {}
+
+    # 检验是否包含 RuntimeAttestationEnvelope 数字信封
+    if "attestation_envelope" in raw_input_data and "audit_metadata" in raw_input_data:
+        env_dict = raw_input_data["attestation_envelope"]
+        audit_data = raw_input_data["audit_metadata"]
+        try:
+            envelope = RuntimeAttestationEnvelope(**env_dict)
+            envelope_valid, envelope_errors = envelope.verify(audit_payload_data=audit_data, require_clean_git=False)
+        except Exception as e:
+            envelope_valid = False
+            envelope_errors.append(f"corrupted_envelope_format_{str(e)}")
+    else:
+        # 手工创建的无签名裸 JSON
+        audit_data = raw_input_data
+        envelope_valid = False
+        envelope_errors.append("untrusted_runtime_artifact_missing_attestation_envelope")
+
     meta = AuditMetadata()
     for k, v in audit_data.items():
         if hasattr(meta, k):
             setattr(meta, k, v)
 
     reliability, failed_checks = CertificationPolicy.evaluate(meta)
-    run_id = meta.runtime_instance_id
+
+    # 数字信封未通过校验时，强制降级为 HIGH_RISK 并不予认证
+    if not envelope_valid:
+        reliability = "HIGH_RISK"
+        failed_checks.extend(envelope_errors)
+        run_id = f"UNTRUSTED_{meta.runtime_instance_id}"
+    else:
+        run_id = meta.runtime_instance_id
 
     # 10 项运行时要素检查
     runtime_items = [
@@ -307,8 +331,9 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
         },
         {
             "name": "真实数据源 (No Synthetic)",
-            "val": "REAL_DATA" if not meta.synthetic_data_used else "SYNTHETIC_DATA",
-            "passed": not bool(meta.synthetic_data_used),
+            "val": ("REAL_DATA_VERIFIED" if (not meta.synthetic_data_used and meta.data_source != "unknown" and meta.raw_data_provenance_preserved)
+                    else ("REAL_DATA_UNVERIFIED" if not meta.synthetic_data_used else "SYNTHETIC_DATA")),
+            "passed": bool(not meta.synthetic_data_used and meta.data_source != "unknown"),
             "detail": f"数据源: {meta.data_source}, 分布: {meta.data_source_breakdown}"
         },
         {
@@ -354,10 +379,10 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
             "detail": f"部分成交: {meta.partial_fill_count}, 撤单: {meta.cancelled_order_count}, 延期: {meta.deferred_order_count}"
         },
         {
-            "name": "逐日截面行业中性化",
-            "val": meta.industry_neutralization_enabled,
-            "passed": meta.industry_neutralization_enabled in ["FULL", "PARTIAL"],
-            "detail": f"中性化天数比例: {(meta.industry_neutralized_day_ratio or 0)*100:.1f}%, 均值覆盖率: {(meta.industry_coverage_ratio_mean or 0)*100:.1f}%"
+            "name": "运行时防伪数字信封与配置哈希",
+            "val": "SIGNED_AND_VERIFIED" if envelope_valid else "UNTRUSTED_OR_TAMPERED",
+            "passed": bool(envelope_valid and meta.runtime_config_hash is not None),
+            "detail": f"信封校验: {envelope_valid}, 配置指纹: {meta.runtime_config_hash}"
         }
     ]
 
@@ -400,13 +425,14 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
 ## 3. 评级定义与解释说明
 
 - **`VERIFIED` (最高真实性等级)**: 
-  - 必须具备完整的官方/持牌 Raw Evidence 原始证据与 SHA256 密码级哈希链；
+  - 必须具备完整的官方/持牌 Raw Evidence 原始证据、Trust Anchor 签名与 SHA256 密码级哈希链；
+  - 必须具备合法的 RuntimeAttestationEnvelope 数字信封；
   - 必须 100% 通过无未来函数、订单数量守恒与交易所官方日历校验；
   - 幸存者偏差完全清零。
 - **`CONTROLLED_WITH_LIMITATIONS` (受限受控等级)**: 
   - 代码具备完整量化与风控逻辑，但运行时使用了部分第三方公开接口或静态成分股子集。
 - **`HIGH_RISK` (高风险提示)**: 
-  - 缺少可信的 PIT 原始证据或存在幸存者偏差风险。系统严格遵循科学诚信，绝不粉饰。
+  - 缺少可信的 PIT 原始证据、数字信封无效或存在幸存者偏差风险。系统严格遵循科学诚信，绝不粉饰。
 """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
@@ -414,16 +440,31 @@ def generate_runtime_attestation(audit_data: Optional[Dict[str, Any]], output_pa
     print(f"成功生成运行时认证报告: {output_path}")
 
 
-def generate_master_report(junit_info: Dict[str, Any], audit_data: Optional[Dict[str, Any]], output_path: Path):
+def generate_master_report(junit_info: Dict[str, Any], raw_input_data: Optional[Dict[str, Any]], output_path: Path):
     """生成总览报告 MASTER_REPORT.md"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
+    envelope_valid = False
+    audit_data = {}
+    if raw_input_data:
+        if "attestation_envelope" in raw_input_data and "audit_metadata" in raw_input_data:
+            audit_data = raw_input_data["audit_metadata"]
+            try:
+                env = RuntimeAttestationEnvelope(**raw_input_data["attestation_envelope"])
+                envelope_valid, _ = env.verify(audit_data, require_clean_git=False)
+            except Exception:
+                envelope_valid = False
+        else:
+            audit_data = raw_input_data
+
     meta = AuditMetadata()
-    if audit_data:
-        for k, v in audit_data.items():
-            if hasattr(meta, k):
-                setattr(meta, k, v)
+    for k, v in audit_data.items():
+        if hasattr(meta, k):
+            setattr(meta, k, v)
+
     reliability, _ = CertificationPolicy.evaluate(meta)
+    if not envelope_valid:
+        reliability = "HIGH_RISK"
 
     total_tests = junit_info.get("total", 0)
     passed_tests = junit_info.get("passed", 0)
@@ -442,7 +483,7 @@ def generate_master_report(junit_info: Dict[str, Any], audit_data: Optional[Dict
 
 2. 🛡️ **[RUNTIME_ATTESTATION.md](./RUNTIME_ATTESTATION.md)**
    - **核心职责**: 回答“本次具体回测实际上证明了什么”。
-   - **证据来源**: 基于本次回测运行的 AuditMetadata (`artifacts/runtime_audit.json`)、Manifest 链式指纹与数据血缘推导。
+   - **证据来源**: 基于本次回测运行的 AuditMetadata (`artifacts/runtime_audit.json`)、RuntimeAttestationEnvelope 防伪数字信封与数据血缘推导。
    - **当前评级**: **`{reliability}`**
 
 ---

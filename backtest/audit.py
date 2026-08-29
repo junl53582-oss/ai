@@ -4,11 +4,15 @@
 1. 默认状态全方位防伪：survivorship_bias_risk=True, synthetic_data_used=True, calendar_is_exchange_official=False
 2. 全量审计字段从运行时核心对象自动派生，禁止乐观硬编码
 3. 严格白名单防伪保护 (NON_CERTIFICATION_OVERRIDE_FIELDS)，封死一切通过 custom_overrides 修改认证字段的途径
-4. 密码级 Chained Manifest Provenance 审计与一致性检验
+4. 密码级 64-hex SHA256 Chained Manifest Provenance 审计与一致性检验
 5. 订单数量守恒缺失时严格默认为 False (Fail-Closed)
 6. 实际回测窗口与覆盖区间必须由 CertificationPolicy 独立强制双向比对
 7. 公司行为缺少数据时必须具备真实 Zero Event Proof 才能认证
+8. runtime_config_hash 作为核心门禁检查项
 """
+import re
+import json
+import hashlib
 import logging
 from dataclasses import dataclass, field, asdict
 from typing import Dict, Any, Optional, List, Union, Tuple
@@ -25,6 +29,22 @@ NON_CERTIFICATION_OVERRIDE_FIELDS = {
     "audit_override_source"
 }
 CERTIFICATION_FIELDS = NON_CERTIFICATION_OVERRIDE_FIELDS
+
+HEX_64_PATTERN = re.compile(r"^[0-9a-fA-F]{64}$")
+
+
+def compute_canonical_runtime_config_hash(config_obj: Any) -> str:
+    """确定性计算运行时解析后的核心配置 Canonical SHA256 哈希"""
+    keys = [
+        "START_DATE", "END_DATE", "LABEL_HORIZON", "UNIVERSE_MODE", "INDEX_CODE",
+        "TRAIN_WINDOW_DAYS", "PURGE_GAP_DAYS", "TOP_K_BUY", "TOP_K_HOLD",
+        "REBALANCE_FREQ", "TRANSACTION_FEE", "STAMP_DUTY", "SLIPPAGE", "ENABLE_NEUTRALIZATION"
+    ]
+    extracted = {}
+    for k in keys:
+        extracted[k] = str(getattr(config_obj, k, "")) if config_obj is not None else ""
+    sorted_json = json.dumps(extracted, sort_keys=True)
+    return hashlib.sha256(sorted_json.encode('utf-8')).hexdigest()
 
 
 @dataclass
@@ -170,12 +190,17 @@ class CertificationPolicy:
     def evaluate(cls, meta: AuditMetadata) -> Tuple[str, List[str]]:
         failed_checks = []
 
-        # 0. 关键链式哈希完整性校验 (Chained Manifest Provenance)
-        if meta.universe_manifest_hash in (None, "", "none"):
+        # 0. 关键链式哈希完整性校验 (Chained Manifest Provenance & 64-hex Hash Validation)
+        if not meta.runtime_config_hash or not HEX_64_PATTERN.match(str(meta.runtime_config_hash)):
+            failed_checks.append("runtime_config_hash_missing")
+
+        if not meta.universe_manifest_hash or not HEX_64_PATTERN.match(str(meta.universe_manifest_hash)):
             failed_checks.append("universe_manifest_hash_missing")
-        if meta.factor_manifest_hash in (None, "", "none"):
+
+        if not meta.factor_manifest_hash or not HEX_64_PATTERN.match(str(meta.factor_manifest_hash)):
             failed_checks.append("factor_manifest_hash_missing")
-        if meta.market_manifest_hash in (None, "", "none"):
+
+        if not meta.market_manifest_hash or not HEX_64_PATTERN.match(str(meta.market_manifest_hash)):
             failed_checks.append("market_manifest_hash_missing")
 
         # 1. 实际回测窗口与 PIT 股票池覆盖独立校验 (P1-12)
@@ -244,7 +269,12 @@ class CertificationPolicy:
         if not meta.future_adjustment_leakage_test_passed:
             failed_checks.append("future_adjustment_leakage_test_not_passed")
 
-        # 7. 基准指数完整性
+        # 7. 行情与基准数据源可信度校验
+        if meta.data_source == "unknown":
+            failed_checks.append("market_data_source_unverified")
+
+        if meta.benchmark_source == "unknown":
+            failed_checks.append("benchmark_source_unverified")
         if meta.benchmark_coverage_ratio < 1.0:
             failed_checks.append("benchmark_coverage_ratio_less_than_100pct")
         if meta.benchmark_missing_date_count > 0:
@@ -275,8 +305,10 @@ class CertificationPolicy:
             "universe_manifest_hash_missing",
             "factor_manifest_hash_missing",
             "market_manifest_hash_missing",
+            "runtime_config_hash_missing",
             "corporate_action_missing_adjustment_or_zero_event_proof",
-            "actual_backtest_window_or_universe_coverage_dates_missing"
+            "actual_backtest_window_or_universe_coverage_dates_missing",
+            "market_data_source_unverified"
         }
         if any(c in critical_high_risks for c in failed_checks) or any("after_actual_backtest_start" in c or "before_actual_backtest_end" in c for c in failed_checks):
             return "HIGH_RISK", failed_checks
@@ -295,6 +327,7 @@ class AuditCollector:
         portfolio_builder: Optional[Any] = None,
         trainer: Optional[Any] = None,
         engine: Optional[Any] = None,
+        config: Optional[Any] = None,
         custom_overrides: Optional[Dict[str, Any]] = None,
         runtime_instance_id: Optional[str] = None
     ) -> AuditMetadata:
@@ -302,6 +335,9 @@ class AuditCollector:
         import uuid
         meta = AuditMetadata()
         meta.runtime_instance_id = runtime_instance_id or f"run_{uuid.uuid4().hex[:8]}"
+
+        if config is not None:
+            meta.runtime_config_hash = compute_canonical_runtime_config_hash(config)
 
         # 1. 数据层采集 (Fail-Closed 默认值)
         if data_manager is not None:

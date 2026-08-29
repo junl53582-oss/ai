@@ -1,17 +1,15 @@
 """
-数据血缘与证据链认证引擎 (data/provenance.py)
+数据血缘、独立信任根与时点状态机认证引擎 (data/provenance.py)
 实现严格的 Single-Source-of-Truth、Fail-Closed、Anti-Tampering、Anti-Impersonation 数据血缘与证据链检验。
 核心原则：
 1. NO EVIDENCE => NO VERIFIED
 2. UNKNOWN != VERIFIED
-3. SHA256 VERIFIED != SOURCE AUTHENTICATED (哈希仅证明未篡改，不证明来自官方)
-4. FILE EXISTS != OFFICIAL SOURCE (任意 CSV 放入 raw/ 绝不自动成为官方)
-5. LOCAL METADATA CLAIM != OFFICIAL SOURCE (自造 source.json + 真实哈希不代表来自官方)
-6. TEST FIXTURE != PRODUCTION EVIDENCE
-7. MANIFEST CLAIM != VERIFICATION
-8. CALLER PROVIDED TRUE != VERIFICATION
-9. COVERAGE CLAIM != ACTUAL BACKTEST COVERAGE
-10. UNIQUE SYMBOLS REQUIRED (禁止通过重复标的伪造数量)
+3. SHA256 VERIFIED != SOURCE AUTHENTICATED (自算哈希仅证明未篡改，绝不证明来自官方)
+4. SELF-HASHED RECEIPT != DIGITAL SIGNATURE (缺乏独立信任根的自摘要绝不能作为签名)
+5. LICENSED_VENDOR != AUTOMATICALLY TRUSTED (Wind/Choice 同样必须具备可审计采集凭据或 Operator Attestation)
+6. STATE MACHINE CONSISTENCY: PIT 历史事件必须通过时点状态机完整重放，拒绝非法 IN/OUT 与 NO-OP 覆盖虚增
+7. EVIDENCE-DERIVED COVERAGE: 覆盖区间由物理证据真实推导，拒绝 Manifest 人工虚增
+8. EXACT BINDING: SourceMetadata <-> AcquisitionReceipt <-> Raw File <-> State Machine 强闭环
 """
 import re
 import json
@@ -27,7 +25,9 @@ import numpy as np
 
 from data.source_registry import (
     TRUSTED_SOURCE_REGISTRY,
+    TRUSTED_ACQUISITION_KEYS,
     AcquisitionReceipt,
+    validate_trusted_url,
     extract_domain
 )
 
@@ -36,8 +36,8 @@ logger = logging.getLogger(__name__)
 
 class SourceClass(str, Enum):
     """数据源证据资质等级分类"""
-    OFFICIAL_PRIMARY = "OFFICIAL_PRIMARY"       # 交易所/指数公司官方一手数据 (必须具有 Registry 鉴权与 Acquisition Receipt)
-    LICENSED_VENDOR = "LICENSED_VENDOR"         # 持牌专业金融数据终端 (如 Wind/Choice/彭博原始导出)
+    OFFICIAL_PRIMARY = "OFFICIAL_PRIMARY"       # 交易所/指数公司官方一手数据 (必须具有 Registry 鉴权与 Trust Anchor Receipt)
+    LICENSED_VENDOR = "LICENSED_VENDOR"         # 持牌专业金融数据终端 (必须具备可核验的采集凭据或 Operator Attestation)
     THIRD_PARTY = "THIRD_PARTY"                 # 开源/第三方抓取源 (如 AKShare/TuShare 实时接口)
     TEST_FIXTURE = "TEST_FIXTURE"               # 单元测试专用固定 Fixture (仅用于代码能力验证，绝不可生产认证)
     SYNTHETIC = "SYNTHETIC"                     # 模拟/算法生成的测试数据 (严禁进入生产认证)
@@ -79,7 +79,7 @@ class SourceEvidenceMetadata:
         raw_file_path: Path,
         require_acquisition_receipt: bool = False
     ) -> Tuple[Optional["SourceEvidenceMetadata"], List[str]]:
-        """从 .source.json 文件加载并执行 Trusted Registry 与 Acquisition Receipt 严格鉴真"""
+        """从 .source.json 文件加载并执行 Trusted Registry、Trust Anchor 与 Exact Binding 严格鉴真"""
         errors = []
         if not meta_path.exists():
             return None, [f"missing_source_metadata_{meta_path.name}"]
@@ -105,22 +105,28 @@ class SourceEvidenceMetadata:
         ev_type = str(data.get("evidence_type", "INDEX_CONSTITUENT_ADJUSTMENT")).strip()
         receipt_fn = data.get("receipt_file")
 
-        # 1. 检验 Trusted Source Registry 登记
+        # 1. 检验 Trusted Source Registry 登记与规范机构名称
         if s_id not in TRUSTED_SOURCE_REGISTRY:
             errors.append(f"unregistered_source_id_{s_id}")
             s_class = SourceClass.UNKNOWN
         else:
             reg_info = TRUSTED_SOURCE_REGISTRY[s_id]
             expected_class = reg_info.get("source_class")
+            canonical_name = reg_info.get("canonical_source_name", "")
+
             if s_class.value != expected_class:
                 errors.append(f"source_class_mismatch_{s_class.value}_vs_registry_{expected_class}")
                 s_class = SourceClass.UNKNOWN
 
-            # 校验域名是否在白名单内
+            if s_name and canonical_name and s_name.lower() != canonical_name.lower():
+                errors.append(f"source_name_mismatch_{s_name}_vs_canonical_{canonical_name}")
+                s_class = SourceClass.UNKNOWN
+
+            # 严格 HTTPS URL 校验
             if s_url:
-                domain = extract_domain(s_url)
-                if domain not in reg_info.get("allowed_domains", []):
-                    errors.append(f"source_domain_{domain}_not_in_registry_allowed_domains")
+                url_ok, url_errs = validate_trusted_url(s_url, reg_info.get("allowed_domains", []))
+                if not url_ok:
+                    errors.extend(url_errs)
                     s_class = SourceClass.UNKNOWN
 
             # 校验证据类型是否支持
@@ -146,8 +152,8 @@ class SourceEvidenceMetadata:
         else:
             errors.append(f"raw_evidence_file_missing_{raw_file_path.name}")
 
-        # 3. 生产级官方来源必须具备采集回执 (Acquisition Receipt)
-        if s_class == SourceClass.OFFICIAL_PRIMARY:
+        # 3. 生产级 OFFICIAL_PRIMARY 与 LICENSED_VENDOR 均必须具备可验证的 Trust Anchor 回执 (P0)
+        if s_class in [SourceClass.OFFICIAL_PRIMARY, SourceClass.LICENSED_VENDOR]:
             receipt_path = meta_path.parent / (receipt_fn if receipt_fn else f"{raw_file_path.name}.receipt.json")
             if not receipt_path.exists():
                 receipt_path = raw_file_path.with_suffix(".receipt.json")
@@ -155,13 +161,33 @@ class SourceEvidenceMetadata:
             receipt, r_errs = AcquisitionReceipt.load_from_file(receipt_path)
             if r_errs or receipt is None:
                 errors.extend(r_errs)
-                # 无合法采集回执时，强制降级为非生产官方源
                 s_class = SourceClass.THIRD_PARTY
-                errors.append("missing_valid_acquisition_receipt_for_official_primary")
+                errors.append(f"missing_valid_acquisition_receipt_for_{s_class_str}")
             else:
                 ok, vr_errs = receipt.verify_against_file(raw_file_path)
                 if not ok:
                     errors.extend(vr_errs)
+                    s_class = SourceClass.THIRD_PARTY
+
+                # 验证 Exact Binding 双向强绑定
+                bind_ok, bind_errs = receipt.verify_exact_binding(
+                    SourceEvidenceMetadata(
+                        source_id=s_id,
+                        source_class=s_class,
+                        source_name=s_name,
+                        source_url=s_url,
+                        sha256=expected_sha or actual_sha,
+                        original_filename=orig_fn or raw_file_path.name
+                    ),
+                    raw_file_path
+                )
+                if not bind_ok:
+                    errors.extend(bind_errs)
+                    s_class = SourceClass.THIRD_PARTY
+
+                # 必须验证 Trust Anchor (独立签名或合法 Operator 鉴证)
+                if not receipt.trust_anchor_verified:
+                    errors.append(f"acquisition_receipt_trust_anchor_not_verified_type_{receipt.trust_anchor_type}")
                     s_class = SourceClass.THIRD_PARTY
 
         if s_class == SourceClass.UNKNOWN:
@@ -195,6 +221,7 @@ class UniverseVerificationResult:
     source_verified: bool = False
     baseline_verified: bool = False
     event_integrity_verified: bool = False
+    state_machine_verified: bool = False
     survivorship_bias_risk: bool = True
     mode: str = "STATIC_FALLBACK"
     failed_checks: List[str] = field(default_factory=list)
@@ -212,10 +239,95 @@ class UniverseVerificationResult:
             and self.source_verified
             and self.baseline_verified
             and self.event_integrity_verified
+            and self.state_machine_verified
             and not self.survivorship_bias_risk
             and SourceClass.is_production_eligible(self.source_class)
             and len(self.failed_checks) == 0
         )
+
+
+class PITUniverseStateMachineVerifier:
+    """
+    点位股票池严格时点状态机校验器 (PIT State Machine Verifier - P0/P1)
+    按时间轴严格重放每期调仓事件，确保：
+    1. 不向集合纳入已存在标的 (INVALID_DUPLICATE_IN)
+    2. 不从集合剔除不存在标的 (INVALID_OUT_NON_MEMBER)
+    3. 每期调整后成分股数量严格守恒 (CSI300 必须恒为 300 只)
+    4. 拦截试图通过 NO-OP 事件人工延长 coverage_end 的作弊行为
+    """
+
+    @classmethod
+    def verify_event_stream(
+        cls,
+        baseline_symbols: List[str],
+        baseline_date: str,
+        events_df: pd.DataFrame,
+        index_code: str = "000300",
+        strict_300_count: bool = True
+    ) -> Tuple[bool, List[str], Dict[str, Any]]:
+        errors = []
+        details = {}
+
+        current_active = set(s.strip().upper() for s in baseline_symbols)
+        target_count = len(current_active)
+
+        if index_code == "000300" and strict_300_count and len(current_active) != 300:
+            errors.append(f"baseline_symbol_count_not_300_actual_{len(current_active)}")
+
+        if events_df.empty:
+            return len(errors) == 0, errors, {"final_active_count": len(current_active)}
+
+        # 过滤基线日期之后的变动流水
+        b_date_str = pd.to_datetime(baseline_date).strftime("%Y-%m-%d")
+        rebal_df = events_df[events_df["effective_date"] > b_date_str].copy()
+        rebal_df.sort_values(by=["effective_date", "action"], inplace=True)
+
+        grouped = rebal_df.groupby("effective_date")
+        derived_end_date = b_date_str
+
+        for eff_date, group in grouped:
+            eff_date_str = str(eff_date)
+            date_ins: Set[str] = set()
+            date_outs: Set[str] = set()
+            has_effective_change = False
+
+            for _, row in group.iterrows():
+                sym = str(row["symbol"]).strip().upper()
+                act = str(row["action"]).strip().upper()
+
+                if act == "IN":
+                    if sym in current_active:
+                        errors.append(f"invalid_duplicate_in_symbol_{sym}_on_{eff_date_str}")
+                    elif sym in date_ins:
+                        errors.append(f"duplicate_in_event_on_same_day_{sym}_{eff_date_str}")
+                    else:
+                        date_ins.add(sym)
+                        current_active.add(sym)
+                        has_effective_change = True
+
+                elif act == "OUT":
+                    if sym not in current_active:
+                        errors.append(f"invalid_out_nonmember_symbol_{sym}_on_{eff_date_str}")
+                    elif sym in date_outs:
+                        errors.append(f"duplicate_out_event_on_same_day_{sym}_{eff_date_str}")
+                    else:
+                        date_outs.add(sym)
+                        current_active.discard(sym)
+                        has_effective_change = True
+
+            # 校验调仓后成分股数量守恒
+            if strict_300_count and index_code == "000300" and len(current_active) != 300:
+                errors.append(f"rebalance_constituent_count_not_300_on_{eff_date_str}_actual_{len(current_active)}")
+
+            if has_effective_change:
+                derived_end_date = eff_date_str
+            else:
+                errors.append(f"noop_rebalance_event_detected_on_{eff_date_str}")
+
+        details["derived_evidence_end_date"] = derived_end_date
+        details["final_active_count"] = len(current_active)
+
+        return len(errors) == 0, errors, details
 
 
 class UniverseParserAdapter(ABC):
@@ -356,11 +468,11 @@ class ProvenanceVerifier:
         """
         执行全链路严格数据血缘审计检查：
         1. 检查 Raw Evidence 实体文件及对应的 .source.json 独立来源元数据与采集回执
-        2. 严格核验 source_class，严禁 Parser 自作主张提升资质
+        2. 严格核验 source_class 与 Trust Anchor，严禁 Parser 自作主张提升资质
         3. 核验 Baseline Snapshot 10 步独立证据闭环 (拒绝由调样推导，拒绝标的去重膨胀)
-        4. 严格对比 actual_backtest_start / actual_backtest_end 覆盖范围
-        5. Normalized 数据集 SHA256 精确对比 (消除拼接歧义)
-        6. Schema、标的代码格式、同日冲突 IN/OUT 校验
+        4. 时点状态机 (State Machine) 完整重放与守恒验证
+        5. 证据派生真实覆盖时间 (Evidence-Derived Coverage)，拒绝 Manifest 人工虚增
+        6. Normalized 数据集 SHA256 精确对比 (消除拼接歧义)
         """
         failed_checks: List[str] = []
         details: Dict[str, Any] = {}
@@ -501,30 +613,31 @@ class ProvenanceVerifier:
                 and conflicts.empty
             )
 
-        # 4. Baseline 基线快照 10 步严密闭环校验 (P0 & P1-1)
+        # 4. Baseline 基线快照 10 步严密闭环校验 (P0 & P1)
         baseline_date = manifest_data.get("baseline_snapshot_date")
         raw_baseline_symbols = manifest_data.get("baseline_symbols", [])
         unique_baseline_symbols = sorted(list(set(str(s).strip().upper() for s in raw_baseline_symbols)))
         baseline_file = manifest_data.get("baseline_snapshot_file")
         manifest_declared_count = manifest_data.get("baseline_symbol_count", len(unique_baseline_symbols))
+        baseline_sha = manifest_data.get("baseline_snapshot_sha256")
+        idx_code = str(manifest_data.get("index_code", "000300")).strip().zfill(6)
         baseline_verified = False
 
         if not baseline_date or not raw_baseline_symbols:
             failed_checks.append("baseline_snapshot_missing_in_manifest")
         elif not baseline_file:
             failed_checks.append("baseline_snapshot_independent_raw_file_missing_in_manifest")
+        elif not baseline_sha:
+            failed_checks.append("baseline_snapshot_sha256_missing_in_manifest")
         else:
             b_date_ts = pd.to_datetime(baseline_date)
             b_invalid = [s for s in unique_baseline_symbols if not cls.A_SHARE_SYMBOL_PATTERN.match(s)]
             if b_invalid:
                 failed_checks.append(f"baseline_contains_invalid_symbols_{b_invalid[:3]}")
 
-            # 标的去重检查：声明数量必须等于去重后的唯一标的数量
             if len(raw_baseline_symbols) != len(unique_baseline_symbols) or manifest_declared_count != len(unique_baseline_symbols):
                 failed_checks.append(f"baseline_contains_duplicate_symbols_unique_{len(unique_baseline_symbols)}_declared_{manifest_declared_count}")
 
-            # CSI300 标的数量严格检查 (300 标的)
-            idx_code = str(manifest_data.get("index_code", "000300")).strip().zfill(6)
             if idx_code == "000300" and len(unique_baseline_symbols) != 300 and resolved_source_class != SourceClass.TEST_FIXTURE:
                 failed_checks.append(f"csi300_baseline_symbol_count_not_300_actual_{len(unique_baseline_symbols)}")
 
@@ -533,13 +646,15 @@ class ProvenanceVerifier:
                 snap_path = Path(raw_evidence_dir) / baseline_file
                 if not snap_path.exists():
                     failed_checks.append(f"baseline_snapshot_file_missing_on_disk_{baseline_file}")
+                elif baseline_file not in raw_files:
+                    failed_checks.append(f"baseline_file_{baseline_file}_not_in_manifest_source_files")
+                elif baseline_file not in raw_hashes:
+                    failed_checks.append(f"baseline_file_{baseline_file}_not_in_raw_hashes")
                 else:
                     snap_hash = cls.compute_file_sha256(snap_path)
-                    expected_snap_hash = manifest_data.get("baseline_snapshot_sha256")
-                    if expected_snap_hash and snap_hash.lower() != expected_snap_hash.lower():
-                        failed_checks.append(f"baseline_snapshot_sha256_mismatch_{snap_hash}_vs_{expected_snap_hash}")
+                    if snap_hash.lower() != baseline_sha.lower():
+                        failed_checks.append(f"baseline_snapshot_sha256_mismatch_{snap_hash}_vs_{baseline_sha}")
 
-                    # 重新解析 snapshot 并校验三方集合一致性
                     snap_meta_p = Path(raw_evidence_dir) / f"{baseline_file}.source.json"
                     snap_meta, snap_errs = SourceEvidenceMetadata.load_and_verify(snap_meta_p, snap_path)
                     if snap_errs or snap_meta is None:
@@ -553,7 +668,11 @@ class ProvenanceVerifier:
                         if parsed_symbols_set != set(unique_baseline_symbols):
                             failed_checks.append("baseline_manifest_set_mismatch_raw_snapshot")
 
-                        # 校验 normalized_df 中 baseline_date 的 IN 记录
+                        # 校验三方日期与集合一致性
+                        snap_date_parsed = parsed_snap_events[0]["effective_date"] if parsed_snap_events else None
+                        if snap_date_parsed and snap_date_parsed != str(pd.to_datetime(baseline_date).strftime("%Y-%m-%d")):
+                            failed_checks.append(f"baseline_date_mismatch_{snap_date_parsed}_vs_{baseline_date}")
+
                         norm_base_df = normalized_df[normalized_df["effective_date"] == str(pd.to_datetime(baseline_date).strftime("%Y-%m-%d"))]
                         norm_base_syms = set(norm_base_df[norm_base_df["action"] == "IN"]["symbol"])
                         if norm_base_syms != set(unique_baseline_symbols):
@@ -564,11 +683,29 @@ class ProvenanceVerifier:
                 if b_date_ts > bt_start_ts:
                     failed_checks.append(f"baseline_date_{baseline_date}_is_after_backtest_start_{act_start}")
                 else:
-                    baseline_verified = len(b_invalid) == 0 and len(unique_baseline_symbols) >= (300 if idx_code == "000300" and resolved_source_class != SourceClass.TEST_FIXTURE else 1)
+                    baseline_verified = len(b_invalid) == 0 and (len(unique_baseline_symbols) == 300 if idx_code == "000300" and resolved_source_class != SourceClass.TEST_FIXTURE else len(unique_baseline_symbols) >= 1)
             else:
-                baseline_verified = len(b_invalid) == 0 and len(unique_baseline_symbols) >= (300 if idx_code == "000300" and resolved_source_class != SourceClass.TEST_FIXTURE else 1)
+                baseline_verified = len(b_invalid) == 0 and (len(unique_baseline_symbols) == 300 if idx_code == "000300" and resolved_source_class != SourceClass.TEST_FIXTURE else len(unique_baseline_symbols) >= 1)
 
-        # 5. 时间覆盖窗口校验 (P0-3: 必须精确覆盖真实回测起止点)
+        # 5. 时点状态机 (State Machine) 严格重放与守恒校验 (P0/P1)
+        state_machine_verified = False
+        derived_coverage_end = str(pd.to_datetime(baseline_date).strftime("%Y-%m-%d")) if baseline_date else ""
+        if baseline_date and unique_baseline_symbols and not normalized_df.empty:
+            sm_ok, sm_errs, sm_details = PITUniverseStateMachineVerifier.verify_event_stream(
+                baseline_symbols=unique_baseline_symbols,
+                baseline_date=str(baseline_date),
+                events_df=normalized_df,
+                index_code=idx_code,
+                strict_300_count=(resolved_source_class != SourceClass.TEST_FIXTURE)
+            )
+            derived_coverage_end = sm_details.get("derived_evidence_end_date", derived_coverage_end)
+            if not sm_ok:
+                failed_checks.extend(sm_errs)
+                state_machine_verified = False
+            else:
+                state_machine_verified = True
+
+        # 6. 时间覆盖窗口校验 (Evidence-Derived Coverage 校验，拒绝 Manifest 虚增)
         cov_start = manifest_data.get("coverage_start")
         cov_end = manifest_data.get("coverage_end")
         coverage_verified = False
@@ -578,6 +715,9 @@ class ProvenanceVerifier:
         else:
             c_start_ts = pd.to_datetime(cov_start)
             c_end_ts = pd.to_datetime(cov_end)
+
+            if derived_coverage_end and str(pd.to_datetime(cov_end).strftime("%Y-%m-%d")) > str(derived_coverage_end):
+                failed_checks.append(f"manifest_coverage_end_{cov_end}_exceeds_derived_evidence_{derived_coverage_end}")
 
             if act_start:
                 bt_start_ts = pd.to_datetime(act_start)
@@ -592,21 +732,24 @@ class ProvenanceVerifier:
             coverage_verified = (
                 (not act_start or c_start_ts <= pd.to_datetime(act_start))
                 and (not act_end or c_end_ts >= pd.to_datetime(act_end))
+                and not any("manifest_coverage_end" in f for f in failed_checks)
             )
 
-        # 6. 综合判定
+        # 7. 综合判定
         provenance_verified = (
             raw_hash_verified
             and dataset_hash_verified
             and source_verified
             and baseline_verified
             and event_integrity_verified
+            and state_machine_verified
         )
 
         survivorship_bias_risk = not (
             coverage_verified
             and baseline_verified
             and provenance_verified
+            and state_machine_verified
             and SourceClass.is_production_eligible(resolved_source_class)
         )
 
@@ -614,6 +757,7 @@ class ProvenanceVerifier:
             dataset_hash_verified
             and event_integrity_verified
             and baseline_verified
+            and state_machine_verified
             and len(failed_checks) == 0
         )
 
@@ -633,6 +777,7 @@ class ProvenanceVerifier:
             source_verified=source_verified,
             baseline_verified=baseline_verified,
             event_integrity_verified=event_integrity_verified,
+            state_machine_verified=state_machine_verified,
             survivorship_bias_risk=survivorship_bias_risk,
             mode=mode,
             failed_checks=failed_checks,

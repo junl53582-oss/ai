@@ -12,11 +12,6 @@ from pathlib import Path
 import json
 import pandas as pd
 
-# 确保 UTF-8 输出
-if sys.platform.startswith("win"):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
-    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
-
 # 将根目录加入路径
 root_dir = Path(__file__).resolve().parent
 if str(root_dir) not in sys.path:
@@ -76,9 +71,14 @@ def run_pipeline(
         if audit_json_path:
             out_p = Path(audit_json_path)
             out_p.parent.mkdir(parents=True, exist_ok=True)
-            fail_meta = AuditCollector.collect(data_manager=data_manager)
+            from backtest.runtime_attestation import create_signed_runtime_attestation
+            fail_meta = AuditCollector.collect(data_manager=data_manager, config=settings)
+            attestation_data = create_signed_runtime_attestation(
+                audit_meta=fail_meta,
+                pytest_xml_path=root_dir / "artifacts" / "pytest.xml"
+            )
             with open(out_p, "w", encoding="utf-8") as f:
-                json.dump(fail_meta.to_dict(), f, ensure_ascii=False, indent=2)
+                json.dump(attestation_data, f, ensure_ascii=False, indent=2)
             try:
                 tool_p = root_dir / "tools" / "generate_audit_report.py"
                 subprocess.run(
@@ -190,15 +190,21 @@ def run_pipeline(
         factor_processor=processor,
         portfolio_builder=engine.builder,
         trainer=trainer,
-        engine=engine
+        engine=engine,
+        config=settings
     )
 
     if audit_json_path:
         out_p = Path(audit_json_path)
         out_p.parent.mkdir(parents=True, exist_ok=True)
+        from backtest.runtime_attestation import create_signed_runtime_attestation
+        attestation_data = create_signed_runtime_attestation(
+            audit_meta=audit_obj,
+            pytest_xml_path=root_dir / "artifacts" / "pytest.xml"
+        )
         with open(out_p, "w", encoding="utf-8") as f:
-            json.dump(audit_obj.to_dict(), f, ensure_ascii=False, indent=2)
-        print(f"   * 运行审计元数据已导出至: {out_p}")
+            json.dump(attestation_data, f, ensure_ascii=False, indent=2)
+        print(f"   * 运行审计元数据与数字信封已导出至: {out_p}")
         # 基于真实运行产物自动刷新 CAPABILITY / RUNTIME_ATTESTATION / MASTER 三份认证报告
         try:
             tool_p = root_dir / "tools" / "generate_audit_report.py"
