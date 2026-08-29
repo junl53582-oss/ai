@@ -2,8 +2,8 @@
   "schema_version": "1.5",
   "research_validity_status": "DEVELOPMENT_SAMPLE",
   "production_readiness_status": "NOT_READY_DEVELOPMENT_SAMPLE",
-  "research_source_commit": "81f556ab8debd3b3066159ee3c882abe31307de0",
-  "research_source_tree_hash": "9bf16949de428c9c168c1cf2051c0754aa7fb39c",
+  "research_source_commit": "beb33cdc753d5179478df7a81299c18eae044770",
+  "research_source_tree_hash": "7421162063a20451ebc25bc4f8409e8531c33764",
   "research_source_working_tree_clean": true,
   "requirements_hash": "a49f986dc96bd6081e9c820823cb7cd926bea7811b6f127cb42b3ca73c7bf42f",
   "parent_market_manifest_hash": null,
@@ -46,5 +46,5 @@
   "walk_forward_status": "DEVELOPMENT_SAMPLE",
   "selected_strong_count": 0,
   "selected_useful_count": 0,
-  "generated_at": "2026-08-29T17:18:28.122498+00:00"
+  "generated_at": "2026-08-29T17:41:09.915182+00:00"
 }
