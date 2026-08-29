@@ -1,12 +1,12 @@
 # A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
-> **运行时实例 ID**: `DIRTY_WORKTREE_run_69bfa7d3`  
+> **运行时实例 ID**: `UNTRUSTED_run_b7c7f054`  
 > **认证类型**: `CURRENT_RUNTIME_ATTESTATION`  
-> **执行代码 Commit (CODE_COMMIT_SHA)**: `860c6cbda7be723812469cac7e32855504cafdda`  
+> **执行代码 Commit (CODE_COMMIT_SHA)**: `c9e45e1586135fe28fe01876dbbecba031bd3667`  
 > **构建产物归档类型 (ARTIFACT_STORAGE)**: `BUILD_ARTIFACT / REPOSITORY_GENERATED_OUTPUT`  
-> **启动时源码纯净状态 (RUNTIME_START_SOURCE_DIRTY)**: `True`  
+> **启动时源码纯净状态 (RUNTIME_START_SOURCE_DIRTY)**: `False`  
 > **外部信任根锚定状态 (TRUST_ROOT_VERIFIED)**: `False`  
-> **认证评估时间**: 2026-08-29 19:29:25  
+> **认证评估时间**: 2026-08-29 19:48:32  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 
@@ -62,8 +62,6 @@
 - `calendar_not_exchange_official`
 - `missing_external_trust_root_pin_QUANT_TRUSTED_KEYRING_SHA256`
 - `unregistered_runtime_signing_key_DEV_UNTRUSTED_KEY`
-- `runtime_started_from_dirty_source_code`
-- `current_source_code_dirty`
 - `missing_external_trust_root_pin_QUANT_TRUSTED_KEYRING_SHA256`
 
 ---
