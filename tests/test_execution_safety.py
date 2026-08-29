@@ -64,9 +64,9 @@ class TestExecutionSafetyGuard:
         """防线 3: 日内 50% 换手率熔断"""
         guard = ExecutionSafetyGuard(max_daily_turnover_ratio=0.50)
         total_equity = 1_000_000.0
-        # 拟买入 80% 换手 (800,000元)
-        target_shares = {"A": 4000, "B": 4000} # 800,000元
-        prices = {"A": 100.0, "B": 100.0}
+        # 拟买入 80% 换手 (800,000元，每只标的 200,000 元均满足 20% 单股硬顶，纯粹触发日内 50% 换手熔断)
+        target_shares = {"A": 2000, "B": 2000, "C": 2000, "D": 2000}
+        prices = {"A": 100.0, "B": 100.0, "C": 100.0, "D": 100.0}
 
         clamped, logs = guard.audit_and_clamp_orders(
             target_shares=target_shares,
@@ -75,7 +75,7 @@ class TestExecutionSafetyGuard:
             total_equity=total_equity,
             current_cash=total_equity
         )
-        total_turnover = clamped["A"] * 100.0 + clamped["B"] * 100.0
+        total_turnover = sum(clamped[s] * prices[s] for s in clamped)
         assert total_turnover <= 500_000.0 + 100.0
         assert any("换手熔断防线" in log for log in logs)
 

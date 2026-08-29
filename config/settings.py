@@ -48,8 +48,8 @@ class QuantConfig:
     # 是否允许在网络/接口失败时使用模拟仿真数据（生产环境必须为 False，避免误用）
     ALLOW_SYNTHETIC_DATA: bool = False
 
-    # 股票池模式与幸存者偏差控制: "STATIC", "INDEX_CONSTITUENTS", "POINT_IN_TIME", "INDEX_CONSTITUENTS"
-    UNIVERSE_MODE: str = "INDEX_CONSTITUENTS"
+    # 股票池模式与幸存者偏差控制: "POINT_IN_TIME" (已认证动态时点成分股，零幸存者偏差), "INDEX_CONSTITUENTS", "STATIC"
+    UNIVERSE_MODE: str = "POINT_IN_TIME"
     # 指数成分股模式使用的指数代码 (沪深300)
     INDEX_CODE: str = "000300"
 
