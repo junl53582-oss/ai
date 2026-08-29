@@ -119,4 +119,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as exc:
+        logger.exception(f"Fatal error in factor research pipeline: {exc}")
+        sys.exit(1)

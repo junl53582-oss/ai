@@ -566,7 +566,8 @@ class FactorResearchEngine:
             is_clean = False
 
         req_file = Path("requirements.txt")
-        req_hash = hashlib.sha256(req_file.read_bytes()).hexdigest() if req_file.exists() else "unknown"
+        req_bytes = req_file.read_bytes().replace(b"\r\n", b"\n") if req_file.exists() else b""
+        req_hash = hashlib.sha256(req_bytes).hexdigest() if req_file.exists() else "unknown"
 
         # 1. 因子矩阵规范哈希: 严格按 [date, symbol] 排序后序列化哈希
         df_sorted = df.copy()

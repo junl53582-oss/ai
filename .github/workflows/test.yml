@@ -30,11 +30,11 @@ jobs:
 
       - name: Run Factor Research Pipeline
         run: |
-          python tools/run_factor_research.py
+          python -u tools/run_factor_research.py
 
       - name: Validate Research Artifacts & Lineage Evidence
         run: |
-          python tools/validate_research_artifacts.py
+          python -u tools/validate_research_artifacts.py
 
       - name: Upload Pytest Test Results
         if: always()

@@ -95,7 +95,7 @@ def validate_artifacts(report_dir: Path) -> bool:
         # 核算 requirements.txt 哈希
         req_file = Path("requirements.txt")
         if req_file.exists():
-            exp_req_h = hashlib.sha256(req_file.read_bytes()).hexdigest()
+            exp_req_h = hashlib.sha256(req_file.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
             if manifest.get("requirements_hash") != exp_req_h:
                 logger.error(f"❌ Manifest requirements_hash 与实际 requirements.txt 不匹配！")
                 return False
@@ -186,7 +186,11 @@ def validate_artifacts(report_dir: Path) -> bool:
 
 
 if __name__ == "__main__":
-    rep_dir = Path("reports/factor_research")
-    if not validate_artifacts(rep_dir):
+    try:
+        rep_dir = Path("reports/factor_research")
+        if not validate_artifacts(rep_dir):
+            sys.exit(1)
+        sys.exit(0)
+    except Exception as exc:
+        logger.exception(f"Fatal error in artifact validator: {exc}")
         sys.exit(1)
-    sys.exit(0)
