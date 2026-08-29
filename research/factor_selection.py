@@ -1,10 +1,9 @@
 """
 因子评分、等级划分与严格 Purged Walk-Forward 滚动筛选引擎 (research/factor_selection.py)
-Phase 1.2 核心硬化:
-1. 每个 Train Fold 内部独立运行完整正式选择流水线 (HAC-FDR, Decay, Monotonicity, Stability, Redundancy, Scoring, Classify) (P0-5)
-2. 验证折严格仅应用并评估冻结决策 (Frozen Direction, Frozen Horizon, Frozen Clusters)
-3. 严格 Purge Gap >= max(HORIZONS)=25天，彻底杜绝边界标签跨区泄漏
-4. 输出逐折审计记录供导出 walk_forward_folds.csv
+Phase 1.3 核心硬化:
+1. P0-5: 每个 Train Fold 内部独立运行完整正式选择流水线 (HAC-FDR, Decay, Monotonicity, Stability, Redundancy, Scoring, Classify)
+2. P1-2: 组合多门禁认证 (最少 Fold 门禁 + 样本规模门禁 + 截面门禁)，小样本严格标记为 DEVELOPMENT_SAMPLE
+3. 验证折严格仅应用并评估冻结决策 (Frozen Direction, Frozen Horizon, Frozen Clusters)
 """
 import logging
 import json
@@ -225,10 +224,7 @@ class FactorSelectionEngine:
         config: Optional[ResearchConfig] = None
     ) -> Dict[str, Any]:
         """
-        Phase 1.2 核心硬化: 完整 Purged Walk-Forward 样本外验证 (P0-5)
-        1. 训练折内运行全套选择流水线 (Decay, Monotonicity, Stability, HAC-FDR, Redundancy, Scoring, Classify);
-        2. 严格冻结训练折决策并在验证折独立评估;
-        3. 严禁未入选因子获得 selected OOS 成绩。
+        Phase 1.3 核心硬化: 完整 Purged Walk-Forward 样本外验证 (P0-5 / P1-2)
         """
         cfg = config or default_research_config
         dates = sorted(pd.to_datetime(df["date"].unique()))
@@ -255,9 +251,11 @@ class FactorSelectionEngine:
             })
             start_idx += step_days
 
+        sym_count = int(df["symbol"].nunique()) if "symbol" in df.columns else 0
+
         if not folds_info:
             return {
-                "walk_forward_status": "PRELIMINARY",
+                "walk_forward_status": "DEVELOPMENT_SAMPLE" if sym_count < cfg.MIN_RESEARCH_SYMBOLS else "PRELIMINARY",
                 "reason": "insufficient_history_for_purged_folds",
                 "total_folds": 0,
                 "folds_detail": []
@@ -277,7 +275,7 @@ class FactorSelectionEngine:
             train_df = df[pd.to_datetime(df["date"]).isin(train_d)].copy()
             val_df = df[pd.to_datetime(df["date"]).isin(val_d)].copy()
 
-            # 1. 训练折内独立运行全要素评估与多重检验 (P0-5)
+            # 1. 训练折内独立运行全要素评估与多重检验
             train_metrics: Dict[str, FactorEvaluationMetrics] = {}
             train_decay: Dict[str, FactorDecayResult] = {}
             train_stab: Dict[str, FactorStabilityResult] = {}
@@ -292,7 +290,7 @@ class FactorSelectionEngine:
                 
                 m = FactorMetricsEngine.evaluate_factor(train_df, f, ret_col, horizon=best_h, config=cfg)
                 train_metrics[f] = m
-                train_pvals.append(m.rank_ic_hac_p_value) # 必须使用 HAC 稳健 p 值 (P0-5)
+                train_pvals.append(m.rank_ic_hac_p_value)
                 if m.daily_rank_ic_series is not None and not m.daily_rank_ic_series.empty:
                     train_ic_dict[f] = m.daily_rank_ic_series
 
@@ -357,7 +355,14 @@ class FactorSelectionEngine:
             })
 
         total_folds = len(folds_info)
-        wf_status = "OOS_VALIDATED" if total_folds >= cfg.MIN_WF_FOLDS_FOR_CERTIFICATION else "OOS_PRELIMINARY"
+
+        # 综合多门禁状态划分 (P1-2)
+        if sym_count < cfg.MIN_RESEARCH_SYMBOLS:
+            wf_status = "DEVELOPMENT_SAMPLE"
+        elif total_folds >= cfg.MIN_WF_FOLDS_FOR_CERTIFICATION:
+            wf_status = "OOS_VALIDATED"
+        else:
+            wf_status = "OOS_PRELIMINARY"
 
         summary = {}
         for f in factor_cols:

@@ -1,6 +1,6 @@
 """
 因子研究与 Alpha 验证全局配置 (research/config.py)
-定义因子研究视界、分层数、交易摩擦成本假设、评分权重、门禁阈值、截面最小门禁与 Purged Walk-Forward 参数。
+Phase 1.3: 统一基准收益时序、全家族 FDR、年度最小有效天数门禁与 Purged Walk-Forward 参数
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -8,23 +8,26 @@ from typing import List, Dict, Any, Optional
 
 @dataclass
 class ResearchConfig:
-    # ---------------- 预测视界与交易时序定义 (Phase 1.2 P0-1) ----------------
+    # ---------------- 预测视界与交易时序定义 (Phase 1.3 P0-1 / P0-2) ----------------
     HORIZONS: List[int] = field(default_factory=lambda: [1, 3, 5, 10, 20])
     PRIMARY_HORIZON: int = 20                   # 核心评估视界 (天)
     USE_EXCESS_RETURN: bool = True               # 是否优先使用基准超额收益 (去 Beta)
     ENTRY_PRICE_TYPE: str = "open"               # 最早执行价格类型 (T+1 开盘价 open)
     EXIT_PRICE_TYPE: str = "close"              # 退出价格类型 (T+H 收盘价 close)
+    BENCHMARK_CLOSE_COL: str = "benchmark_close" # 基准收盘价列名
+    BENCHMARK_OPEN_COL: str = "benchmark_open"   # 基准开盘价列名
     
     # ---------------- 分层与组合回测 ----------------
     NUM_QUANTILES: int = 5                      # 主分层组数 (Q1..Q5)
     DETAILED_QUANTILES: int = 10                # 细分层组数 (Q1..Q10)
     
-    # ---------------- 样本与截面最小门禁 (Phase 1.2 P0-2) ----------------
+    # ---------------- 样本与截面最小门禁 (Phase 1.3 P0-2 / P1-2) ----------------
     MIN_RESEARCH_SYMBOLS: int = 50              # 正式实证标的数门槛 (低于此值标记为 DEVELOPMENT_SAMPLE)
     MIN_DAILY_CROSS_SECTION: int = 4            # 每日最小截面有效样本数
+    MIN_DAILY_CROSS_SECTION_PRODUCTION: int = 10# 生产级研究每日最小截面样本数
     MIN_NEUTRALIZATION_CROSS_SECTION: int = 10  # 真实中性化最小截面样本数 (不足则 fail closed 返回 None)
     MIN_QUANTILE_CROSS_SECTION: int = 5         # 分层回测最小截面唯一因子值数
-    MIN_VALID_DAYS_PER_YEAR: int = 60           # 年度稳定性评估最小有效交易日数
+    MIN_VALID_DAYS_PER_YEAR: int = 60           # 年度稳定性评估最小有效交易日数 (Phase 1.3 P1-3)
     
     # ---------------- 交易摩擦成本假设 ----------------
     COST_BPS_LIST: List[float] = field(default_factory=lambda: [5.0, 10.0, 20.0, 30.0])
@@ -69,7 +72,7 @@ class ResearchConfig:
     # ---------------- 冗余相关性阈值 ----------------
     REDUNDANCY_CORR_THRESHOLD: float = 0.85     # 截面或 IC 相关性 > 0.85 标记为冗余
     
-    # ---------------- Purged Walk-Forward 因子选择参数 (P0-5) ----------------
+    # ---------------- Purged Walk-Forward 因子选择参数 ----------------
     WF_TRAIN_YEARS: float = 2.0
     WF_VALIDATION_YEARS: float = 1.0
     WF_PURGE_DAYS: int = 25                     # Purge 隔离天数 >= max(HORIZONS)=20，杜绝跨区泄漏

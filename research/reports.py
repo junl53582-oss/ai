@@ -1,7 +1,7 @@
 """
 因子研究报告生成器 (research/reports.py)
-输出 16 份全要素结构化证据文件、selected_factors.json、research_run_manifest.json
-以及诚实严密的全景 FACTOR_RESEARCH_REPORT.md 与 Matplotlib 图表。
+输出 18 份全要素结构化证据文件、selected_factors.json、research_run_manifest.json
+以及全景 FACTOR_RESEARCH_REPORT.md 与可视化图表。
 """
 import logging
 import json
@@ -33,9 +33,10 @@ class FactorReportGenerator:
         selection_result: FactorSelectionResult,
         neutralization_comp: Dict[str, Any],
         orthogonalization_comp: Dict[str, Any],
+        horizon_significance_df: Optional[pd.DataFrame] = None,
         run_manifest: Optional[Dict[str, Any]] = None
     ):
-        """导出全套 16 份报表、凭据与 Markdown 总结"""
+        """导出全套 18 份报表、凭据与 Markdown 总结"""
         output_dir.mkdir(parents=True, exist_ok=True)
         charts_dir = output_dir / "charts"
         charts_dir.mkdir(parents=True, exist_ok=True)
@@ -83,6 +84,8 @@ class FactorReportGenerator:
                 "sharpe_ratio": m.sharpe_ratio,
                 "net_sharpe_10bps": m.net_sharpe_ratio,
                 "turnover": m.mean_turnover,
+                "long_turnover": m.long_turnover,
+                "short_turnover": m.short_turnover,
                 "max_drawdown": m.max_drawdown,
                 "win_rate": m.win_rate,
                 "long_only_excess_annual_return": m.long_only_excess_annual_return,
@@ -168,39 +171,43 @@ class FactorReportGenerator:
         with open(output_dir / "selected_factors.json", "w", encoding="utf-8") as f:
             json.dump(selected_json_data, f, indent=2, ensure_ascii=False)
 
-        # 9. research_run_manifest.json (P0-6)
+        # 9. factor_horizon_significance.csv (Phase 1.3 P1-1)
+        if horizon_significance_df is not None and not horizon_significance_df.empty:
+            horizon_significance_df.to_csv(output_dir / "factor_horizon_significance.csv", index=False, encoding="utf-8-sig")
+
+        # 10. research_run_manifest.json (P0-4 / P0-6)
         if run_manifest:
             with open(output_dir / "research_run_manifest.json", "w", encoding="utf-8") as f:
                 json.dump(run_manifest, f, indent=2, ensure_ascii=False)
 
-        # 10. walk_forward_folds.csv (P0-5 Evidence)
+        # 11. walk_forward_folds.csv (P0-5 Evidence)
         wf_folds = selection_result.walk_forward_stability.get("folds_detail", [])
         if wf_folds:
             pd.DataFrame(wf_folds).to_csv(output_dir / "walk_forward_folds.csv", index=False, encoding="utf-8-sig")
         else:
             pd.DataFrame(columns=["fold_id", "train_start", "train_end", "purge_start", "purge_end", "validation_start", "validation_end", "selected_factors"]).to_csv(output_dir / "walk_forward_folds.csv", index=False, encoding="utf-8-sig")
 
-        # 11. neutralization_evidence.csv (P0-3 Evidence)
+        # 12. neutralization_evidence.csv (P0-3 Evidence)
         if neutralization_comp:
             neu_rows = [{"factor_name": k, **v} for k, v in neutralization_comp.items()]
             pd.DataFrame(neu_rows).to_csv(output_dir / "neutralization_evidence.csv", index=False, encoding="utf-8-sig")
 
-        # 12. orthogonalization_evidence.csv (P0-4 Evidence)
+        # 13. orthogonalization_evidence.csv (P0-4 Evidence)
         if orthogonalization_comp:
             ortho_rows = [{"factor_name": k, **v} for k, v in orthogonalization_comp.items()]
             pd.DataFrame(ortho_rows).to_csv(output_dir / "orthogonalization_evidence.csv", index=False, encoding="utf-8-sig")
 
-        # 13. daily_portfolio_pnl.csv (P0-1 Evidence)
+        # 14. daily_portfolio_pnl.csv (P0-1 / P0-6 Evidence)
         top_factor = df_summary["factor_name"].iloc[0] if not df_summary.empty else None
         if top_factor and top_factor in metrics_dict and metrics_dict[top_factor].daily_pnl_df is not None:
             metrics_dict[top_factor].daily_pnl_df.to_csv(output_dir / "daily_portfolio_pnl.csv", index=False, encoding="utf-8-sig")
         else:
-            pd.DataFrame(columns=["signal_date", "execution_date", "top_quantile_return", "bottom_quantile_return", "gross_return", "turnover", "total_cost", "net_return", "equity_curve"]).to_csv(output_dir / "daily_portfolio_pnl.csv", index=False, encoding="utf-8-sig")
+            pd.DataFrame(columns=["signal_date", "execution_date", "top_quantile_return", "bottom_quantile_return", "benchmark_return", "gross_return", "long_turnover", "short_turnover", "gross_turnover", "commission", "stamp_duty", "slippage", "total_cost", "net_return", "long_only_excess_return", "equity_curve"]).to_csv(output_dir / "daily_portfolio_pnl.csv", index=False, encoding="utf-8-sig")
 
-        # 14. 可视化图表
+        # 15. 可视化图表
         cls._generate_charts(charts_dir, metrics_dict, decay_dict, corr_result, selection_result)
 
-        # 15. 全景 Markdown 报告 FACTOR_RESEARCH_REPORT.md
+        # 16. 全景 Markdown 报告 FACTOR_RESEARCH_REPORT.md
         cls._generate_markdown_report(output_dir / "FACTOR_RESEARCH_REPORT.md", df_summary, selection_result, corr_result, neutralization_comp, orthogonalization_comp, run_manifest)
         cls._generate_markdown_report(output_dir.parent.parent / "FACTOR_RESEARCH_REPORT.md", df_summary, selection_result, corr_result, neutralization_comp, orthogonalization_comp, run_manifest)
 
@@ -213,7 +220,6 @@ class FactorReportGenerator:
         corr_result: CorrelationAnalysisResult,
         selection_result: FactorSelectionResult
     ):
-        """生成静态图表"""
         try:
             import matplotlib
             matplotlib.use("Agg")
@@ -277,7 +283,6 @@ class FactorReportGenerator:
         orthogonalization_comp: Dict[str, Any],
         run_manifest: Optional[Dict[str, Any]] = None
     ):
-        """渲染全景 Markdown 报告 (Phase 1.2 诚实命名与全证据展示)"""
         top10_df = df_summary.head(10)
         rejected_df = df_summary[df_summary["status"] == "REJECT"].head(10)
         wf_info = selection_result.walk_forward_stability
@@ -287,25 +292,25 @@ class FactorReportGenerator:
         n_strong = len(selection_result.selected_factors)
         n_useful = len(selection_result.useful_factors)
 
-        # 诚实命名标题 (P1-3)
         if n_strong == 0 and n_useful == 0:
             ranking_title = "Top 10 探索性候选因子表现 (Exploratory / Research Candidates)"
         else:
             ranking_title = "Top 10 核心有效因子排行榜 (Top Selected Factors)"
 
         lines = [
-            "# A股多因子研究与 Alpha 真实性验证报告 (Phase 1.2 Empirical Validity & Execution Integrity)",
+            "# A股多因子研究与 Alpha 真实性验证报告 (Phase 1.3 Execution & Research Provenance Closure)",
             "",
             f"> **研究证据级别 (Validity Status)**: `{val_status}` (数据样本数: {manifest.get('symbol_count', 0)} 标的, 行数: {manifest.get('dataset_rows', 0)})",
             "> **交易执行模型 (Execution Definition)**: `Signal at T Close -> Earliest Entry at T+1 Open -> Realized Post-Entry Return`",
+            "> **基准收益模型 (Benchmark Definition)**: `Benchmark Entry at T+1 Open -> Benchmark Exit at T+H Close (Exact-Math Matching)`",
             "",
-            "## 1. 核心架构与真实性闭环要点 (Phase 1.2 Execution Integrity)",
-            "- **P0-1 严格 T+1 开盘真实执行**: 杜绝 $P[T+1]/P[T]-1$ 伪执行前视，以 $T+1$ 开盘价真实计价成交并过滤 $T+1$ 停牌/一字涨跌停；",
-            "- **P0-2 截面样本门禁**: 明确区分 `DEVELOPMENT_SAMPLE` (小样本工程测试) 与 `PRODUCTION_RESEARCH`；",
-            "- **P0-3 Fail-Closed 中性化**: 样本不足或秩亏时严格返回 `None` 与 `INSUFFICIENT_CROSS_SECTION`，绝不回退充当伪计算；",
-            "- **P0-4 Sequential Residualization 正交化**: 逐步残差正交化消除 QR 矩阵维度异常，真实评估增量 Alpha；",
-            "- **P0-5 训练折内完整选择**: 严格在 Purged 训练折内独立执行方向、最优视界、HAC-FDR 与冗余剪枝，验证折严格评估冻结决策；",
-            "- **P0-6 全要素 Manifest 绑定**: 全量 79 个因子矩阵规范排序哈希，绑定源码 Tree Hash 与测试执行凭据。",
+            "## 1. 核心架构与真实性闭环要点 (Phase 1.3 Integrity Highlights)",
+            "- **P0-1 严格基准收益解耦**: 彻底消除基准价格直接参与相减的错误，基准日度收益与前向收益严格基于 `T+1 Open -> T+H Close` 计价计算；",
+            "- **P0-2 前向超额标签严密对齐**: 个股与基准收益享有完全一致的进入与退出时间点，超额收益精确为小数收益率之差；",
+            "- **P0-3 CI 真实可复现性**: `requirements.txt` 完整纳入 `cryptography` 与 `pytest`，工作流配置真实测试与产物上传；",
+            "- **P0-4 Manifest 干净源码绑定**: 引入两阶段提交流程，Manifest 严密绑定执行时的 clean source commit 指纹；",
+            "- **P0-5 真实可交易性过滤**: 严格审计 T+1 停牌、一字涨跌停锁死与无开盘价，阻断不可执行成交；",
+            "- **P0-6 多空换手与成本独立分离**: 独立计算多头换手与空头换手，分别核算买入滑点佣金与卖出印花税佣金滑点。",
             "",
             "## 2. 研究概览与因子分级统计",
             f"- **候选因子总数**: {len(df_summary)} 个",
@@ -341,11 +346,12 @@ class FactorReportGenerator:
         for _, r in top10_df.head(5).iterrows():
             fname = r["factor_name"]
             ann_ret_str = f"{r['annualized_return']*100:.1f}%" if r['annualized_return'] > -0.99 else "-99.0%"
+            long_only_str = f"{r['long_only_excess_annual_return']*100:.1f}%" if r['long_only_excess_annual_return'] > -0.99 else "-99.0%"
             lines.extend([
                 f"### 📍 `{fname}`",
                 f"- **RankIC & HAC 稳健显著性**: 20D 均值 RankIC 为 `{r['mean_rank_ic']:.4f}`，Newey-West HAC t-stat 为 `{r['rank_ic_hac_t_stat']:.2f}`，全家族 FDR p-val 为 `{r['rank_ic_fdr_p_value']:.4f}`；",
                 f"- **分层单调性**: 截面分层相关性得分为 `{r['monotonicity']:.2f}`；",
-                f"- **真实 T+1 开盘可执行 PnL**: 日均换手率 `{r['turnover']*100:.1f}%`，真实非重叠日度年化收益 `{ann_ret_str}`，扣除摩擦后夏普为 `{r['net_sharpe_10bps']:.2f}`，Top 组相对于基准超额年化为 `{r['long_only_excess_annual_return']*100:.1f}%`；",
+                f"- **真实 T+1 开盘可执行 PnL**: 多头换手率 `{r['long_turnover']*100:.1f}%`，空头换手率 `{r['short_turnover']*100:.1f}%`，综合日均换手率 `{r['turnover']*100:.1f}%`，真实非重叠日度年化收益 `{ann_ret_str}`，扣除摩擦后夏普为 `{r['net_sharpe_10bps']:.2f}`，Top 组相对于基准超额年化为 `{long_only_str}`；",
                 f"- **市场状态表现**: 牛市 RankIC=`{r['bull_rank_ic']:.4f}`，熊市 RankIC=`{r['bear_rank_ic']:.4f}`，震荡市 RankIC=`{r['sideways_rank_ic']:.4f}`。"
             ])
 
@@ -412,7 +418,7 @@ class FactorReportGenerator:
         lines.extend([
             "",
             "---",
-            "*本报告由 `research/factor_analyzer.py` 自动生成，16 份结构化证据已同步归档至 `reports/factor_research/`。*"
+            "*本报告由 `research/factor_analyzer.py` 自动生成，18 份结构化证据已同步归档至 `reports/factor_research/`。*"
         ])
 
         sep = chr(10)

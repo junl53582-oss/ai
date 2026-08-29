@@ -1,41 +1,35 @@
 """
-因子时间稳定性与市场状态分化研究引擎 (research/factor_stability.py)
-按年度切片、滚动窗口 (60D/120D/252D)、符号一致性检验，以及牛市/熊市/震荡市分市场状态评价。
+因子时序稳定性、牛熊市场状态与多年度稳健性分析引擎 (research/factor_stability.py)
+Phase 1.3 P1-3: 增加年度最小有效交易日门禁 MIN_VALID_DAYS_PER_YEAR，样本不足年份不参与符号一致性判定
 """
 import logging
 from dataclasses import dataclass, field
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional
 import numpy as np
 import pandas as pd
 
-from .factor_metrics import FactorMetricsEngine
 from .config import ResearchConfig, default_research_config
+from .factor_metrics import FactorMetricsEngine
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class FactorStabilityResult:
-    """因子的时间稳定性与市场状态分析结果"""
+    """因子时序稳定性评估结果"""
     factor_name: str
-    overall_mean_rank_ic: float
-    annual_rank_ic: Dict[str, float] = field(default_factory=dict)       # "2021" -> 0.05
-    annual_rank_icir: Dict[str, float] = field(default_factory=dict)
-    annual_long_short_return: Dict[str, float] = field(default_factory=dict)
-    sign_consistency_ratio: float = 0.0                                 # 与全样本符号同向的年份占比
-    
-    # 滚动稳定性统计
-    rolling_stats: Dict[str, Dict[str, float]] = field(default_factory=dict) # "60D" -> {mean, std, min, max, positive_ratio}
-    
-    # 市场状态划分结果
+    overall_mean_rank_ic: float = 0.0
+    sign_consistency_ratio: float = 0.0
     bull_rank_ic: float = 0.0
     bear_rank_ic: float = 0.0
     sideways_rank_ic: float = 0.0
-    regime_breakdown: Dict[str, Any] = field(default_factory=dict)
+    annual_rank_ic: Dict[str, float] = field(default_factory=dict)
+    annual_details: Dict[str, Dict[str, Any]] = field(default_factory=dict)
+    rolling_mean_ic_dict: Dict[int, float] = field(default_factory=dict)
 
 
 class FactorStabilityEngine:
-    """因子时序稳定性分析器"""
+    """因子时间序列与多市场状态稳定性评估器"""
 
     @classmethod
     def evaluate_stability(
@@ -43,130 +37,99 @@ class FactorStabilityEngine:
         df: pd.DataFrame,
         factor_col: str,
         return_col: str,
-        benchmark_col: Optional[str] = "benchmark_close",
         config: Optional[ResearchConfig] = None
     ) -> FactorStabilityResult:
-        """
-        全面评估因子的年度稳定性、滚动稳健性与牛熊分化表现
-        """
+        """评估因子的年度一致性与牛熊震荡市表现"""
         cfg = config or default_research_config
+        df = df.copy()
+        df["date"] = pd.to_datetime(df["date"])
+
+        # 1. 逐日 RankIC 序列
         daily_rank_ic = FactorMetricsEngine.compute_daily_ic(df, factor_col, return_col, method="spearman")
         if daily_rank_ic.empty:
-            return FactorStabilityResult(factor_name=factor_col, overall_mean_rank_ic=0.0)
+            return FactorStabilityResult(factor_name=factor_col)
 
         overall_mean = float(daily_rank_ic.mean())
-        overall_sign = np.sign(overall_mean) if abs(overall_mean) > 1e-8 else 1.0
+        target_sign = 1 if overall_mean >= 0 else -1
 
-        daily_rank_ic.index = pd.to_datetime(daily_rank_ic.index)
-        daily_df = pd.DataFrame({"rank_ic": daily_rank_ic})
-        daily_df["year"] = daily_df.index.year.astype(str)
+        # 2. 分年度 RankIC 计算与有效天数门禁 (Phase 1.3 P1-3)
+        daily_df = daily_rank_ic.to_frame(name="rank_ic")
+        daily_df["year"] = daily_df.index.year
 
-        # 1. 按年度统计
-        annual_rank_ic = {}
-        annual_icir = {}
-        annual_ls = {}
-        sign_match_count = 0
-        total_years = len(daily_df["year"].unique())
+        annual_ic = {}
+        annual_details = {}
+        valid_sign_years = 0
+        total_valid_years = 0
 
         for yr, grp in daily_df.groupby("year"):
-            y_mean = float(grp["rank_ic"].mean())
-            y_std = float(grp["rank_ic"].std(ddof=1)) if len(grp) > 1 else 0.0
-            y_icir = (y_mean / y_std) if y_std > 1e-8 else 0.0
+            yr_str = str(yr)
+            n_days = len(grp)
+            m_ic = float(grp["rank_ic"].mean())
+            std_ic = float(grp["rank_ic"].std(ddof=1)) if n_days > 1 else 1e-6
+            icir = (m_ic / std_ic) if std_ic > 1e-8 else 0.0
 
-            annual_rank_ic[yr] = round(y_mean, 4)
-            annual_icir[yr] = round(y_icir, 4)
+            if n_days < cfg.MIN_VALID_DAYS_PER_YEAR:
+                status_str = "INSUFFICIENT_YEAR_SAMPLE"
+            else:
+                status_str = "VALID"
+                total_valid_years += 1
+                if (m_ic * target_sign) > 0:
+                    valid_sign_years += 1
 
-            # 该年符号是否与全样本一致
-            if np.sign(y_mean) == overall_sign:
-                sign_match_count += 1
+            annual_ic[yr_str] = round(m_ic, 4)
+            annual_details[yr_str] = {
+                "year": yr,
+                "valid_ic_days": n_days,
+                "mean_rank_ic": round(m_ic, 4),
+                "icir": round(icir, 4),
+                "status": status_str
+            }
 
-            # 计算该年度的多空收益
-            sub_yr_df = df[pd.to_datetime(df["date"]).dt.year.astype(str) == yr]
-            direction = 1 if overall_mean >= 0 else -1
-            ls_res = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(
-                sub_yr_df, factor_col=factor_col, direction=direction, n_quantiles=5
-            )
-            annual_ls[yr] = round(ls_res["annualized_return"], 4)
+        # 符号一致性仅由样本充分的年份决定
+        if total_valid_years > 0:
+            sign_consistency = float(valid_sign_years / total_valid_years)
+        else:
+            sign_consistency = float((daily_rank_ic * target_sign > 0).mean())
 
-        sign_consistency = round(sign_match_count / max(total_years, 1), 4)
+        # 3. 牛熊与震荡市场状态划分
+        market_bench_col = cfg.BENCHMARK_CLOSE_COL if cfg.BENCHMARK_CLOSE_COL in df.columns else None
+        if market_bench_col:
+            bench_daily = df.groupby("date")[market_bench_col].first().sort_index()
+            bench_20d_ret = bench_daily.pct_change(cfg.MARKET_REGIME_WINDOW)
+            
+            regime_map = {}
+            for dt, ret in bench_20d_ret.items():
+                if np.isnan(ret):
+                    regime_map[dt] = "SIDEWAYS"
+                elif ret >= cfg.MARKET_REGIME_THRESHOLD:
+                    regime_map[dt] = "BULL"
+                elif ret <= -cfg.MARKET_REGIME_THRESHOLD:
+                    regime_map[dt] = "BEAR"
+                else:
+                    regime_map[dt] = "SIDEWAYS"
+                    
+            daily_df["regime"] = daily_df.index.map(regime_map).fillna("SIDEWAYS")
+            
+            bull_ic = float(daily_df[daily_df["regime"] == "BULL"]["rank_ic"].mean()) if (daily_df["regime"] == "BULL").any() else 0.0
+            bear_ic = float(daily_df[daily_df["regime"] == "BEAR"]["rank_ic"].mean()) if (daily_df["regime"] == "BEAR").any() else 0.0
+            side_ic = float(daily_df[daily_df["regime"] == "SIDEWAYS"]["rank_ic"].mean()) if (daily_df["regime"] == "SIDEWAYS").any() else 0.0
+        else:
+            bull_ic = bear_ic = side_ic = overall_mean
 
-        # 2. 滚动窗口稳定性 (60D, 120D, 252D)
-        rolling_stats = {}
+        # 4. 滚动均值 IC
+        rolling_dict = {}
         for w in cfg.ROLLING_WINDOWS:
-            if len(daily_rank_ic) >= w:
-                roll_s = daily_rank_ic.rolling(w).mean().dropna()
-                rolling_stats[f"{w}D"] = {
-                    "mean": round(float(roll_s.mean()), 4),
-                    "std": round(float(roll_s.std(ddof=1)), 4) if len(roll_s) > 1 else 0.0,
-                    "min": round(float(roll_s.min()), 4),
-                    "max": round(float(roll_s.max()), 4),
-                    "positive_ratio": round(float((roll_s > 0).mean()), 4)
-                }
-
-        # 3. 市场状态划分 (牛市 / 熊市 / 震荡市)
-        regime_res = cls._evaluate_regimes(df, daily_rank_ic, benchmark_col, cfg)
+            roll_mean = daily_rank_ic.rolling(w, min_periods=min(w, len(daily_rank_ic))).mean().dropna()
+            rolling_dict[w] = round(float(roll_mean.mean()), 4) if not roll_mean.empty else 0.0
 
         return FactorStabilityResult(
             factor_name=factor_col,
             overall_mean_rank_ic=round(overall_mean, 4),
-            annual_rank_ic=annual_rank_ic,
-            annual_rank_icir=annual_icir,
-            annual_long_short_return=annual_ls,
-            sign_consistency_ratio=sign_consistency,
-            rolling_stats=rolling_stats,
-            bull_rank_ic=regime_res["bull_rank_ic"],
-            bear_rank_ic=regime_res["bear_rank_ic"],
-            sideways_rank_ic=regime_res["sideways_rank_ic"],
-            regime_breakdown=regime_res
+            sign_consistency_ratio=round(sign_consistency, 4),
+            bull_rank_ic=round(bull_ic, 4),
+            bear_rank_ic=round(bear_ic, 4),
+            sideways_rank_ic=round(side_ic, 4),
+            annual_rank_ic=annual_ic,
+            annual_details=annual_details,
+            rolling_mean_ic_dict=rolling_dict
         )
-
-    @classmethod
-    def _evaluate_regimes(
-        cls,
-        df: pd.DataFrame,
-        daily_rank_ic: pd.Series,
-        benchmark_col: Optional[str],
-        config: ResearchConfig
-    ) -> Dict[str, Any]:
-        """按基准指数趋势划分市场状态并评估 RankIC"""
-        res = {"bull_rank_ic": 0.0, "bear_rank_ic": 0.0, "sideways_rank_ic": 0.0, "counts": {}}
-        if not benchmark_col or benchmark_col not in df.columns:
-            return res
-
-        # 提取逐日基准收盘价
-        bench_daily = df.groupby("date")[benchmark_col].first().dropna()
-        bench_daily.index = pd.to_datetime(bench_daily.index)
-        if len(bench_daily) < config.MARKET_REGIME_WINDOW:
-            return res
-
-        # 计算 20 日动量
-        bench_ret_20d = bench_daily.pct_change(config.MARKET_REGIME_WINDOW)
-        
-        regimes = {}
-        for dt, ret in bench_ret_20d.items():
-            if np.isnan(ret):
-                continue
-            if ret >= config.MARKET_REGIME_THRESHOLD:
-                regimes[dt] = "BULL"
-            elif ret <= -config.MARKET_REGIME_THRESHOLD:
-                regimes[dt] = "BEAR"
-            else:
-                regimes[dt] = "SIDEWAYS"
-
-        regime_s = pd.Series(regimes)
-        aligned = pd.DataFrame({"rank_ic": daily_rank_ic, "regime": regime_s}).dropna()
-
-        if not aligned.empty:
-            for reg in ["BULL", "BEAR", "SIDEWAYS"]:
-                sub = aligned[aligned["regime"] == reg]
-                res["counts"][reg] = len(sub)
-                if not sub.empty:
-                    val = round(float(sub["rank_ic"].mean()), 4)
-                    if reg == "BULL":
-                        res["bull_rank_ic"] = val
-                    elif reg == "BEAR":
-                        res["bear_rank_ic"] = val
-                    else:
-                        res["sideways_rank_ic"] = val
-
-        return res
