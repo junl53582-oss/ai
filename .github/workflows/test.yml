@@ -1,0 +1,27 @@
+name: CI Test & Factor Research Audit
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt pytest scipy matplotlib
+      - name: Run Pytest Test Suite
+        run: |
+          python -m pytest -s --junitxml=artifacts/pytest.xml
+      - name: Run Factor Research Pipeline
+        run: |
+          python tools/run_factor_research.py

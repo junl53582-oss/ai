@@ -1,7 +1,11 @@
 {
-  "schema_version": "1.1",
-  "git_commit": "ca7363f618ed490a7b283ea006e6a13ae1716ae3",
-  "factor_matrix_hash": "4bfd9739d469dc6e5504bebf3cc085a981e2f587e29f69604c6ef76e27a03473",
+  "schema_version": "1.2",
+  "research_validity_status": "DEVELOPMENT_SAMPLE",
+  "source_git_commit": "bb462ffe44a0e4a8058a041bd26e3d39228acc4f",
+  "source_git_tree_hash": "0e0b83fa65e19cbf9a5a50a1246e4cdc8aa451df",
+  "working_tree_clean": false,
+  "factor_matrix_hash": "0cdfd9dbc709f6f2ad3845b79ba7b7ce7c1548cdc04ef5417340e0df437f032d",
+  "factor_columns_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
   "dataset_rows": 4555,
   "symbol_count": 5,
   "factor_count": 79,
@@ -15,11 +19,13 @@
     10,
     20
   ],
+  "label_definition": "T_close_to_T+1_open_entry_to_T+H_close_exit",
+  "execution_definition": "T_signal_T+1_open_execution_T+1_close_realized",
   "wf_purge_days": 25,
   "wf_embargo_days": 5,
   "min_wf_folds_required": 3,
   "walk_forward_status": "OOS_PRELIMINARY",
   "selected_strong_count": 0,
   "selected_useful_count": 0,
-  "generated_at": "2026-08-29T13:32:23.176176+00:00"
+  "generated_at": "2026-08-29T14:17:21.596961+00:00"
 }

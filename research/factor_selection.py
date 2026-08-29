@@ -1,9 +1,10 @@
 """
 因子评分、等级划分与严格 Purged Walk-Forward 滚动筛选引擎 (research/factor_selection.py)
-P0-2: 严密实现 Purge Gap >= max(HORIZONS)，杜绝训练/验证边界标签泄露
-P0-6/7: 每折在训练集内独立执行全套特征选择(方向、最优视界、FDR、冗余过滤)，验证集仅评估冻结决策
-P1-1: 强化 FDR 门禁 (STRONG 必须 FDR <= 0.05)
-P1-6: 最少 Fold 数门禁 (MIN_WF_FOLDS_FOR_CERTIFICATION >= 3)
+Phase 1.2 核心硬化:
+1. 每个 Train Fold 内部独立运行完整正式选择流水线 (HAC-FDR, Decay, Monotonicity, Stability, Redundancy, Scoring, Classify) (P0-5)
+2. 验证折严格仅应用并评估冻结决策 (Frozen Direction, Frozen Horizon, Frozen Clusters)
+3. 严格 Purge Gap >= max(HORIZONS)=25天，彻底杜绝边界标签跨区泄漏
+4. 输出逐折审计记录供导出 walk_forward_folds.csv
 """
 import logging
 import json
@@ -33,10 +34,9 @@ class FactorSelectionResult:
     factor_directions: Dict[str, int] = field(default_factory=dict)
     best_horizons: Dict[str, str] = field(default_factory=dict)
     rejection_reasons: Dict[str, List[str]] = field(default_factory=dict)
-    status_summary: Dict[str, str] = field(default_factory=dict) # factor -> STRONG | USEFUL | WEAK | REJECT
-    research_grade: Dict[str, str] = field(default_factory=dict) # OOS_VALIDATED | OOS_PRELIMINARY | IN_SAMPLE_STRONG | REJECT
+    status_summary: Dict[str, str] = field(default_factory=dict)
+    research_grade: Dict[str, str] = field(default_factory=dict)
     
-    # 严格 Purged Walk-Forward 审计报告 (P0-2)
     walk_forward_stability: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -51,9 +51,7 @@ class FactorSelectionEngine:
         corr_result: CorrelationAnalysisResult,
         config: Optional[ResearchConfig] = None
     ) -> pd.DataFrame:
-        """
-        多维度标准化综合评分
-        """
+        """多维度标准化综合评分"""
         cfg = config or default_research_config
         rows = []
 
@@ -121,7 +119,7 @@ class FactorSelectionEngine:
     ) -> FactorSelectionResult:
         """
         根据门禁阈值将因子分为 STRONG / USEFUL / WEAK / REJECT
-        P1-1 强化: STRONG 必须满足 rank_ic_fdr_p_value <= FDR_ALPHA (0.05)
+        STRONG 必须满足 rank_ic_fdr_p_value <= FDR_ALPHA (0.05)
         """
         cfg = config or default_research_config
         selected = []
@@ -135,7 +133,6 @@ class FactorSelectionEngine:
         status_map = {}
         grades = {}
 
-        # 冗余组去重
         kept_group_representatives = set()
 
         for _, row in scores_df.iterrows():
@@ -163,7 +160,7 @@ class FactorSelectionEngine:
                 else:
                     kept_group_representatives.add(gid)
 
-            # 状态分级决策树 (P1-1 严格 FDR 门禁)
+            # 状态决策
             if is_redundant_drop:
                 status = "REJECT"
                 rejected.append(name)
@@ -173,7 +170,7 @@ class FactorSelectionEngine:
                 and effective_icir >= cfg.STRONG_IC_IR
                 and sign_stab >= cfg.STRONG_SIGN_STABILITY
                 and cov >= cfg.STRONG_COVERAGE
-                and m.rank_ic_fdr_p_value <= cfg.FDR_ALPHA  # 严格 FDR <= 0.05
+                and m.rank_ic_fdr_p_value <= cfg.FDR_ALPHA
             ):
                 status = "STRONG"
                 selected.append(name)
@@ -187,7 +184,7 @@ class FactorSelectionEngine:
                 status = "USEFUL"
                 useful.append(name)
                 grades[name] = "USEFUL"
-            elif abs_ic >= cfg.WEAK_RANK_IC:
+            elif abs_ic >= cfg.WEAK_RANK_IC and m.rank_ic_fdr_p_value <= cfg.FDR_USEFUL_ALPHA:
                 status = "WEAK"
                 weak.append(name)
                 grades[name] = "WEAK"
@@ -228,11 +225,10 @@ class FactorSelectionEngine:
         config: Optional[ResearchConfig] = None
     ) -> Dict[str, Any]:
         """
-        P0-2 / P0-6 / P0-7 严格 Purged Walk-Forward 因子样本外验证:
-        1. 训练集 -> Purge Gap (>= max(HORIZONS)=25天) -> 验证集，杜绝标签前视泄露;
-        2. 训练窗口内完全独立执行方向、最优视界、FDR 与因子选择 pipeline;
-        3. 验证窗口严格冻结并仅评估训练集选出的因子 (Frozen Direction & Frozen Horizon);
-        4. 未入选因子绝不记入 selected OOS 成绩。
+        Phase 1.2 核心硬化: 完整 Purged Walk-Forward 样本外验证 (P0-5)
+        1. 训练折内运行全套选择流水线 (Decay, Monotonicity, Stability, HAC-FDR, Redundancy, Scoring, Classify);
+        2. 严格冻结训练折决策并在验证折独立评估;
+        3. 严禁未入选因子获得 selected OOS 成绩。
         """
         cfg = config or default_research_config
         dates = sorted(pd.to_datetime(df["date"].unique()))
@@ -281,11 +277,13 @@ class FactorSelectionEngine:
             train_df = df[pd.to_datetime(df["date"]).isin(train_d)].copy()
             val_df = df[pd.to_datetime(df["date"]).isin(val_d)].copy()
 
-            # 1. 训练窗口全要素评估 (P0-7)
+            # 1. 训练折内独立运行全要素评估与多重检验 (P0-5)
             train_metrics: Dict[str, FactorEvaluationMetrics] = {}
             train_decay: Dict[str, FactorDecayResult] = {}
+            train_stab: Dict[str, FactorStabilityResult] = {}
             train_pvals = []
-            
+            train_ic_dict = {}
+
             for f in factor_cols:
                 dec = FactorDecayEngine.analyze_decay(train_df, f, horizons=cfg.HORIZONS)
                 train_decay[f] = dec
@@ -294,47 +292,52 @@ class FactorSelectionEngine:
                 
                 m = FactorMetricsEngine.evaluate_factor(train_df, f, ret_col, horizon=best_h, config=cfg)
                 train_metrics[f] = m
-                train_pvals.append(m.rank_ic_p_value)
+                train_pvals.append(m.rank_ic_hac_p_value) # 必须使用 HAC 稳健 p 值 (P0-5)
+                if m.daily_rank_ic_series is not None and not m.daily_rank_ic_series.empty:
+                    train_ic_dict[f] = m.daily_rank_ic_series
 
-            # 训练集 FDR 校正
+                stab = FactorStabilityEngine.evaluate_stability(train_df, f, ret_col, config=cfg)
+                train_stab[f] = stab
+
             train_fdr = FactorMetricsEngine.compute_fdr_pvalues(train_pvals)
             for idx, f in enumerate(factor_cols):
                 train_metrics[f].rank_ic_fdr_p_value = train_fdr[idx]
 
-            # 训练集选拔因子 (STRONG 或 USEFUL 且 FDR <= 0.20)
-            fold_selected = []
-            fold_directions = {}
-            fold_horizons = {}
+            # 训练折相关性与冗余聚类
+            train_corr = FactorCorrelationEngine.analyze_correlation(train_df, factor_cols, train_ic_dict, config=cfg)
 
-            for f in factor_cols:
-                m = train_metrics[f]
-                dec = train_decay[f]
-                eff_icir = max(abs(m.rank_ic_ir), abs(m.annualized_rank_icir))
-                if (abs(m.mean_rank_ic) >= cfg.USEFUL_RANK_IC and eff_icir >= cfg.USEFUL_IC_IR and m.rank_ic_fdr_p_value <= cfg.FDR_USEFUL_ALPHA):
-                    fold_selected.append(f)
-                    fold_directions[f] = m.recommended_direction
-                    fold_horizons[f] = dec.best_horizon
+            # 训练折多维评分与分级决策
+            train_scores_df = cls.score_factors(train_metrics, train_stab, train_corr, config=cfg)
+            train_sel_res = cls.classify_factors(train_scores_df, train_metrics, train_decay, train_stab, train_corr, config=cfg)
+
+            fold_selected = train_sel_res.selected_factors + train_sel_res.useful_factors
 
             for f in fold_selected:
                 factor_selected_counts[f] += 1
 
-            # 2. 验证窗口严格冻结评估 (P0-6: 仅对选出因子评估冻结参数)
+            # 2. 验证折严格评估冻结决策 (Frozen Direction & Horizon)
             val_results = {}
             for f in fold_selected:
-                h_int = int(fold_horizons[f].replace("D", ""))
+                f_dir = train_sel_res.factor_directions[f]
+                f_horiz = train_sel_res.best_horizons[f]
+                h_int = int(f_horiz.replace("D", ""))
                 val_ret_col = f"future_excess_return_{h_int}d" if f"future_excess_return_{h_int}d" in val_df.columns else f"future_return_{h_int}d"
                 
                 val_ic_s = FactorMetricsEngine.compute_daily_ic(val_df, f, val_ret_col, method="spearman")
                 if not val_ic_s.empty:
-                    # 依据训练期冻结方向调正
-                    aligned_ic = val_ic_s * fold_directions[f]
+                    aligned_ic = val_ic_s * f_dir
                     m_val_ic = float(aligned_ic.mean())
                     std_val_ic = float(aligned_ic.std(ddof=1)) if len(aligned_ic) > 1 else 1e-6
                     val_icir = (m_val_ic / std_val_ic) if std_val_ic > 1e-8 else 0.0
 
                     factor_oos_rank_ics[f].append(m_val_ic)
                     factor_oos_icirs[f].append(val_icir)
-                    val_results[f] = {"oos_rank_ic": round(m_val_ic, 4), "oos_icir": round(val_icir, 4)}
+                    val_results[f] = {
+                        "train_direction": f_dir,
+                        "train_horizon": f_horiz,
+                        "oos_rank_ic": round(m_val_ic, 4),
+                        "oos_icir": round(val_icir, 4)
+                    }
 
             folds_detail.append({
                 "fold_id": f_id,
@@ -344,9 +347,11 @@ class FactorSelectionEngine:
                 "purge_end": str(purge_d[-1].date()),
                 "validation_start": str(val_d[0].date()),
                 "validation_end": str(val_d[-1].date()),
-                "train_sample_count": len(train_df),
-                "validation_sample_count": len(val_df),
-                "selected_factors_count": len(fold_selected),
+                "train_symbols": int(train_df["symbol"].nunique()) if "symbol" in train_df.columns else 0,
+                "train_rows": len(train_df),
+                "validation_symbols": int(val_df["symbol"].nunique()) if "symbol" in val_df.columns else 0,
+                "validation_rows": len(val_df),
+                "selected_factor_count": len(fold_selected),
                 "selected_factors": fold_selected,
                 "oos_evaluation": val_results
             })

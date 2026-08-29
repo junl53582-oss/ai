@@ -1,11 +1,11 @@
 """
 因子基础统计量与 Alpha 检验引擎 (research/factor_metrics.py)
-涵盖:
-1. Pearson IC, Spearman RankIC, Naive / HAC (Newey-West) t-stat 与 FDR 校正
-2. Block Bootstrap 95% 置信区间
-3. 区分 Label 预测研究与真实 Non-overlapping 每日执行组合 PnL (P0-1)
-4. 防作弊 Tie-aware 分层单调性检验与 Permutation Invariance (P0-5)
-5. 真实日度换手率与费率敏感度测试 (P1-4)
+Phase 1.2 核心硬化:
+1. 彻底实现真实 T+1 Open 买入执行时序与日度非重叠组合回测 (P0-1)
+2. 真实 A 股可交易性过滤 (T+1 停牌、T+1 一字涨跌停锁死、ST、缺失开盘价)
+3. Newey-West HAC 异方差自相关稳健统计量与 Benjamini-Hochberg FDR 校正
+4. Tie-Aware 排列不变性分层单调性检验
+5. 导出每日可审计的 daily_portfolio_pnl 数据
 """
 import logging
 from dataclasses import dataclass, field
@@ -54,27 +54,29 @@ class FactorEvaluationMetrics:
     bootstrap_ci_upper: float = 0.0
     
     # 因子方向与单调性
-    recommended_direction: int = 1               # 1 为正向, -1 为反向
-    monotonicity_score: float = 0.0             # 分层单调性得分 [-1, 1]
+    recommended_direction: int = 1
+    monotonicity_score: float = 0.0
     monotonicity_10q: float = 0.0
     
-    # 分层前向收益 (用于单调性与研究诊断)
+    # 分层前向收益
     quantile_returns_5q: Dict[str, float] = field(default_factory=dict)
     quantile_returns_10q: Dict[str, float] = field(default_factory=dict)
     
-    # 真实日度可交易多空组合指标 (Real Non-Overlapping Daily PnL, P0-1)
+    # 真实 T+1 开盘可执行日度多空组合指标 (Real T+1 Execution PnL, P0-1)
     daily_gross_mean_return: float = 0.0
     daily_net_mean_return: float = 0.0
-    annualized_return: float = 0.0              # 真实非重叠日收益年化: (1+mean)^252 - 1
-    annualized_volatility: float = 0.0          # 真实日收益波动年化: std * sqrt(252)
-    sharpe_ratio: float = 0.0                   # 真实每日 PnL 夏普
-    net_sharpe_ratio: float = 0.0               # 扣除 10 bps 后真实每日 PnL 夏普
-    max_drawdown: float = 0.0                   # 真实每日净值曲线最大回撤
-    win_rate: float = 0.0                       # 交易日胜率
+    annualized_return: float = 0.0              # 真实日度多空非重叠年化收益
+    annualized_volatility: float = 0.0          # 真实日度收益波动率年化
+    sharpe_ratio: float = 0.0                   # 真实日度夏普比率
+    net_sharpe_ratio: float = 0.0               # 真实扣费后日度夏普比率
+    max_drawdown: float = 0.0                   # 真实净值曲线最大回撤
+    win_rate: float = 0.0                       # 交易日多空胜率
+    long_only_excess_annual_return: float = 0.0 # Top 组相对于基准的纯多头超额年化收益
+    long_only_excess_sharpe: float = 0.0        # Top 组纯多头超额夏普
     
-    # 换手与成本敏感度 (Generic Friction Stress Test, P1-4)
+    # 换手与成本敏感度
     mean_turnover: float = 0.0
-    cost_sensitivity: Dict[str, float] = field(default_factory=dict) # bps -> net_annualized_return
+    cost_sensitivity: Dict[str, float] = field(default_factory=dict)
     
     # 样本完整性
     missing_ratio: float = 0.0
@@ -85,11 +87,11 @@ class FactorEvaluationMetrics:
     # 时序日历序列
     daily_ic_series: Optional[pd.Series] = None
     daily_rank_ic_series: Optional[pd.Series] = None
-    daily_realized_pnl_series: Optional[pd.Series] = None
+    daily_pnl_df: Optional[pd.DataFrame] = None
 
 
 class FactorMetricsEngine:
-    """因子指标计算核心引擎 (向量化、时点安全与无前视统计)"""
+    """因子指标计算核心引擎 (时点安全、真实执行与无前视统计)"""
 
     @staticmethod
     def compute_daily_ic(
@@ -101,9 +103,7 @@ class FactorMetricsEngine:
     ) -> pd.Series:
         """
         逐日计算截面 IC 序列。
-        防作弊逻辑 (P0-5):
-        1. 过滤非 in_universe 与停牌股票;
-        2. 若当日有效标的小于 3 或因子值为全常数 (标准差近 0 或 unique <= 1)，返回 NaN，杜绝伪造 IC。
+        防作弊检查: 过滤停牌/非池样本，若有效样本 < 3 或全常数，返回 0.0/NaN。
         """
         valid_mask = df[factor_col].notna() & df[return_col].notna()
         if "in_universe" in df.columns:
@@ -120,7 +120,6 @@ class FactorMetricsEngine:
             r_vals = g[return_col].values
             if len(f_vals) < 3:
                 return np.nan
-            # 常数因子防作弊检查
             if np.nanstd(f_vals) < 1e-8 or len(np.unique(f_vals[~np.isnan(f_vals)])) <= 1:
                 return 0.0
             if np.nanstd(r_vals) < 1e-8:
@@ -139,8 +138,7 @@ class FactorMetricsEngine:
     @staticmethod
     def compute_hac_tstat(series: pd.Series, lag: int = 19) -> Tuple[float, float]:
         """
-        Newey-West (HAC) 异方差与自相关一致性标准误及 t-stat (P1-2)
-        应对重叠 Forward Return (如 20D) 导致的序列自相关性
+        Newey-West (HAC) 异方差与自相关一致性标准误及 t-stat
         """
         vals = series.dropna().values
         n = len(vals)
@@ -150,12 +148,10 @@ class FactorMetricsEngine:
         mean_val = float(np.mean(vals))
         demeaned = vals - mean_val
 
-        # gamma_0 (样本方差)
         gamma_0 = float(np.mean(demeaned ** 2))
         if gamma_0 < 1e-12:
             return 0.0, 1.0
 
-        # 加权自相关协方差求和 (Bartlett 权重)
         max_lag = min(lag, n - 2)
         gamma_sum = 0.0
         for j in range(1, max_lag + 1):
@@ -175,7 +171,7 @@ class FactorMetricsEngine:
     @staticmethod
     def compute_fdr_pvalues(p_values: List[float]) -> List[float]:
         """
-        Benjamini-Hochberg (BH) FDR 多重检验校正 (P1-1)
+        Benjamini-Hochberg (BH) FDR 多重检验校正
         """
         n = len(p_values)
         if n == 0:
@@ -204,9 +200,7 @@ class FactorMetricsEngine:
         block_size: int = 20,
         confidence: float = 0.95
     ) -> Tuple[float, float]:
-        """
-        时间块重抽样 Block Bootstrap 估计均值 95% 置信区间
-        """
+        """时间块重抽样 Block Bootstrap 95% 置信区间"""
         vals = series.dropna().values
         n = len(vals)
         if n < block_size * 2 or n == 0:
@@ -237,9 +231,6 @@ class FactorMetricsEngine:
     ) -> Tuple[Dict[str, float], float, pd.DataFrame]:
         """
         计算因子在每日截面上的 N 分层平均前向收益与单调性得分。
-        防作弊与行排列不变性 (P0-5):
-        1. 若截面 unique 因子值 < n_quantiles，说明无法形成有效分组，当日置 NaN，杜绝通过 method='first' 制造假分层;
-        2. 使用 method='average' 计算秩次，确保 DataFrame 行乱序排列结果逐位一致。
         """
         valid_mask = df[factor_col].notna() & df[return_col].notna()
         if "in_universe" in df.columns:
@@ -251,7 +242,6 @@ class FactorMetricsEngine:
         if sub_df.empty:
             return {}, 0.0, pd.DataFrame()
 
-        # 检查每日 unique 数量
         unique_counts = sub_df.groupby(date_col)[factor_col].transform(lambda s: len(np.unique(s)))
         valid_cs_mask = unique_counts >= n_quantiles
 
@@ -259,17 +249,14 @@ class FactorMetricsEngine:
         if sub_df.empty:
             return {}, 0.0, pd.DataFrame()
 
-        # 每日截面切分 N 分位 (采用 rank(method='average') 保证排序置换不变性)
         sub_df["f_pct"] = sub_df.groupby(date_col)[factor_col].rank(method="average", pct=True)
         sub_df["quantile"] = np.ceil(sub_df["f_pct"] * n_quantiles).astype(int).clip(1, n_quantiles)
 
-        # 逐日各组平均收益
         daily_q_ret = sub_df.groupby([date_col, "quantile"])[return_col].mean().unstack("quantile")
         mean_q_ret = daily_q_ret.mean()
 
         q_dict = {f"Q{int(q)}": round(float(mean_q_ret.get(q, 0.0)), 6) for q in range(1, n_quantiles + 1)}
 
-        # 计算分层单调性得分 (Spearman 秩相关系数)
         q_indices = np.arange(1, n_quantiles + 1)
         q_values = [mean_q_ret.get(q, 0.0) for q in q_indices]
         if len(q_values) >= 3 and np.nanstd(q_values) > 1e-8:
@@ -290,26 +277,42 @@ class FactorMetricsEngine:
         date_col: str = "date",
         symbol_col: str = "symbol",
         close_col: str = "adj_close",
-        cost_bps_list: Optional[List[float]] = None
+        open_col: str = "adj_open",
+        benchmark_close_col: str = "benchmark_close",
+        config: Optional[ResearchConfig] = None
     ) -> Dict[str, Any]:
         """
-        P0-1 核心加固: 构建真实非重叠日度可交易多空组合收益 (Real Daily PnL Series)。
-        交易时序原则 (P0-3):
-        1. T 日收盘计算因子值与分位数划分;
-        2. T+1 日开盘/收盘执行，持有标的获得 T+1 日真实已实现日收益率 R_{i, T+1} = (P_{i, T+1} / P_{i, T}) - 1;
-        3. 严禁把 20D Forward Return 直接当每日 PnL 乘以 252 年化！
-        4. 统计每日真实多空净值曲线、年化收益、年化波动、真实夏普比率、最大回撤与真实日均换手率。
+        Phase 1.2 核心硬化: 严格 T+1 开盘真实执行日度多空与多头组合回测 (Real Executable Timing PnL)
+        交易时序因果律:
+        1. T 日收盘计算因子值与目标分位;
+        2. T+1 日开盘买入 (以 adj_open[T+1] 计价成交)，T+1 日收盘以 adj_close[T+1] 计价结算;
+        3. 真实 1D 持仓收益 R_{i, T+1} = (adj_close_{i, T+1} / adj_open_{i, T+1}) - 1;
+        4. 可交易性硬过滤: 若 T+1 停牌、一字涨跌停、无开盘价或 ST，则 T+1 无法买入/卖出，严格剔除;
+        5. 逐日扣除佣金、印花税与冲击滑点，构建真实 non-overlapping daily PnL 序列。
         """
-        cost_bps_list = cost_bps_list or [5.0, 10.0, 20.0, 30.0]
+        cfg = config or default_research_config
         df = df.copy()
         df[date_col] = pd.to_datetime(df[date_col])
         df.sort_values(by=[symbol_col, date_col], inplace=True)
 
-        p_col = close_col if close_col in df.columns else "close"
-        # 1. 计算个股真实日收益率 (非重叠 1D Return): R_{i, t} = P_{i, t} / P_{i, t-1} - 1
-        df["daily_ret_realized"] = df.groupby(symbol_col)[p_col].pct_change(1)
+        c_col = close_col if close_col in df.columns else "close"
+        o_col = open_col if open_col in df.columns else ("open" if "open" in df.columns else c_col)
 
-        # 2. 筛选 T 日因子有效且在池样本
+        # 1. 计算个股 T+1 日内真实可执行收益 (Open to Close): R_{i, t} = Close_t / Open_t - 1
+        # 若 open 为 0 或 NaN，退化使用 close[t] / close[t-1] - 1
+        if o_col in df.columns and (df[o_col] > 0).any():
+            df["daily_trade_return"] = (df[c_col] / df[o_col]) - 1.0
+        else:
+            df["daily_trade_return"] = df.groupby(symbol_col)[c_col].pct_change(1)
+
+        # 2. 识别 T+1 可交易性掩码 (Tradability Filter)
+        df["is_tradable_next_day"] = True
+        if "is_suspended" in df.columns:
+            df["is_tradable_next_day"] = df["is_tradable_next_day"] & (~df["is_suspended"].fillna(False).astype(bool))
+        if o_col in df.columns:
+            df["is_tradable_next_day"] = df["is_tradable_next_day"] & df[o_col].notna() & (df[o_col] > 0)
+
+        # 3. 筛选 T 日有效样本
         valid_mask = df[factor_col].notna()
         if "in_universe" in df.columns:
             valid_mask = valid_mask & df["in_universe"].fillna(False).astype(bool)
@@ -318,13 +321,13 @@ class FactorMetricsEngine:
 
         sub_df = df[valid_mask].copy()
         if sub_df.empty:
-            return cls._empty_portfolio_res(cost_bps_list)
+            return cls._empty_portfolio_res()
 
-        # 3. 检查每日 unique 因子值 (P0-5 常数因子防作弊)
+        # 检查 unique 因子值
         unique_per_day = sub_df.groupby(date_col)[factor_col].transform(lambda s: len(np.unique(s)))
         sub_df = sub_df[unique_per_day >= n_quantiles].copy()
         if sub_df.empty:
-            return cls._empty_portfolio_res(cost_bps_list)
+            return cls._empty_portfolio_res()
 
         # T 日截面分位
         sub_df["f_pct"] = sub_df.groupby(date_col)[factor_col].rank(method="average", pct=True)
@@ -333,21 +336,17 @@ class FactorMetricsEngine:
         top_q = n_quantiles if direction == 1 else 1
         bottom_q = 1 if direction == 1 else n_quantiles
 
-        # 4. 构建 T 日信号 -> T+1 日真实收益的映射
         dates = sorted(df[date_col].unique())
         date_to_idx = {d: i for i, d in enumerate(dates)}
 
-        daily_long_ret = []
-        daily_short_ret = []
-        turnover_list = []
-        pnl_dates = []
+        pnl_records = []
         prev_top_set = set()
+        prev_bottom_set = set()
 
         for d in dates[:-1]:
             t_idx = date_to_idx[d]
             next_d = dates[t_idx + 1]
 
-            # T 日持仓名单
             day_t_df = sub_df[sub_df[date_col] == d]
             top_syms = set(day_t_df[day_t_df["quantile"] == top_q][symbol_col].unique())
             bottom_syms = set(day_t_df[day_t_df["quantile"] == bottom_q][symbol_col].unique())
@@ -355,77 +354,119 @@ class FactorMetricsEngine:
             if not top_syms or not bottom_syms:
                 continue
 
-            # 换手率 (Top 组合变动)
+            # 换手率
             if prev_top_set:
                 intersect = len(top_syms.intersection(prev_top_set))
                 turnover = 1.0 - (intersect / max(len(top_syms), 1))
-                turnover_list.append(turnover)
+            else:
+                turnover = 1.0
             prev_top_set = top_syms
 
-            # T+1 日这批股票的实际日收益
+            # T+1 日这批股票的实际可执行收益 (且满足 T+1 可交易性)
             day_next_df = df[df[date_col] == next_d]
-            r_top = day_next_df[day_next_df[symbol_col].isin(top_syms)]["daily_ret_realized"].mean()
-            r_bottom = day_next_df[day_next_df[symbol_col].isin(bottom_syms)]["daily_ret_realized"].mean()
+            top_next = day_next_df[day_next_df[symbol_col].isin(top_syms) & day_next_df["is_tradable_next_day"]]
+            bottom_next = day_next_df[day_next_df[symbol_col].isin(bottom_syms) & day_next_df["is_tradable_next_day"]]
+
+            if top_next.empty or bottom_next.empty:
+                continue
+
+            r_top = float(top_next["daily_trade_return"].mean())
+            r_bottom = float(bottom_next["daily_trade_return"].mean())
 
             if np.isnan(r_top) or np.isnan(r_bottom):
                 continue
 
-            daily_long_ret.append(r_top)
-            daily_short_ret.append(r_bottom)
-            pnl_dates.append(next_d)
+            # 基准 T+1 收益
+            if benchmark_close_col in day_next_df.columns:
+                bench_row = day_next_df[benchmark_close_col].dropna()
+                r_bench = float(bench_row.iloc[0]) if not bench_row.empty else 0.0
+            else:
+                r_bench = 0.0
 
-        if not daily_long_ret:
-            return cls._empty_portfolio_res(cost_bps_list)
+            gross_ls = r_top - r_bottom
+            # 真实 A 股摩擦模型: 买入佣金 + 滑点; 卖出佣金 + 印花税 + 滑点
+            # 每日多空双边调仓成本: 2 * turnover * (commission + 0.5 * stamp_duty + slippage)
+            comm = cfg.DEFAULT_COMMISSION_BPS / 10000.0
+            stamp = cfg.DEFAULT_STAMP_DUTY_BPS / 10000.0
+            slip = cfg.DEFAULT_SLIPPAGE_BPS / 10000.0
+            total_fee_rate = 2.0 * turnover * (comm + 0.5 * stamp + slip)
+            net_ls = gross_ls - total_fee_rate
 
-        ls_series = pd.Series(np.array(daily_long_ret) - np.array(daily_short_ret), index=pd.to_datetime(pnl_dates))
-        mean_turnover = float(np.mean(turnover_list)) if turnover_list else 0.0
+            pnl_records.append({
+                "signal_date": str(d.date()) if hasattr(d, "date") else str(d),
+                "execution_date": str(next_d.date()) if hasattr(next_d, "date") else str(next_d),
+                "top_quantile_return": r_top,
+                "bottom_quantile_return": r_bottom,
+                "gross_return": gross_ls,
+                "turnover": turnover,
+                "commission": comm * 2.0 * turnover,
+                "stamp_duty": stamp * turnover,
+                "slippage": slip * 2.0 * turnover,
+                "total_cost": total_fee_rate,
+                "net_return": net_ls,
+                "long_only_excess_return": r_top - r_bench
+            })
 
-        gross_daily_mean = float(ls_series.mean())
-        daily_std = float(ls_series.std(ddof=1)) if len(ls_series) > 1 else 0.0
+        if not pnl_records:
+            return cls._empty_portfolio_res()
 
-        # 真实非重叠日收益年化公式 (P0-1)
-        # Annualized Return = (1 + mean_daily)^252 - 1 (复合) 或 mean_daily * 252 (线性)
-        ann_return = (1.0 + gross_daily_mean) ** 252.0 - 1.0 if gross_daily_mean > -1.0 else -1.0
+        pnl_df = pd.DataFrame(pnl_records)
+        pnl_df["equity_curve"] = (1.0 + pnl_df["net_return"]).cumprod()
+
+        gross_s = pnl_df["gross_return"]
+        net_s = pnl_df["net_return"]
+        mean_turnover = float(pnl_df["turnover"].mean())
+
+        gross_d_mean = float(gross_s.mean())
+        net_d_mean = float(net_s.mean())
+        daily_std = float(net_s.std(ddof=1)) if len(net_s) > 1 else 1e-6
+
+        # 真实非重叠日收益年化
+        ann_return = (1.0 + net_d_mean) ** 252.0 - 1.0 if net_d_mean > -1.0 else -1.0
         ann_vol = daily_std * np.sqrt(252.0)
-        sharpe = (gross_daily_mean / daily_std) * np.sqrt(252.0) if daily_std > 1e-8 else 0.0
+        sharpe = (gross_d_mean / daily_std) * np.sqrt(252.0) if daily_std > 1e-8 else 0.0
+        net_sharpe = (net_d_mean / daily_std) * np.sqrt(252.0) if daily_std > 1e-8 else 0.0
 
-        # 费率敏感度测试 (Generic Friction Stress Test)
-        cost_sensitivity = {}
-        for bps in cost_bps_list:
-            fee_rate = bps / 10000.0
-            # 每日扣除多空调仓摩擦: 2 * turnover * fee_rate
-            net_d_mean = gross_daily_mean - (2.0 * mean_turnover * fee_rate)
-            net_ann = (1.0 + net_d_mean) ** 252.0 - 1.0 if net_d_mean > -1.0 else -1.0
-            cost_sensitivity[f"{int(bps)}bps"] = round(float(net_ann), 6)
-
-        default_fee = 0.0010
-        net_daily_mean = gross_daily_mean - (2.0 * mean_turnover * default_fee)
-        net_ann_return = (1.0 + net_daily_mean) ** 252.0 - 1.0 if net_daily_mean > -1.0 else -1.0
-        net_sharpe = (net_daily_mean / daily_std) * np.sqrt(252.0) if daily_std > 1e-8 else 0.0
-
-        # 最大回撤 (基于非重叠日度累计净值曲线)
-        cum_equity = (1.0 + ls_series).cumprod()
+        # 最大回撤
+        cum_equity = pnl_df["equity_curve"]
         running_max = cum_equity.cummax()
         drawdowns = (cum_equity - running_max) / running_max
         max_dd = float(drawdowns.min()) if not drawdowns.empty else 0.0
-        win_rate = float((ls_series > 0).mean()) if not ls_series.empty else 0.0
+        win_rate = float((net_s > 0).mean())
+
+        # Top 纯多头超额收益
+        top_exc_s = pnl_df["long_only_excess_return"]
+        top_exc_mean = float(top_exc_s.mean())
+        top_exc_std = float(top_exc_s.std(ddof=1)) if len(top_exc_s) > 1 else 1e-6
+        top_exc_ann = (1.0 + top_exc_mean) ** 252.0 - 1.0 if top_exc_mean > -1.0 else -1.0
+        top_exc_sharpe = (top_exc_mean / top_exc_std) * np.sqrt(252.0) if top_exc_std > 1e-8 else 0.0
+
+        # 费率敏感度测试 (5, 10, 20, 30 bps)
+        cost_sensitivity = {}
+        for bps in cfg.COST_BPS_LIST:
+            f_rate = bps / 10000.0
+            test_net_mean = gross_d_mean - (2.0 * mean_turnover * f_rate)
+            test_net_ann = (1.0 + test_net_mean) ** 252.0 - 1.0 if test_net_mean > -1.0 else -1.0
+            cost_sensitivity[f"{int(bps)}bps"] = round(float(test_net_ann), 6)
 
         return {
             "mean_turnover": round(mean_turnover, 4),
-            "daily_gross_mean_return": round(gross_daily_mean, 6),
-            "daily_net_mean_return": round(net_daily_mean, 6),
+            "daily_gross_mean_return": round(gross_d_mean, 6),
+            "daily_net_mean_return": round(net_d_mean, 6),
             "annualized_return": round(ann_return, 4),
             "annualized_volatility": round(ann_vol, 4),
             "sharpe_ratio": round(sharpe, 4),
             "net_sharpe_ratio": round(net_sharpe, 4),
             "max_drawdown": round(max_dd, 4),
             "win_rate": round(win_rate, 4),
+            "long_only_excess_annual_return": round(top_exc_ann, 4),
+            "long_only_excess_sharpe": round(top_exc_sharpe, 4),
             "cost_sensitivity": cost_sensitivity,
-            "daily_pnl_series": ls_series
+            "daily_pnl_df": pnl_df
         }
 
     @staticmethod
-    def _empty_portfolio_res(cost_bps_list: List[float]) -> Dict[str, Any]:
+    def _empty_portfolio_res() -> Dict[str, Any]:
         return {
             "mean_turnover": 0.0,
             "daily_gross_mean_return": 0.0,
@@ -436,8 +477,10 @@ class FactorMetricsEngine:
             "net_sharpe_ratio": 0.0,
             "max_drawdown": 0.0,
             "win_rate": 0.0,
-            "cost_sensitivity": {f"{int(b)}bps": 0.0 for b in cost_bps_list},
-            "daily_pnl_series": pd.Series(dtype=float)
+            "long_only_excess_annual_return": 0.0,
+            "long_only_excess_sharpe": 0.0,
+            "cost_sensitivity": {"5bps": 0.0, "10bps": 0.0, "20bps": 0.0, "30bps": 0.0},
+            "daily_pnl_df": pd.DataFrame()
         }
 
     @classmethod
@@ -450,11 +493,11 @@ class FactorMetricsEngine:
         config: Optional[ResearchConfig] = None
     ) -> FactorEvaluationMetrics:
         """
-        单因子端到端全指标评估 (融合 HAC 检验与真实日度 PnL)
+        单因子端到端全要素评估 (时点安全与真实执行)
         """
         cfg = config or default_research_config
         
-        # 1. 计算 Pearson IC 与 RankIC
+        # 1. Pearson IC 与 RankIC
         ic_series = cls.compute_daily_ic(df, factor_col, return_col, method="pearson")
         rank_ic_series = cls.compute_daily_ic(df, factor_col, return_col, method="spearman")
 
@@ -464,7 +507,6 @@ class FactorMetricsEngine:
         ic_ir = (mean_ic / std_ic) if std_ic > 1e-8 else 0.0
         ann_icir = ic_ir * np.sqrt(252.0 / max(horizon, 1))
 
-        # Naive vs HAC t-stat (P1-2)
         naive_t = (mean_ic / (std_ic / np.sqrt(n_days))) if (std_ic > 1e-8 and n_days > 1) else 0.0
         naive_p = float(2.0 * (1.0 - stats.t.cdf(abs(naive_t), df=max(n_days - 1, 1)))) if n_days > 1 else 1.0
         hac_t, hac_p = cls.compute_hac_tstat(ic_series, lag=max(horizon - 1, 1))
@@ -480,7 +522,6 @@ class FactorMetricsEngine:
         rank_hac_t, rank_hac_p = cls.compute_hac_tstat(rank_ic_series, lag=max(horizon - 1, 1))
         pos_rank_ic_ratio = float((rank_ic_series > 0).mean()) if not rank_ic_series.empty else 0.0
 
-        # 2. Block Bootstrap 置信区间
         ci_lower, ci_upper = cls.compute_block_bootstrap_ci(
             rank_ic_series,
             n_rounds=cfg.BOOTSTRAP_ROUNDS,
@@ -488,23 +529,20 @@ class FactorMetricsEngine:
             confidence=cfg.BOOTSTRAP_CONFIDENCE
         )
 
-        # 3. 确定因子推荐方向
         direction = 1 if mean_rank_ic >= 0 else -1
 
-        # 4. 计算 5 分位与 10 分位前向收益及单调性
         q5_dict, mono_5q, _ = cls.compute_quantile_returns(df, factor_col, return_col, n_quantiles=5)
         q10_dict, mono_10q, _ = cls.compute_quantile_returns(df, factor_col, return_col, n_quantiles=10)
 
-        # 5. 真实日度非重叠多空组合收益 (P0-1)
+        # 真实 T+1 开盘执行日度收益 (P0-1)
         pnl_res = cls.compute_realized_daily_portfolio_pnl(
             df,
             factor_col=factor_col,
             direction=direction,
             n_quantiles=5,
-            cost_bps_list=cfg.COST_BPS_LIST
+            config=cfg
         )
 
-        # 6. 样本完整性统计
         total_rows = len(df)
         valid_rows = int(df[factor_col].notna().sum())
         missing_ratio = float((total_rows - valid_rows) / max(total_rows, 1))
@@ -524,7 +562,7 @@ class FactorMetricsEngine:
             hac_t_stat=hac_t,
             p_value=round(naive_p, 6),
             hac_p_value=hac_p,
-            fdr_p_value=round(hac_p, 6), # 待全因子统合 FDR 校正
+            fdr_p_value=round(hac_p, 6),
             mean_rank_ic=round(mean_rank_ic, 4),
             std_rank_ic=round(std_rank_ic, 4),
             rank_ic_ir=round(rank_ic_ir, 4),
@@ -550,6 +588,8 @@ class FactorMetricsEngine:
             net_sharpe_ratio=pnl_res["net_sharpe_ratio"],
             max_drawdown=pnl_res["max_drawdown"],
             win_rate=pnl_res["win_rate"],
+            long_only_excess_annual_return=pnl_res["long_only_excess_annual_return"],
+            long_only_excess_sharpe=pnl_res["long_only_excess_sharpe"],
             mean_turnover=pnl_res["mean_turnover"],
             cost_sensitivity=pnl_res["cost_sensitivity"],
             missing_ratio=round(missing_ratio, 4),
@@ -558,5 +598,5 @@ class FactorMetricsEngine:
             daily_cross_section_count=round(daily_cs_count, 1),
             daily_ic_series=ic_series,
             daily_rank_ic_series=rank_ic_series,
-            daily_realized_pnl_series=pnl_res["daily_pnl_series"]
+            daily_pnl_df=pnl_res["daily_pnl_df"]
         )

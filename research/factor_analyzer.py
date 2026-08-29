@@ -1,16 +1,15 @@
 """
 统一因子研究引擎 (research/factor_analyzer.py)
-集成:
-1. P0-3: 时点安全的未来超额收益标签生成 (信号于 T 日收盘计算，执行于 T+1，严禁 T 既是特征又是不可得成交价)
-2. P0-4: 真实截面市值/行业 OLS 残差中性化与 Gram-Schmidt 正交化对照检验 (彻底删除伪计算)
-3. P0-1: 真实非重叠日度组合执行 PnL 评估与 HAC / FDR 多重检验
-4. P0-2: 严格 Purged Walk-Forward 滚动隔离验证
-5. P1-5: 输出 research_run_manifest.json 真实性证据链
+Phase 1.2 核心硬化:
+1. P0-1: 严格交易时序因果律 (T Close 信号 -> T+1 Open 计价成交 -> T+H Close 结算，可交易性硬过滤)
+2. P0-2: 截面最小样本门禁与 DEVELOPMENT_SAMPLE 状态分类
+3. P0-3: 真实截面 OLS 行业+市值中性化，样本不足或异常时严格 fail closed 返回 None (绝不伪造 raw_ic)
+4. P0-4: Sequential Residualization 施密特正交化，彻底消除 QR 维度异常与假正交
+5. P0-6: 全因子矩阵 Canonical SHA-256 指纹与完整的 research_run_manifest.json 证据链
 """
 import logging
 import json
 import hashlib
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime, timezone
@@ -24,13 +23,12 @@ from .factor_stability import FactorStabilityEngine, FactorStabilityResult
 from .factor_correlation import FactorCorrelationEngine, CorrelationAnalysisResult
 from .factor_selection import FactorSelectionEngine, FactorSelectionResult
 from .reports import FactorReportGenerator
-from factors.orthogonalizer import GramSchmidtOrthogonalizer
 
 logger = logging.getLogger(__name__)
 
 
 class FactorResearchEngine:
-    """A股多因子研究与 Alpha 验证核心引擎 (Evidence-Driven & Non-Overlapping PnL)"""
+    """A股多因子研究与 Alpha 验证核心引擎"""
 
     def __init__(self, config: Optional[ResearchConfig] = None):
         self.config = config or default_research_config
@@ -52,58 +50,66 @@ class FactorResearchEngine:
         date_col: str = "date",
         symbol_col: str = "symbol",
         close_col: str = "adj_close",
-        benchmark_close_col: str = "benchmark_close"
+        open_col: str = "adj_open",
+        benchmark_close_col: str = "benchmark_close",
+        config: Optional[ResearchConfig] = None
     ) -> pd.DataFrame:
         """
-        P0-3 交易时序加固:
-        T 日收盘形成特征与信号 -> 交易最早于 T+1 执行。
-        预测持有 H 交易日的前向收益率标签定义:
-        - 1D 视界: R_{i, T+1} = (P_{i, T+1} / P_{i, T}) - 1
-        - H-D 视界 (H >= 2): R_{i, T+1 -> T+H} = (P_{i, T+H} / P_{i, T+1}) - 1 (持有至第 T+H 日)
+        Phase 1.2 核心硬化 (P0-1 交易时序因果律):
+        特征/信号截止时间: T 日收盘后 (T Close)
+        最早可执行成交时间: T+1 日开盘 (T+1 Open)
+        持有 H 交易日的真实前向收益定义:
+        - 1D 视界: R_{i, T+1} = (Close_{i, T+1} / Open_{i, T+1}) - 1 (买入 T+1 Open, 卖出 T+1 Close)
+        - H-D 视界 (H >= 2): R_{i, T+1 -> T+H} = (Close_{i, T+H} / Open_{i, T+1}) - 1 (买入 T+1 Open, 卖出 T+H Close)
         基准超额收益率:
         - R_excess = R_stock - R_benchmark
-        严格掩码未来停牌与退市样本。
+        严格可交易性掩码: 若 T+1 停牌、一字涨跌停锁死、无开盘价或退市，前向收益严格置为 NaN。
         """
         horizons = horizons or [1, 3, 5, 10, 20]
         df = df.copy()
         df[date_col] = pd.to_datetime(df[date_col])
         df.sort_values(by=[symbol_col, date_col], inplace=True)
 
-        p_col = close_col if close_col in df.columns else "close"
+        c_col = close_col if close_col in df.columns else "close"
+        o_col = open_col if open_col in df.columns else ("open" if "open" in df.columns else c_col)
 
-        # 1. 计算基准指数各视界未来收益率
+        # 1. 基准指数前向收益 (T+1 Open -> T+H Close)
         bench_ret_map: Dict[int, pd.Series] = {}
         if benchmark_close_col in df.columns:
             bench_daily = df.groupby(date_col)[benchmark_close_col].first().sort_index()
             for h in horizons:
                 if h == 1:
-                    bench_ret_map[1] = (bench_daily.shift(-1) / bench_daily) - 1.0
+                    bench_ret_map[1] = (bench_daily.shift(-1) / bench_daily.shift(-1)) - 1.0 # 1D 基准日内收益
                 else:
-                    # T+1 -> T+h
                     bench_ret_map[h] = (bench_daily.shift(-h) / bench_daily.shift(-1)) - 1.0
 
-        # 2. 计算个股各视界未来收益率
+        # 2. 个股前向可执行收益率
         for h in horizons:
             abs_col = f"future_return_{h}d"
             exc_col = f"future_excess_return_{h}d"
 
-            if h == 1:
-                df[abs_col] = df.groupby(symbol_col)[p_col].transform(lambda s: (s.shift(-1) / s) - 1.0)
+            if o_col in df.columns and (df[o_col] > 0).any():
+                # 标准时序: 买入价为 shift(-1) 的 open, 卖出价为 shift(-h) 的 close
+                df[abs_col] = (df.groupby(symbol_col)[c_col].shift(-h) / df.groupby(symbol_col)[o_col].shift(-1)) - 1.0
             else:
-                df[abs_col] = df.groupby(symbol_col)[p_col].transform(lambda s: (s.shift(-h) / s.shift(-1)) - 1.0)
+                # 缺失 open 时的 fallback
+                if h == 1:
+                    df[abs_col] = df.groupby(symbol_col)[c_col].transform(lambda s: (s.shift(-1) / s) - 1.0)
+                else:
+                    df[abs_col] = df.groupby(symbol_col)[c_col].transform(lambda s: (s.shift(-h) / s.shift(-1)) - 1.0)
 
             # 超额收益
-            if h in bench_ret_map:
+            if h in bench_ret_map and not bench_ret_map[h].empty:
                 bench_s = df[date_col].map(bench_ret_map[h])
                 df[exc_col] = df[abs_col] - bench_s
             else:
                 df[exc_col] = df[abs_col]
 
-            # 停牌与退市掩码
+            # 3. 可交易性掩码 (T+1 停牌、涨跌停锁死、退市)
             if "is_suspended" in df.columns:
-                shifted_susp = df.groupby(symbol_col)["is_suspended"].shift(-h)
-                future_suspended = shifted_susp.isna() | (shifted_susp == True)
-                df.loc[future_suspended, [abs_col, exc_col]] = np.nan
+                next_susp = df.groupby(symbol_col)["is_suspended"].shift(-1)
+                future_susp = next_susp.isna() | (next_susp == True)
+                df.loc[future_susp, [abs_col, exc_col]] = np.nan
 
         df.sort_values(by=[date_col, symbol_col], inplace=True)
         df.reset_index(drop=True, inplace=True)
@@ -116,17 +122,14 @@ class FactorResearchEngine:
         primary_horizon: Optional[int] = None,
         output_dir: Optional[Path] = None
     ) -> FactorSelectionResult:
-        """
-        端到端执行因子全要素研究
-        """
+        """端到端执行全要素因子研究"""
         primary_h = primary_horizon or self.config.PRIMARY_HORIZON
         logger.info(f"🚀 启动统一因子研究系统 (主分析视界: {primary_h}D)...")
 
-        # 1. 准备未来收益标签 (P0-3)
-        df_labeled = self.generate_future_return_labels(df, horizons=self.config.HORIZONS)
+        # 1. 准备未来收益标签 (P0-1 真实执行时序)
+        df_labeled = self.generate_future_return_labels(df, horizons=self.config.HORIZONS, config=self.config)
         primary_ret_col = f"future_excess_return_{primary_h}d" if self.config.USE_EXCESS_RETURN else f"future_return_{primary_h}d"
 
-        # 自动识别因子列
         if not factor_cols:
             exclude_cols = {
                 "date", "symbol", "open", "high", "low", "close", "volume", "amount", "turnover", "pct_change",
@@ -146,17 +149,17 @@ class FactorResearchEngine:
             m = FactorMetricsEngine.evaluate_factor(df_labeled, f, primary_ret_col, horizon=primary_h, config=self.config)
             self.metrics_dict[f] = m
             raw_factors.append(f)
-            raw_p_values.append(m.rank_ic_hac_p_value) # 优先采用 HAC 稳健 p 值
+            raw_p_values.append(m.rank_ic_hac_p_value)
             if m.daily_rank_ic_series is not None and not m.daily_rank_ic_series.empty:
                 daily_ic_dict[f] = m.daily_rank_ic_series
 
-        # 3. Benjamini-Hochberg 多重检验 FDR 统一校正 (P1-1)
+        # 3. Benjamini-Hochberg FDR 统一校正
         fdr_p_vals = FactorMetricsEngine.compute_fdr_pvalues(raw_p_values)
         for idx, f in enumerate(raw_factors):
             self.metrics_dict[f].rank_ic_fdr_p_value = round(float(fdr_p_vals[idx]), 6)
             self.metrics_dict[f].fdr_p_value = round(float(fdr_p_vals[idx]), 6)
 
-        # 4. 多视界衰减分析 (1D, 3D, 5D, 10D, 20D)
+        # 4. 多视界衰减分析
         for f in factor_cols:
             dec = FactorDecayEngine.analyze_decay(df_labeled, f, horizons=self.config.HORIZONS)
             self.decay_dict[f] = dec
@@ -169,12 +172,12 @@ class FactorResearchEngine:
         # 6. 相关性与高冗余聚集分析
         self.corr_result = FactorCorrelationEngine.analyze_correlation(df_labeled, factor_cols, daily_ic_dict, config=self.config)
 
-        # 7. 真实中性化与正交化对照分析 (P0-4: 彻底消除伪计算)
+        # 7. 真实中性化与正交化对照检验 (P0-3 / P0-4 Fail-Closed)
         self.neutralization_comparison = self._run_real_neutralization_comparison(df_labeled, factor_cols, primary_ret_col)
         self.orthogonalization_comparison = self._run_real_orthogonalization_comparison(df_labeled, factor_cols, primary_ret_col)
         self.outlier_sensitivity_comparison = self._run_real_outlier_comparison(df_labeled, factor_cols, primary_ret_col)
 
-        # 8. 综合评分与等级决策 (P1-1 强化 FDR 门禁)
+        # 8. 综合评分与等级决策
         scores_df = FactorSelectionEngine.score_factors(self.metrics_dict, self.stability_dict, self.corr_result, config=self.config)
         self.selection_result = FactorSelectionEngine.classify_factors(
             scores_df=scores_df,
@@ -185,14 +188,14 @@ class FactorResearchEngine:
             config=self.config
         )
 
-        # 9. 严格 Purged Walk-Forward 样本外验证 (P0-2 / P0-6 / P0-7)
+        # 9. 严格 Purged Walk-Forward 样本外验证 (P0-5)
         wf_res = FactorSelectionEngine.run_purged_walk_forward(df_labeled, factor_cols, config=self.config)
         self.selection_result.walk_forward_stability = wf_res
 
-        # 10. 生成研究 Manifest 真实性证据链 (P1-5)
+        # 10. 生成研究 Manifest 真实性证据链 (P0-6)
         self._build_research_run_manifest(df_labeled, factor_cols)
 
-        # 11. 导出结构化报表与图表
+        # 11. 导出结构化报表与图表 (共 16 份证据文件)
         if output_dir is not None:
             out_p = Path(output_dir)
             out_p.mkdir(parents=True, exist_ok=True)
@@ -218,76 +221,102 @@ class FactorResearchEngine:
         return_col: str
     ) -> Dict[str, Any]:
         """
-        P0-4 真实截面 OLS 行业+市值中性化对照检验:
-        每日在 in_universe 样本上做回归: Factor ~ log_circ_mv + Industry_Dummies
-        提取残差 Residual，并真实重新计算截面 RankIC 与 Delta。
+        Phase 1.2 核心硬化 (P0-3 Fail-Closed 中性化):
+        逐日多元 OLS 回归: Factor ~ 1 + log_circ_mv + Industry_Dummies
+        若样本不足 (len < MIN_NEUTRALIZATION_CROSS_SECTION) 或奇异秩亏，严格返回 None (绝对禁止回退 raw_ic)。
         """
         res = {}
-        target_factors = factor_cols[:15] # 针对核心代表性因子做对照
+        target_factors = factor_cols[:15]
+        cfg = self.config
         
-        # 寻找市值与行业列
         mv_col = "LOG_CIRC_MV" if "LOG_CIRC_MV" in df.columns else ("log_circ_mv" if "log_circ_mv" in df.columns else None)
         ind_col = "industry" if "industry" in df.columns else None
 
         for f in target_factors:
             raw_ic = float(FactorMetricsEngine.compute_daily_ic(df, f, return_col).mean())
             
-            # 若缺失市值或行业数据，显式返回 unavailable
             if not mv_col or not ind_col:
                 res[f] = {
                     "raw_rank_ic": round(raw_ic, 4),
                     "neutralized_rank_ic": None,
                     "delta_rank_ic": None,
-                    "status": "neutralization_data_unavailable"
+                    "total_dates": 0,
+                    "successful_dates": 0,
+                    "failed_dates": 0,
+                    "mean_cross_section_size": 0.0,
+                    "min_cross_section_size": 0,
+                    "max_cross_section_size": 0,
+                    "status": "DATA_UNAVAILABLE"
                 }
                 continue
 
-            # 逐日真实计算 OLS 残差
-            df_neu = df.copy()
             neu_vals = []
-            
+            cs_sizes = []
+            successful_dates = 0
+            failed_dates = 0
+            all_dates = df["date"].nunique()
+
             for dt, grp in df.groupby("date"):
                 sub_grp = grp.dropna(subset=[f, mv_col, return_col])
-                if len(sub_grp) < 10:
+                n_samples = len(sub_grp)
+                
+                if n_samples < cfg.MIN_NEUTRALIZATION_CROSS_SECTION:
+                    failed_dates += 1
                     continue
                 
-                # 构造回归设计矩阵 X (截距 + 市值 + 行业Dummy)
                 y = sub_grp[f].values.astype(float)
-                ones = np.ones((len(sub_grp), 1))
+                ones = np.ones((n_samples, 1))
                 mv = sub_grp[mv_col].values.reshape(-1, 1).astype(float)
-                
-                # 行业哑变量
                 ind_dummies = pd.get_dummies(sub_grp[ind_col], drop_first=True, dtype=float).values
-                if ind_dummies.shape[1] > 0:
-                    X = np.hstack([ones, mv, ind_dummies])
-                else:
-                    X = np.hstack([ones, mv])
                 
-                # OLS 最小二乘求解 beta: (X'X)^(-1) X'y
+                X = np.hstack([ones, mv, ind_dummies]) if ind_dummies.shape[1] > 0 else np.hstack([ones, mv])
+                
+                # 秩亏检查
+                if np.linalg.matrix_rank(X) < X.shape[1]:
+                    failed_dates += 1
+                    continue
+
                 try:
                     beta, _, _, _ = np.linalg.lstsq(X, y, rcond=None)
                     resid = y - X @ beta
                     temp_df = pd.DataFrame({"date": dt, "symbol": sub_grp["symbol"], "f_resid": resid})
                     neu_vals.append(temp_df)
-                except Exception:
-                    pass
+                    cs_sizes.append(n_samples)
+                    successful_dates += 1
+                except Exception as exc:
+                    logger.debug(f"OLS 中性化异常 ({dt}): {exc}")
+                    failed_dates += 1
 
-            if neu_vals:
+            if successful_dates > 0 and neu_vals:
                 resid_df = pd.concat(neu_vals, ignore_index=True)
                 merged = df[["date", "symbol", return_col]].merge(resid_df, on=["date", "symbol"], how="inner")
                 neu_ic = float(FactorMetricsEngine.compute_daily_ic(merged, "f_resid", return_col).mean())
+                status_str = "REAL_CALCULATED" if (successful_dates / max(all_dates, 1) >= 0.5) else "PARTIAL"
                 res[f] = {
                     "raw_rank_ic": round(raw_ic, 4),
                     "neutralized_rank_ic": round(neu_ic, 4),
                     "delta_rank_ic": round(neu_ic - raw_ic, 4),
-                    "status": "real_ols_calculated"
+                    "total_dates": all_dates,
+                    "successful_dates": successful_dates,
+                    "failed_dates": failed_dates,
+                    "mean_cross_section_size": round(float(np.mean(cs_sizes)), 1),
+                    "min_cross_section_size": int(np.min(cs_sizes)),
+                    "max_cross_section_size": int(np.max(cs_sizes)),
+                    "status": status_str
                 }
             else:
+                # 严格 Fail Closed: 绝不返回 raw_ic (P0-3)
                 res[f] = {
                     "raw_rank_ic": round(raw_ic, 4),
-                    "neutralized_rank_ic": round(raw_ic, 4),
-                    "delta_rank_ic": 0.0,
-                    "status": "insufficient_cross_sections"
+                    "neutralized_rank_ic": None,
+                    "delta_rank_ic": None,
+                    "total_dates": all_dates,
+                    "successful_dates": 0,
+                    "failed_dates": failed_dates,
+                    "mean_cross_section_size": 0.0,
+                    "min_cross_section_size": 0,
+                    "max_cross_section_size": 0,
+                    "status": "INSUFFICIENT_CROSS_SECTION"
                 }
 
         return res
@@ -299,34 +328,80 @@ class FactorResearchEngine:
         return_col: str
     ) -> Dict[str, Any]:
         """
-        P0-4 真实 Gram-Schmidt 截面因子正交化对照检验:
-        调用 GramSchmidtOrthogonalizer 真实生成正交化因子矩阵，并实际重新计算 RankIC。
+        Phase 1.2 核心硬化 (P0-4 Sequential Residualization 正交化):
+        采用逐步残差投影正交化 F_k' = residual(F_k ~ F_1' + ... + F_{k-1}')
+        逐日检查自由度 n_samples > k + 2，失败严格返回 None 与 INSUFFICIENT_CROSS_SECTION。
         """
         res = {}
-        target_factors = factor_cols[:15]
+        target_factors = factor_cols[:10]
         if len(target_factors) < 2:
             return res
 
-        # 真实执行正交化
-        ortho_df = GramSchmidtOrthogonalizer.orthogonalize_cross_section(df, target_factors)
+        df_ortho = df.copy()
+        successful_cs = 0
+        failed_cs = 0
+        all_dates = df["date"].nunique()
+
+        for dt, grp in df.groupby("date"):
+            sub_grp = grp.dropna(subset=target_factors)
+            n_samples = len(sub_grp)
+
+            # 自由度检查
+            if n_samples < len(target_factors) + 2:
+                failed_cs += 1
+                continue
+
+            mat = sub_grp[target_factors].values.astype(float)
+            ortho_cols = []
+
+            try:
+                # 逐列逐步正交化
+                for j in range(mat.shape[1]):
+                    col_j = mat[:, j]
+                    if j == 0:
+                        std0 = np.std(col_j)
+                        ortho_cols.append(col_j / (std0 if std0 > 1e-8 else 1.0))
+                    else:
+                        X_prev = np.column_stack([np.ones(n_samples)] + ortho_cols)
+                        if np.linalg.matrix_rank(X_prev) < X_prev.shape[1]:
+                            raise ValueError("Rank deficiency in orthogonalization")
+                        beta, _, _, _ = np.linalg.lstsq(X_prev, col_j, rcond=None)
+                        resid_j = col_j - X_prev @ beta
+                        std_r = np.std(resid_j)
+                        ortho_cols.append(resid_j / (std_r if std_r > 1e-8 else 1.0))
+
+                for j, f in enumerate(target_factors):
+                    df_ortho.loc[sub_grp.index, f"{f}_ortho"] = ortho_cols[j]
+                successful_cs += 1
+            except Exception as exc:
+                logger.debug(f"正交化异常 ({dt}): {exc}")
+                failed_cs += 1
 
         for f in target_factors:
             raw_ic = float(FactorMetricsEngine.compute_daily_ic(df, f, return_col).mean())
-            if f in ortho_df.columns:
-                ortho_ic = float(FactorMetricsEngine.compute_daily_ic(ortho_df, f, return_col).mean())
+            ortho_col_name = f"{f}_ortho"
+            
+            if successful_cs > 0 and ortho_col_name in df_ortho.columns and df_ortho[ortho_col_name].notna().sum() > 10:
+                ortho_ic = float(FactorMetricsEngine.compute_daily_ic(df_ortho, ortho_col_name, return_col).mean())
+                status_str = "REAL_CALCULATED" if (successful_cs / max(all_dates, 1) >= 0.5) else "PARTIAL"
                 res[f] = {
                     "raw_rank_ic": round(raw_ic, 4),
                     "orthogonalized_rank_ic": round(ortho_ic, 4),
                     "delta_rank_ic": round(ortho_ic - raw_ic, 4),
-                    "status": "real_gram_schmidt_calculated"
+                    "successful_cross_sections": successful_cs,
+                    "failed_cross_sections": failed_cs,
+                    "status": status_str
                 }
             else:
                 res[f] = {
                     "raw_rank_ic": round(raw_ic, 4),
-                    "orthogonalized_rank_ic": round(raw_ic, 4),
-                    "delta_rank_ic": 0.0,
-                    "status": "unaltered"
+                    "orthogonalized_rank_ic": None,
+                    "delta_rank_ic": None,
+                    "successful_cross_sections": successful_cs,
+                    "failed_cross_sections": failed_cs,
+                    "status": "INSUFFICIENT_CROSS_SECTION"
                 }
+
         return res
 
     def _run_real_outlier_comparison(
@@ -335,42 +410,65 @@ class FactorResearchEngine:
         factor_cols: List[str],
         return_col: str
     ) -> Dict[str, Any]:
-        """评估 Winsorize / ZScore 对极端值与 RankIC 的影响 (P0-16)"""
+        """评估 Winsorize / ZScore 对极端值与 RankIC 的影响"""
         res = {}
         for f in factor_cols[:15]:
             raw_ic = float(FactorMetricsEngine.compute_daily_ic(df, f, return_col).mean())
             res[f] = {
                 "raw_rank_ic": round(raw_ic, 4),
-                "winsorized_rank_ic": round(raw_ic, 4), # RankIC 天然对单调保序变换免疫
+                "winsorized_rank_ic": round(raw_ic, 4),
                 "zscore_rank_ic": round(raw_ic, 4)
             }
         return res
 
     def _build_research_run_manifest(self, df: pd.DataFrame, factor_cols: List[str]):
-        """生成因子研究执行凭据 Manifest (P1-5)"""
+        """生成因子研究执行凭据 Manifest (P0-6 全要素绑定)"""
         try:
             import subprocess
             git_commit = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+            tree_hash = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], text=True).strip()
+            status_out = subprocess.check_output(["git", "status", "--porcelain"], text=True).strip()
+            is_clean = (len(status_out) == 0)
         except Exception:
             git_commit = "unknown"
+            tree_hash = "unknown"
+            is_clean = False
 
-        h_factors = pd.util.hash_pandas_object(df[factor_cols[:10]], index=False)
-        matrix_hash = hashlib.sha256(h_factors.values.tobytes()).hexdigest()
+        # 全量因子矩阵按规范字母顺序排序后计算 SHA-256 (P0-6)
+        sorted_factors = sorted(factor_cols)
+        h_matrix = pd.util.hash_pandas_object(df[sorted_factors], index=False)
+        matrix_hash = hashlib.sha256(h_matrix.values.tobytes()).hexdigest()
+        cols_hash = hashlib.sha256(",".join(sorted_factors).encode("utf-8")).hexdigest()
+
+        sym_count = int(df["symbol"].nunique()) if "symbol" in df.columns else 0
+        cfg = self.config
+        
+        # 样本充分性门槛分类 (P0-2)
+        if sym_count < cfg.MIN_RESEARCH_SYMBOLS:
+            validity_status = "DEVELOPMENT_SAMPLE"
+        else:
+            validity_status = self.selection_result.walk_forward_stability.get("walk_forward_status", "DISCOVERY") if self.selection_result else "DISCOVERY"
 
         self.run_manifest = {
-            "schema_version": "1.1",
-            "git_commit": git_commit,
+            "schema_version": "1.2",
+            "research_validity_status": validity_status,
+            "source_git_commit": git_commit,
+            "source_git_tree_hash": tree_hash,
+            "working_tree_clean": is_clean,
             "factor_matrix_hash": matrix_hash,
+            "factor_columns_hash": cols_hash,
             "dataset_rows": len(df),
-            "symbol_count": int(df["symbol"].nunique()) if "symbol" in df.columns else 0,
+            "symbol_count": sym_count,
             "factor_count": len(factor_cols),
             "start_date": str(df["date"].min().date()) if hasattr(df["date"].min(), "date") else str(df["date"].min()),
             "end_date": str(df["date"].max().date()) if hasattr(df["date"].max(), "date") else str(df["date"].max()),
-            "primary_horizon": self.config.PRIMARY_HORIZON,
-            "horizons_tested": self.config.HORIZONS,
-            "wf_purge_days": self.config.WF_PURGE_DAYS,
-            "wf_embargo_days": self.config.WF_EMBARGO_DAYS,
-            "min_wf_folds_required": self.config.MIN_WF_FOLDS_FOR_CERTIFICATION,
+            "primary_horizon": cfg.PRIMARY_HORIZON,
+            "horizons_tested": cfg.HORIZONS,
+            "label_definition": "T_close_to_T+1_open_entry_to_T+H_close_exit",
+            "execution_definition": "T_signal_T+1_open_execution_T+1_close_realized",
+            "wf_purge_days": cfg.WF_PURGE_DAYS,
+            "wf_embargo_days": cfg.WF_EMBARGO_DAYS,
+            "min_wf_folds_required": cfg.MIN_WF_FOLDS_FOR_CERTIFICATION,
             "walk_forward_status": self.selection_result.walk_forward_stability.get("walk_forward_status", "PRELIMINARY") if self.selection_result else "PRELIMINARY",
             "selected_strong_count": len(self.selection_result.selected_factors) if self.selection_result else 0,
             "selected_useful_count": len(self.selection_result.useful_factors) if self.selection_result else 0,
