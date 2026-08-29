@@ -1,17 +1,18 @@
 """
 沪深300历史成分股 Point-in-Time 数据解析与规范化工具 (tools/build_pit_universe.py)
-严格遵循 Single-Source-of-Truth、Fail-Closed 与 Anti-Impersonation 原则：
+严格遵循 Single-Source-of-Truth、Fail-Closed、Trusted Registry 与 Anti-Impersonation 原则：
 - 仅从 data_storage/universe/csi300/raw/ 目录解析官方/持牌数据源的原始文件 (Raw Evidence)
-- 每个 Raw Evidence 必须存在独立的 .source.json 来源认证描述文件，Parser 绝不自行指定或猜测 OFFICIAL_PRIMARY
-- Baseline Snapshot 必须来自独立的基线快照文件 (evidence_type: BASELINE_SNAPSHOT)，严禁由第一条调样事件推导
-- 若无原始数据或缺少合规的 Source Metadata，直接抛出 DataProvenanceError 并拒绝生成伪造 Manifest
+- 每个 Raw Evidence 必须存在独立的 .source.json 来源认证描述文件与受信任采集回执
+- Baseline Snapshot 必须来自独立的基线快照文件 (evidence_type: BASELINE_SNAPSHOT)，严禁由调样事件推导
+- 严格要求唯一标的数量等于 300 只 (CSI300)，严禁重复标的膨胀
+- 若无原始数据或缺少合规的 Source Metadata / Receipt，直接抛出 DataProvenanceError 并拒绝生成伪造 Manifest
 """
 import sys
 import io
 import json
 import hashlib
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set
 import pandas as pd
 import numpy as np
 
@@ -24,6 +25,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from config.settings import settings
+from data.source_registry import TRUSTED_SOURCE_REGISTRY, AcquisitionReceipt
 from data.provenance import (
     SourceClass,
     DataProvenanceError,
@@ -40,7 +42,7 @@ def build_csi300_pit_universe_from_raw(
     fail_closed: bool = True
 ) -> Dict[str, Any]:
     """
-    从真实 Raw Evidence 文件与独立 Source Metadata 解析并生成规范化 PIT 历史成分股事件
+    从真实 Raw Evidence 文件、独立 Source Metadata 与 Acquisition Receipt 解析并生成规范化 PIT 历史成分股事件
     生产环境严格禁止生成任何模拟历史成分股，亦严禁 Parser 伪造 OFFICIAL 标签。
     """
     base_raw = raw_dir or (settings.DATA_DIR / "universe" / "csi300" / "raw")
@@ -55,9 +57,14 @@ def build_csi300_pit_universe_from_raw(
             )
         return {"status": "FAILED", "reason": "RAW_DIR_NOT_FOUND"}
 
-    # 扫描 Raw Evidence 原始文件 (过滤掉 .source.json)
+    # 扫描 Raw Evidence 原始文件 (过滤掉 .source.json 和 .receipt.json)
     all_files = list(base_raw.glob("*.csv")) + list(base_raw.glob("*.json")) + list(base_raw.glob("*.parquet"))
-    raw_files = [f for f in all_files if not f.name.endswith(".source.json") and not f.name.endswith(".manifest.json")]
+    raw_files = [
+        f for f in all_files 
+        if not f.name.endswith(".source.json") 
+        and not f.name.endswith(".receipt.json")
+        and not f.name.endswith(".manifest.json")
+    ]
 
     if not raw_files:
         if fail_closed:
@@ -67,7 +74,7 @@ def build_csi300_pit_universe_from_raw(
             )
         return {"status": "FAILED", "reason": "NO_RAW_FILES"}
 
-    print(f">> 发现 {len(raw_files)} 个原始数据文件，开始校验独立 Source Metadata...")
+    print(f">> 发现 {len(raw_files)} 个原始数据文件，开始校验独立 Source Metadata 与采集回执...")
     parsed_events: List[Dict[str, Any]] = []
     raw_hashes: Dict[str, str] = {}
     verified_source_classes: Set[str] = set()
@@ -84,7 +91,6 @@ def build_csi300_pit_universe_from_raw(
         f_hash = ProvenanceVerifier.compute_file_sha256(r_file)
         raw_hashes[r_file.name] = f_hash
 
-        # P0-1: 校验独立来源元数据文件 .source.json
         meta_file = r_file.with_name(f"{r_file.name}.source.json")
         source_meta, meta_errs = SourceEvidenceMetadata.load_and_verify(meta_file, r_file)
 
@@ -93,10 +99,11 @@ def build_csi300_pit_universe_from_raw(
                 raise DataProvenanceError(
                     f"❌ 原始数据文件 {r_file.name} 缺少合规的独立来源认证描述 (.source.json):\n"
                     f"错误详情: {meta_errs}\n"
-                    "原则: SHA256 仅证明无篡改，不证明来自官方。必须提供经过鉴证的 Source Metadata！"
+                    "原则: SHA256 仅证明无篡改，不证明来自官方。必须提供经过鉴证的 Source Metadata 与 Registry 登记！"
                 )
             source_class_val = SourceClass.UNKNOWN.value
             source_meta = SourceEvidenceMetadata(
+                source_id="UNKNOWN",
                 source_class=SourceClass.UNKNOWN,
                 source_name="UNKNOWN_UNVERIFIED",
                 original_filename=r_file.name,
@@ -107,13 +114,17 @@ def build_csi300_pit_universe_from_raw(
 
         verified_source_classes.add(source_class_val)
 
-        # P1-1: 区分基线快照与定期调样
         if source_meta.evidence_type == "BASELINE_SNAPSHOT":
             events = snap_parser.parse(r_file, source_meta)
             if events:
                 baseline_snapshot_file = r_file.name
                 baseline_snapshot_date = events[0]["effective_date"]
-                baseline_symbols = sorted(list(set(e["symbol"] for e in events)))
+                parsed_syms = [e["symbol"] for e in events]
+                unique_syms = sorted(list(set(parsed_syms)))
+                if len(unique_syms) != len(parsed_syms):
+                    if fail_closed:
+                        raise DataProvenanceError(f"❌ 基线快照文件 {r_file.name} 包含重复标的代码！")
+                baseline_symbols = unique_syms
                 baseline_snapshot_sha256 = f_hash
                 parsed_events.extend(events)
         else:
@@ -132,12 +143,16 @@ def build_csi300_pit_universe_from_raw(
                 "原则: P1-1 严禁由第一条调样事件自动猜测 Baseline Snapshot！"
             )
 
+    if len(baseline_symbols) != 300 and fail_closed:
+        raise DataProvenanceError(
+            f"❌ 沪深300基线快照唯一成分股数量必须精确为 300 只，实际解析到: {len(baseline_symbols)} 只。"
+        )
+
     events_df = pd.DataFrame(parsed_events)
     events_df.sort_values(by=["effective_date", "symbol"], inplace=True)
     events_df.drop_duplicates(subset=["effective_date", "symbol", "action"], inplace=True)
     events_df.reset_index(drop=True, inplace=True)
 
-    # 导出规范化 Parquet
     out_parquet = base_out / "universe_pit_events.parquet"
     events_df.to_parquet(out_parquet, index=False)
     dataset_sha256 = ProvenanceVerifier.compute_dataframe_sha256(events_df)
@@ -152,7 +167,6 @@ def build_csi300_pit_universe_from_raw(
         )
     )
 
-    # 生成事实 Manifest (绝不硬编码自我认证布尔值)
     manifest = {
         "dataset_name": "CSI300_POINT_IN_TIME_UNIVERSE",
         "dataset_version": "3.0",

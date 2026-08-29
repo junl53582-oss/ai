@@ -4,6 +4,7 @@ import pandas as pd
 from pathlib import Path
 
 from config.settings import settings
+from data.provenance import SourceClass, UniverseVerificationResult
 from data.universe_provider import (
     UniverseProvider,
     StaticUniverseProvider,
@@ -33,35 +34,55 @@ from backtest.audit import AuditCollector, AuditMetadata, CERTIFICATION_FIELDS
 
 @pytest.mark.unit
 def test_pit_certification_negative_cases():
-    p1 = PointInTimeUniverseProvider(coverage_start='2021-01-01', coverage_end='2024-12-31', universe_provenance_verified=True, constituent_event_source_verified=True)
+    p1 = PointInTimeUniverseProvider(coverage_start='2021-01-01', coverage_end='2024-12-31')
     p1.add_constituent_change('2021-06-01', '600519.SH', 'IN')
     p1.add_constituent_change('2022-01-01', '000858.SZ', 'IN')
     assert p1.is_coverage_complete('2021-01-01', '2024-12-31') is False
     assert p1.get_mode('2021-01-01', '2024-12-31') != 'POINT_IN_TIME_VERIFIED'
     assert p1.has_survivorship_bias_risk('2021-01-01', '2024-12-31') is True
 
-    p2 = PointInTimeUniverseProvider(universe_provenance_verified=True, constituent_event_source_verified=True)
-    p2.set_baseline_snapshot('2021-06-01', ['600519.SH'], verified=True)
-    p2.set_coverage_window('2021-06-01', '2024-12-31', provenance_verified=True, events_verified=True)
+    p2 = PointInTimeUniverseProvider()
+    p2.set_baseline_snapshot('2021-06-01', ['600519.SH'])
+    p2.set_coverage_window('2021-06-01', '2024-12-31')
     assert p2.is_coverage_complete('2021-01-01', '2024-12-31') is False
 
-    p3 = PointInTimeUniverseProvider(universe_provenance_verified=True, constituent_event_source_verified=True)
-    p3.set_baseline_snapshot('2020-12-31', ['600519.SH'], verified=True)
-    p3.set_coverage_window('2020-12-31', '2023-12-31', provenance_verified=True, events_verified=True)
+    p3 = PointInTimeUniverseProvider()
+    p3.set_baseline_snapshot('2020-12-31', ['600519.SH'])
+    p3.set_coverage_window('2020-12-31', '2023-12-31')
     assert p3.is_coverage_complete('2021-01-01', '2024-12-31') is False
 
-    p4 = PointInTimeUniverseProvider(universe_provenance_verified=False, constituent_event_source_verified=True)
-    p4.set_baseline_snapshot('2020-12-31', ['600519.SH'], verified=True)
-    p4.set_coverage_window('2020-12-31', '2024-12-31', provenance_verified=False, events_verified=True)
-    assert p4.is_coverage_complete('2021-01-01', '2024-12-31') is False
+    p4 = PointInTimeUniverseProvider()
+    p4.set_baseline_snapshot('2020-12-31', ['600519.SH'])
+    p4.set_coverage_window('2020-12-31', '2024-12-31')
+    assert p4.is_coverage_complete('2021-01-01', '2024-12-31') is True
+    assert p4.has_survivorship_bias_risk('2021-01-01', '2024-12-31') is True
+    assert p4.get_mode('2021-01-01', '2024-12-31') != 'POINT_IN_TIME_VERIFIED'
 
 
 @pytest.mark.unit
 def test_pit_certification_positive_case():
-    p = PointInTimeUniverseProvider(universe_provenance_verified=True, constituent_event_source_verified=True)
-    p.set_baseline_snapshot('2020-12-31', ['600519.SH', '000858.SZ'], verified=True)
+    ver_res = UniverseVerificationResult(
+        is_valid=True,
+        source_class=SourceClass.OFFICIAL_PRIMARY,
+        provenance_verified=True,
+        raw_hash_verified=True,
+        dataset_hash_verified=True,
+        coverage_verified=True,
+        source_verified=True,
+        baseline_verified=True,
+        event_integrity_verified=True,
+        survivorship_bias_risk=False,
+        mode="POINT_IN_TIME_VERIFIED",
+        failed_checks=[]
+    )
+    p = PointInTimeUniverseProvider(
+        verification_result=ver_res,
+        baseline_snapshot_date='2020-12-31',
+        baseline_symbols=['600519.SH', '000858.SZ'],
+        coverage_start='2020-12-31',
+        coverage_end='2024-12-31'
+    )
     p.add_constituent_change('2022-01-01', '600036.SH', 'IN')
-    p.set_coverage_window('2020-12-31', '2024-12-31', provenance_verified=True, events_verified=True)
 
     assert p.is_coverage_complete('2021-01-01', '2024-12-31') is True
     assert p.get_mode('2021-01-01', '2024-12-31') == 'POINT_IN_TIME_VERIFIED'
@@ -85,15 +106,32 @@ def test_four_year_pit_pipeline_e2e_integration(tmp_path):
     symbols = ['A', 'B', 'C', 'D', 'E', 'F']
     dates = pd.date_range('2021-01-01', '2024-12-31', freq='B')
     
-    pit_provider = PointInTimeUniverseProvider(universe_provenance_verified=True, constituent_event_source_verified=True)
-    pit_provider.set_baseline_snapshot('2020-12-31', ['A', 'B', 'C'], verified=True)
+    pit_provider = PointInTimeUniverseProvider(
+        verification_result=UniverseVerificationResult(
+            is_valid=True,
+            source_class=SourceClass.OFFICIAL_PRIMARY,
+            provenance_verified=True,
+            raw_hash_verified=True,
+            dataset_hash_verified=True,
+            coverage_verified=True,
+            source_verified=True,
+            baseline_verified=True,
+            event_integrity_verified=True,
+            survivorship_bias_risk=False,
+            mode="POINT_IN_TIME",
+            failed_checks=[]
+        ),
+        baseline_snapshot_date='2020-12-31',
+        baseline_symbols=['A', 'B', 'C'],
+        coverage_start='2020-12-31',
+        coverage_end='2024-12-31'
+    )
     pit_provider.add_constituent_change('2022-01-01', 'A', 'OUT')
     pit_provider.add_constituent_change('2022-01-01', 'D', 'IN')
     pit_provider.add_constituent_change('2023-01-01', 'B', 'OUT')
     pit_provider.add_constituent_change('2023-01-01', 'E', 'IN')
     pit_provider.add_constituent_change('2024-01-01', 'C', 'OUT')
     pit_provider.add_constituent_change('2024-01-01', 'F', 'IN')
-    pit_provider.set_coverage_window('2020-12-31', '2024-12-31', provenance_verified=True, events_verified=True)
 
     dfs = []
     for sym in symbols:
@@ -392,11 +430,15 @@ def test_true_production_pit_e2e(tmp_path):
                 "adj_close": np.full(n, 10.2)
             })
 
-    pit = PointInTimeUniverseProvider(universe_provenance_verified=True, constituent_event_source_verified=True)
-    pit.set_baseline_snapshot("2020-12-31", ["600000.SH"], verified=True)
+    pit = PointInTimeUniverseProvider.for_test_fixture(
+        fallback_symbols=["600000.SH", "000001.SZ"],
+        baseline_snapshot_date="2020-12-31",
+        baseline_symbols=["600000.SH"],
+        coverage_start="2020-12-31",
+        coverage_end="2023-12-31"
+    )
     pit.add_constituent_change("2022-01-01", "000001.SZ", "IN")
     pit.add_constituent_change("2023-01-01", "600000.SH", "OUT")
-    pit.set_coverage_window("2020-12-31", "2023-12-31", provenance_verified=True, events_verified=True)
 
     dm = DataManager(parquet_dir=tmp_path / "parquet", fetcher=FakeFetcher(), universe_provider=pit)
     df = dm.sync_and_build_dataset(
@@ -542,6 +584,10 @@ def test_certification_policy_truth_table():
         universe_manifest_hash="hash_univ",
         factor_manifest_hash="hash_fact",
         market_manifest_hash="hash_mkt",
+        actual_backtest_start_date="2020-01-01",
+        actual_backtest_end_date="2024-12-31",
+        universe_coverage_start="2020-01-01",
+        universe_coverage_end="2024-12-31",
         universe_coverage_complete=True,
         universe_provenance_verified=True,
         survivorship_bias_risk=False,
@@ -583,6 +629,10 @@ def test_certification_policy_truth_table():
         universe_manifest_hash="hash_univ",
         factor_manifest_hash="hash_fact",
         market_manifest_hash="hash_mkt",
+        actual_backtest_start_date="2020-01-01",
+        actual_backtest_end_date="2024-12-31",
+        universe_coverage_start="2020-01-01",
+        universe_coverage_end="2024-12-31",
         universe_coverage_complete=True,
         universe_provenance_verified=True,
         survivorship_bias_risk=False,

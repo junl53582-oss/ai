@@ -1,7 +1,7 @@
 # A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
-> **运行时实例 ID**: `run_96cc62c1`  
-> **认证评估时间**: 2026-08-29 14:45:44  
+> **运行时实例 ID**: `run_fa0dd75e`  
+> **认证评估时间**: 2026-08-29 15:12:36  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 
@@ -11,30 +11,41 @@
 
 | 序号 | 运行时要素 | 实际运行状态 | 认证门禁 | 运行时具体证据与度量 |
 | :--- | :--- | :---: | :---: | :--- |
-| 1 | **股票池时点覆盖 (PIT Universe)** | `COMPLETE` | ⚠️ ATTENTION / FAIL | 模式: POINT_IN_TIME, 来源类别: UNKNOWN, 原始证据校验: False, 幸存者风险: False |
-| 2 | **真实数据源 (No Synthetic)** | `REAL_DATA` | ✅ PASS | 数据源: akshare, 分布: {'akshare': 301, 'local_csv': 0, 'synthetic': 0} |
-| 3 | **交易所官方交易日历** | `OFFICIAL` | ✅ PASS | 日历来源: sse_szse_official, 质量评级: official |
-| 4 | **历史逐日 ST 时间线** | `LIMITED_STATIC` | ⚠️ ATTENTION / FAIL | 标的覆盖: 100.0%, 未知行数: 462844, 偏差风险: False |
-| 5 | **公司行为除权除息覆盖** | `LIMITED_COVERAGE` | ⚠️ ATTENTION / FAIL | 覆盖率: 100.0%, 调整可用: False, 数据源: official_financial_announcements |
-| 6 | **前复权因果安全性 (PIT Safe)** | `PIT_SAFE` | ✅ PASS | 复权模式: point_in_time_forward_adjusted |
-| 7 | **特征与行情缓存指纹校验** | `VERIFIED` | ✅ PASS | 原始血缘保持: True, 版本: 3.0 |
-| 8 | **基准指数时间轴完整性** | `100% COVERED` | ✅ PASS | 缺失日历天数: 0, 数据源: csi_official_index |
-| 9 | **委托订单数量守恒** | `CONSERVED` | ✅ PASS | 部分成交: 79, 撤单: 0, 延期: 0 |
-| 10 | **逐日截面行业中性化** | `FULL` | ✅ PASS | 中性化天数比例: 100.0%, 均值覆盖率: 73.4% |
+| 1 | **股票池时点覆盖 (PIT Universe)** | `COMPLETE` | ⚠️ ATTENTION / FAIL | 模式: PIT_INCOMPLETE, 来源类别: UNKNOWN, 原始证据校验: False, 幸存者风险: True |
+| 2 | **真实数据源 (No Synthetic)** | `REAL_DATA` | ✅ PASS | 数据源: unknown, 分布: {} |
+| 3 | **交易所官方交易日历** | `THIRD_PARTY/FALLBACK` | ⚠️ ATTENTION / FAIL | 日历来源: akshare_sina, 质量评级: third_party |
+| 4 | **历史逐日 ST 时间线** | `LIMITED_STATIC` | ⚠️ ATTENTION / FAIL | 标的覆盖: 0.0%, 未知行数: 0, 偏差风险: True |
+| 5 | **公司行为除权除息覆盖** | `LIMITED_COVERAGE` | ⚠️ ATTENTION / FAIL | 覆盖率: 0.0%, 调整可用: False, 数据源: unknown |
+| 6 | **前复权因果安全性 (PIT Safe)** | `UNKNOWN_OR_UNVERIFIED` | ⚠️ ATTENTION / FAIL | 复权模式: unknown |
+| 7 | **特征与行情缓存指纹校验** | `UNVERIFIED` | ⚠️ ATTENTION / FAIL | 原始血缘保持: False, 版本: 3.0 |
+| 8 | **基准指数时间轴完整性** | `100% COVERED` | ✅ PASS | 缺失日历天数: 0, 数据源: akshare |
+| 9 | **委托订单数量守恒** | `FAILED` | ⚠️ ATTENTION / FAIL | 部分成交: 0, 撤单: 0, 延期: 0 |
+| 10 | **逐日截面行业中性化** | `DISABLED` | ⚠️ ATTENTION / FAIL | 中性化天数比例: 0.0%, 均值覆盖率: 0.0% |
 
 ---
 
 ## 2. 门禁评估与缺失证据诊断
 
 ### ⚠️ 未完全满足的认证门禁项:
-- `universe_manifest_hash_missing`
 - `factor_manifest_hash_missing`
 - `market_manifest_hash_missing`
+- `actual_backtest_window_or_universe_coverage_dates_missing`
+- `universe_provenance_unverified`
 - `universe_raw_evidence_unverified`
 - `universe_dataset_hash_unverified`
 - `universe_source_class_ineligible_for_production_UNKNOWN`
-- `st_unknown_rows_462844_inconsistent_with_complete_coverage`
+- `survivorship_bias_risk_present`
+- `historical_st_coverage_incomplete`
+- `historical_st_bias_risk_present`
 - `corporate_action_missing_adjustment_or_zero_event_proof`
+- `corporate_action_coverage_incomplete`
+- `corporate_action_bias_risk_present`
+- `cache_fingerprint_unverified`
+- `raw_data_provenance_lost`
+- `adjustment_not_point_in_time_safe`
+- `future_adjustment_leakage_test_not_passed`
+- `order_quantity_conservation_failed`
+- `calendar_not_exchange_official`
 
 ---
 

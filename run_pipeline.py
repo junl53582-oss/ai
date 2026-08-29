@@ -6,8 +6,10 @@ import sys
 import io
 import argparse
 import logging
-from typing import Optional, Dict, Any, List
+import subprocess
+from typing import Optional, Dict, Any, List, Union, Tuple
 from pathlib import Path
+import json
 import pandas as pd
 
 # 确保 UTF-8 输出
@@ -54,19 +56,41 @@ def run_pipeline(
     print("\n[Step 1/5] 数据同步与清洗 (AKShare / SecurityMaster -> Parquet，双价格体系与真实交易日历)...")
     univ_provider = create_universe_provider(settings)
     data_manager = DataManager(universe_provider=univ_provider)
-    market_df = data_manager.sync_and_build_dataset(force_update=force_update)
-    if market_df is not None and not market_df.empty:
-        act_start = pd.to_datetime(market_df["date"].min()).strftime("%Y-%m-%d")
-        act_end = pd.to_datetime(market_df["date"].max()).strftime("%Y-%m-%d")
-        data_manager.actual_backtest_start_date = act_start
-        data_manager.actual_backtest_end_date = act_end
-        data_manager.requested_backtest_start_date = settings.START_DATE
-        data_manager.requested_backtest_end_date = settings.END_DATE
-        if hasattr(univ_provider, "set_actual_backtest_window"):
-            univ_provider.set_actual_backtest_window(act_start, act_end)
-    print(f"   * 行情数据加载就绪: {len(market_df)} 条记录，覆盖 {len(market_df['symbol'].unique())} 只股票 (实际区间: {getattr(data_manager, 'actual_backtest_start_date', 'N/A')} -> {getattr(data_manager, 'actual_backtest_end_date', 'N/A')})")
-    print(f"   * 上市日期覆盖率: {data_manager.listing_date_coverage_ratio*100:.1f}% | 行业覆盖率: {data_manager.industry_coverage_ratio*100:.1f}%")
-    print(f"   * 数据源明细: {data_manager.data_source_breakdown}")
+
+    try:
+        market_df = data_manager.sync_and_build_dataset(force_update=force_update)
+        if market_df is not None and not market_df.empty:
+            act_start = pd.to_datetime(market_df["date"].min()).strftime("%Y-%m-%d")
+            act_end = pd.to_datetime(market_df["date"].max()).strftime("%Y-%m-%d")
+            data_manager.actual_backtest_start_date = act_start
+            data_manager.actual_backtest_end_date = act_end
+            data_manager.requested_backtest_start_date = settings.START_DATE
+            data_manager.requested_backtest_end_date = settings.END_DATE
+            if hasattr(univ_provider, "set_actual_backtest_window"):
+                univ_provider.set_actual_backtest_window(act_start, act_end)
+        print(f"   * 行情数据加载就绪: {len(market_df)} 条记录，覆盖 {len(market_df['symbol'].unique())} 只股票 (实际区间: {getattr(data_manager, 'actual_backtest_start_date', 'N/A')} -> {getattr(data_manager, 'actual_backtest_end_date', 'N/A')})")
+        print(f"   * 上市日期覆盖率: {data_manager.listing_date_coverage_ratio*100:.1f}% | 行业覆盖率: {data_manager.industry_coverage_ratio*100:.1f}%")
+        print(f"   * 数据源明细: {data_manager.data_source_breakdown}")
+    except Exception as e:
+        logger.warning(f"⚠️ 数据同步触发 Fail-Closed 拦截: {e}")
+        if audit_json_path:
+            out_p = Path(audit_json_path)
+            out_p.parent.mkdir(parents=True, exist_ok=True)
+            fail_meta = AuditCollector.collect(data_manager=data_manager)
+            with open(out_p, "w", encoding="utf-8") as f:
+                json.dump(fail_meta.to_dict(), f, ensure_ascii=False, indent=2)
+            try:
+                tool_p = root_dir / "tools" / "generate_audit_report.py"
+                subprocess.run(
+                    [sys.executable, str(tool_p),
+                     "--pytest-xml", str(root_dir / "artifacts" / "pytest.xml"),
+                     "--audit-json", str(out_p)],
+                    check=True, capture_output=True, text=True, timeout=120
+                )
+            except Exception as re_err:
+                logger.warning(f"报告生成异常: {re_err}")
+        print(f"\n[Fail-Closed 保护已激活] 缺少生产证据或数据拉取受阻，已生成诚实的 HIGH_RISK 审计评级报告。\n错误详情: {e}")
+        return
 
     # 1.5 基本面财务因子注入 (质量/成长异源信号, 季度->日频 PIT 对齐)
     if getattr(settings, "ENABLE_FUNDAMENTALS", False):
@@ -170,7 +194,6 @@ def run_pipeline(
     )
 
     if audit_json_path:
-        import json
         out_p = Path(audit_json_path)
         out_p.parent.mkdir(parents=True, exist_ok=True)
         with open(out_p, "w", encoding="utf-8") as f:
@@ -178,7 +201,6 @@ def run_pipeline(
         print(f"   * 运行审计元数据已导出至: {out_p}")
         # 基于真实运行产物自动刷新 CAPABILITY / RUNTIME_ATTESTATION / MASTER 三份认证报告
         try:
-            import subprocess
             tool_p = root_dir / "tools" / "generate_audit_report.py"
             subprocess.run(
                 [sys.executable, str(tool_p),

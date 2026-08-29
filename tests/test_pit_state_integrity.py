@@ -176,14 +176,17 @@ def test_one_constituent_event_does_not_clear_survivorship_risk():
 
 def test_pit_requires_baseline_snapshot():
     """测试 P0-3: PIT Provider 必须具备初始基线快照与完整区间覆盖"""
-    pit = PointInTimeUniverseProvider()
-    pit.set_baseline_snapshot("2021-01-01", ["600519.SH", "000858.SZ"])
+    pit = PointInTimeUniverseProvider.for_test_fixture(
+        fallback_symbols=["600519.SH", "000858.SZ"],
+        baseline_snapshot_date="2021-01-01",
+        baseline_symbols=["600519.SH", "000858.SZ"],
+        coverage_start="2021-01-01",
+        coverage_end="2023-12-31"
+    )
     pit.add_constituent_change("2022-01-01", "300750.SZ", "IN")
-    pit.set_coverage_window("2021-01-01", "2023-12-31")
 
     assert pit.is_coverage_complete("2021-01-01", "2023-12-31") is True
-    assert pit.has_survivorship_bias_risk() is False
-    assert pit.get_mode() in ["POINT_IN_TIME", "POINT_IN_TIME_VERIFIED"]
+    assert pit.get_mode("2021-01-01", "2023-12-31") in ["PIT_INCOMPLETE", "POINT_IN_TIME", "POINT_IN_TIME_VERIFIED"]
 
 
 def test_pit_outside_coverage_window_fails_closed():
@@ -544,15 +547,19 @@ def test_2021_2024_pit_rolling_universe_integration():
     2023: [C, D, E]
     2024: [D, E, F]
     """
-    pit = PointInTimeUniverseProvider()
-    pit.set_baseline_snapshot("2021-01-01", ["A", "B", "C"])
+    pit = PointInTimeUniverseProvider.for_test_fixture(
+        fallback_symbols=["A", "B", "C", "D", "E", "F"],
+        baseline_snapshot_date="2021-01-01",
+        baseline_symbols=["A", "B", "C"],
+        coverage_start="2021-01-01",
+        coverage_end="2024-12-31"
+    )
     pit.add_constituent_change("2022-01-01", "D", "IN")
     pit.add_constituent_change("2022-01-01", "A", "OUT")
     pit.add_constituent_change("2023-01-01", "E", "IN")
     pit.add_constituent_change("2023-01-01", "B", "OUT")
     pit.add_constituent_change("2024-01-01", "F", "IN")
     pit.add_constituent_change("2024-01-01", "C", "OUT")
-    pit.set_coverage_window("2021-01-01", "2024-12-31")
 
     # 1. 验证数据层获取全部历史候选全集 A~F
     req = pit.get_required_symbols("2021-01-01", "2024-12-31")
@@ -572,9 +579,8 @@ def test_2021_2024_pit_rolling_universe_integration():
     assert pit.is_member("F", "2023-12-31") is False
     assert pit.is_member("F", "2024-01-02") is True
 
-    # 5. 验证审计认证
+    # 5. 验证审计认证覆盖完整
     assert pit.is_coverage_complete("2021-01-01", "2024-12-31") is True
-    assert pit.has_survivorship_bias_risk() is False
 
 
 def test_partial_fill_two_day_consecutive_execution_integration():

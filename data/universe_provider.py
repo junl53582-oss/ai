@@ -2,10 +2,10 @@
 股票池与成分股提供器接口 (data/universe_provider.py)
 支持静态固定股票池 (StaticUniverseProvider) 与真实点位截面成分股提供器 (PointInTimeUniverseProvider)
 严格遵循 Fail-Closed 与 Anti-Bypass 原则：
-- 生产环境严禁调用方通过传参 verified=True 手工伪造认证状态 (P0-2)
+- 生产环境严禁通过手工注入 verified=True 或 legacy kwargs 伪造认证资质 (P0)
 - Provider 的认证属性严格且唯一由 ProvenanceVerifier 输出的 UniverseVerificationResult 派生
-- set_coverage_window() 仅允许调整区间，严禁篡改认证状态
-- 覆盖率验证必须严格比对真实回测起止日期 (actual_backtest_start / actual_backtest_end) (P0-3)
+- set_baseline_snapshot 与 set_coverage_window 仅允许调整数据与时间区间，严禁篡改认证资质
+- 测试代码统一使用显式工厂 PointInTimeUniverseProvider.for_test_fixture(...)
 """
 import json
 import logging
@@ -122,8 +122,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
         coverage_end: Optional[Union[str, pd.Timestamp]] = None,
         verification_result: Optional[UniverseVerificationResult] = None,
         manifest_hash: Optional[str] = None,
-        source: str = "point_in_time_event_log",
-        **legacy_kwargs
+        source: str = "point_in_time_event_log"
     ):
         self.fallback_symbols = sorted(list(set(fallback_symbols or [])))
         self._changes: List[Dict[str, Any]] = []
@@ -142,7 +141,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
 
         self.universe_manifest_hash: Optional[str] = manifest_hash
 
-        # P0-2: 认证属性严格且唯一从 verification_result 派生
+        # P0: 认证属性严格且唯一从 verification_result 派生，彻底删除 legacy kwargs 后门
         if verification_result is not None:
             self.universe_provenance_verified = bool(verification_result.provenance_verified)
             self.constituent_event_source_verified = bool(verification_result.source_verified)
@@ -150,14 +149,6 @@ class PointInTimeUniverseProvider(UniverseProvider):
             self.universe_dataset_hash_verified = bool(verification_result.dataset_hash_verified)
             self.universe_source_class = verification_result.source_class.value
             self.universe_verification_failures = list(verification_result.failed_checks)
-        elif legacy_kwargs.get("universe_provenance_verified") or legacy_kwargs.get("constituent_event_source_verified"):
-            # 单元测试直接传参兼容模式
-            self.universe_provenance_verified = bool(legacy_kwargs.get("universe_provenance_verified", False))
-            self.constituent_event_source_verified = bool(legacy_kwargs.get("constituent_event_source_verified", False))
-            self.universe_raw_evidence_verified = bool(legacy_kwargs.get("universe_provenance_verified", False))
-            self.universe_dataset_hash_verified = bool(legacy_kwargs.get("universe_provenance_verified", False))
-            self.universe_source_class = SourceClass.OFFICIAL_PRIMARY.value if self.universe_provenance_verified else SourceClass.UNKNOWN.value
-            self.universe_verification_failures = [] if self.universe_provenance_verified else ["legacy_unverified"]
         else:
             self.universe_provenance_verified = False
             self.constituent_event_source_verified = False
@@ -185,13 +176,13 @@ class PointInTimeUniverseProvider(UniverseProvider):
         coverage_start: Optional[Union[str, pd.Timestamp]] = None,
         coverage_end: Optional[Union[str, pd.Timestamp]] = None
     ) -> "PointInTimeUniverseProvider":
-        """单元测试专用工厂方法：显式标记为 TEST_FIXTURE，绝不产生生产认证资质"""
+        """单元测试专用显式工厂方法：强制标记为 TEST_FIXTURE，绝不产生生产认证资质"""
         fixture_res = UniverseVerificationResult(
             is_valid=True,
             source_class=SourceClass.TEST_FIXTURE,
             provenance_verified=False,
-            raw_hash_verified=True,
-            dataset_hash_verified=True,
+            raw_hash_verified=False,
+            dataset_hash_verified=False,
             coverage_verified=True,
             source_verified=False,
             baseline_verified=True,
@@ -214,17 +205,13 @@ class PointInTimeUniverseProvider(UniverseProvider):
     def set_baseline_snapshot(
         self,
         snapshot_date: Union[str, pd.Timestamp],
-        symbols: List[str],
-        verified: bool = True
+        symbols: List[str]
     ):
-        """设置历史初始时点的基线成分股快照"""
+        """设置历史初始时点的基线成分股快照 (禁止在此提升认证资质)"""
         date_str = pd.to_datetime(snapshot_date).strftime("%Y-%m-%d")
         self.baseline_snapshot_date = date_str
         self.baseline_symbols = set(s.strip().upper() for s in symbols)
-        self.baseline_snapshot_verified = bool(verified and len(self.baseline_symbols) > 0)
-        if verified:
-            self.universe_provenance_verified = True
-            self.constituent_event_source_verified = True
+        self.baseline_snapshot_verified = bool(len(self.baseline_symbols) > 0)
         if not self.coverage_start or date_str < self.coverage_start:
             self.coverage_start = date_str
         for sym in self.baseline_symbols:
@@ -234,20 +221,13 @@ class PointInTimeUniverseProvider(UniverseProvider):
         self,
         start_date: Union[str, pd.Timestamp],
         end_date: Union[str, pd.Timestamp],
-        source: Optional[str] = None,
-        **legacy_kwargs
+        source: Optional[str] = None
     ):
-        """
-        设置有效历史覆盖区间 (P0-2: 严禁在此提升生产认证资质)
-        """
+        """设置有效历史覆盖区间 (P0: 严禁在此修改或提升认证资质状态)"""
         self.coverage_start = pd.to_datetime(start_date).strftime("%Y-%m-%d")
         self.coverage_end = pd.to_datetime(end_date).strftime("%Y-%m-%d")
         if source:
             self.universe_source = source
-        if "provenance_verified" in legacy_kwargs:
-            self.universe_provenance_verified = bool(legacy_kwargs["provenance_verified"])
-        if "events_verified" in legacy_kwargs:
-            self.constituent_event_source_verified = bool(legacy_kwargs["events_verified"])
 
     def set_actual_backtest_window(
         self,
@@ -357,7 +337,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
         end_date: Optional[Union[str, pd.Timestamp]] = None
     ) -> bool:
         """
-        检查指定回测区间是否被基线快照与变动事件完整覆盖 (P0-3 严格比对)
+        检查指定回测区间是否被基线快照与变动事件完整覆盖 (P0 严格比对)
         """
         if not self.coverage_start or not self.coverage_end or not self.baseline_snapshot_verified:
             return False
@@ -371,7 +351,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
         if self.coverage_start > s_date or self.coverage_end < e_date:
             return False
 
-        return bool(self.universe_provenance_verified and self.constituent_event_source_verified)
+        return True
 
     def get_mode(
         self,
@@ -388,8 +368,6 @@ class PointInTimeUniverseProvider(UniverseProvider):
             and not self.universe_verification_failures
         ):
             return "POINT_IN_TIME_VERIFIED"
-        elif self.is_coverage_complete(start_date, end_date):
-            return "POINT_IN_TIME"
         elif self._changes:
             return "PIT_INCOMPLETE"
         return "STATIC_FALLBACK"
@@ -399,8 +377,18 @@ class PointInTimeUniverseProvider(UniverseProvider):
         start_date: Optional[Union[str, pd.Timestamp]] = None,
         end_date: Optional[Union[str, pd.Timestamp]] = None
     ) -> bool:
-        """严格判定是否存在幸存者偏差风险 (只要 PIT 覆盖完整即消除幸存者偏差)"""
-        return not self.is_coverage_complete(start_date, end_date)
+        """严格判定是否存在幸存者偏差风险"""
+        if not self.is_coverage_complete(start_date, end_date):
+            return True
+        if (
+            not self.universe_provenance_verified
+            or not self.universe_raw_evidence_verified
+            or not self.universe_dataset_hash_verified
+            or not SourceClass.is_production_eligible(self.universe_source_class)
+            or bool(self.universe_verification_failures)
+        ):
+            return True
+        return False
 
 
 def fetch_index_constituents(index_code: str = "000300") -> List[str]:
@@ -443,7 +431,7 @@ def create_universe_provider(
 ) -> UniverseProvider:
     """
     统一股票池提供器工厂函数 (P0 严格数据血缘认证)
-    完全以 ProvenanceVerifier 运行时核验结果为准，绝无调用方 OR 注入旁路。
+    完全以 ProvenanceVerifier 运行时核验结果为准，绝无调用方注入旁路。
     """
     cfg = config or settings
     mode = getattr(cfg, "UNIVERSE_MODE", "STATIC").upper()
@@ -494,7 +482,7 @@ def create_universe_provider(
         act_start = actual_backtest_start_date or getattr(cfg, "START_DATE", "2020-01-01")
         act_end = actual_backtest_end_date or getattr(cfg, "END_DATE", "2026-12-31")
 
-        # 运行时密码级真实性核验 (P0-1, P0-3)
+        # 运行时密码级真实性核验
         ver_res = ProvenanceVerifier.verify_pit_universe(
             normalized_df=pit_df,
             manifest_data=manifest_data,
@@ -509,7 +497,7 @@ def create_universe_provider(
         c_start = coverage_start or manifest_data.get("coverage_start") or getattr(cfg, "START_DATE", "2020-01-01")
         c_end = coverage_end or manifest_data.get("coverage_end") or getattr(cfg, "END_DATE", "2026-12-31")
 
-        # P0-2: 直接传入 ver_res，绝不进行 caller True OR 运算
+        # 认证属性严格由 ver_res 派生
         provider = PointInTimeUniverseProvider(
             fallback_symbols=getattr(cfg, "DEFAULT_UNIVERSE", []),
             changes_df=pit_df,

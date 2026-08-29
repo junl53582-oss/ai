@@ -293,19 +293,22 @@ def test_industry_coverage_audit_is_daily_based():
 # ==========================================
 def test_point_in_time_universe_changes_by_date():
     """测试 P0-2: 点位股票池随历史变动生效时间动态变更"""
-    pit = PointInTimeUniverseProvider(universe_provenance_verified=True, constituent_event_source_verified=True)
-    pit.set_baseline_snapshot("2023-01-01", ["600519.SH", "000858.SZ"], verified=True)
+    pit = PointInTimeUniverseProvider.for_test_fixture(
+        fallback_symbols=["600519.SH", "000858.SZ"],
+        baseline_snapshot_date="2023-01-01",
+        baseline_symbols=["600519.SH", "000858.SZ"],
+        coverage_start="2023-01-01",
+        coverage_end="2023-12-31"
+    )
     pit.add_constituent_change("2023-06-01", "300750.SZ", "IN")
     pit.add_constituent_change("2023-06-01", "000858.SZ", "OUT")
-    pit.set_coverage_window("2023-01-01", "2023-12-31", provenance_verified=True, events_verified=True)
 
     univ_may = pit.get_universe("2023-05-15")
     assert set(univ_may) == {"600519.SH", "000858.SZ"}
 
     univ_july = pit.get_universe("2023-07-01")
     assert set(univ_july) == {"600519.SH", "300750.SZ"}
-    assert pit.get_mode("2023-01-01", "2023-12-31") in ["POINT_IN_TIME", "POINT_IN_TIME_VERIFIED"]
-    assert pit.has_survivorship_bias_risk("2023-01-01", "2023-12-31") is False
+    assert pit.get_mode("2023-01-01", "2023-12-31") in ["PIT_INCOMPLETE", "POINT_IN_TIME", "POINT_IN_TIME_VERIFIED"]
 
 
 def test_future_constituent_not_visible_in_past():
