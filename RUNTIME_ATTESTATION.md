@@ -1,12 +1,12 @@
 # A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
 
-> **运行时实例 ID**: `DIRTY_WORKTREE_run_be94b0f8`  
+> **运行时实例 ID**: `DIRTY_WORKTREE_run_bf2de943`  
 > **认证类型**: `CURRENT_RUNTIME_ATTESTATION`  
-> **执行代码 Commit (CODE_COMMIT_SHA)**: `5d2c96c7bc826be2ae841944ca919eeca5c3c075`  
+> **执行代码 Commit (CODE_COMMIT_SHA)**: `a47e2e917efbee38ce70c51ef7e17b693a0a4570`  
 > **构建产物归档类型 (ARTIFACT_STORAGE)**: `BUILD_ARTIFACT / REPOSITORY_GENERATED_OUTPUT`  
 > **启动时源码纯净状态 (RUNTIME_START_SOURCE_DIRTY)**: `True`  
 > **外部信任根锚定状态 (TRUST_ROOT_VERIFIED)**: `False`  
-> **认证评估时间**: 2026-08-29 16:50:35  
+> **认证评估时间**: 2026-08-29 18:34:32  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 
@@ -18,14 +18,14 @@
 | :--- | :--- | :---: | :---: | :--- |
 | 1 | **外部信任根锚定 (External Trust Root)** | `UNPINNED_OR_TAMPERED` | ⚠️ ATTENTION / FAIL | 来源: UNPINNED_SELF_TRUST, 注册表哈希: c67a05171e4ab5f9..., 外部锚定: none... |
 | 2 | **股票池时点覆盖 (PIT Universe)** | `COMPLETE` | ⚠️ ATTENTION / FAIL | 模式: PIT_INCOMPLETE, 来源类别: UNKNOWN, 原始证据校验: False, 幸存者风险: True |
-| 3 | **真实数据源 (No Synthetic)** | `REAL_DATA_VERIFIED` | ✅ PASS | 数据源: akshare, 分布: {'akshare': 3, 'local_csv': 0, 'synthetic': 0} |
+| 3 | **真实数据源 (No Synthetic)** | `NON_SYNTHETIC_UNAUTHENTICATED` | ⚠️ ATTENTION / FAIL | 数据源: unknown, 分布: {}, 来源鉴证: False |
 | 4 | **交易所官方交易日历** | `THIRD_PARTY/FALLBACK` | ⚠️ ATTENTION / FAIL | 日历来源: akshare_sina, 质量评级: third_party |
 | 5 | **历史逐日 ST 时间线** | `LIMITED_STATIC` | ⚠️ ATTENTION / FAIL | 标的覆盖: 0.0%, 未知行数: 0, 偏差风险: True |
-| 6 | **公司行为除权除息覆盖** | `LIMITED_COVERAGE` | ⚠️ ATTENTION / FAIL | 覆盖率: 0.0%, 调整可用: False, 数据源: custom_corporate_actions |
+| 6 | **公司行为除权除息覆盖** | `LIMITED_COVERAGE` | ⚠️ ATTENTION / FAIL | 覆盖率: 0.0%, 调整可用: False, 数据源: unknown |
 | 7 | **前复权因果安全性 (PIT Safe)** | `UNKNOWN_OR_UNVERIFIED` | ⚠️ ATTENTION / FAIL | 复权模式: unknown |
-| 8 | **特征与行情缓存指纹校验** | `VERIFIED` | ✅ PASS | 原始血缘保持: True, 版本: 3.1 |
-| 9 | **基准指数时间轴完整性** | `0.0%` | ⚠️ ATTENTION / FAIL | 缺失日历天数: 0, 数据源: unknown |
-| 10 | **委托订单数量守恒** | `CONSERVED` | ✅ PASS | 部分成交: 9, 撤单: 0, 延期: 0 |
+| 8 | **特征与行情缓存指纹校验** | `UNVERIFIED` | ⚠️ ATTENTION / FAIL | 原始血缘保持: False, 版本: 3.1 |
+| 9 | **基准指数时间轴完整性** | `100% COVERED` | ✅ PASS | 缺失日历天数: 0, 数据源: akshare |
+| 10 | **委托订单数量守恒** | `FAILED` | ⚠️ ATTENTION / FAIL | 部分成交: 0, 撤单: 0, 延期: 0 |
 | 11 | **运行时防伪数字信封与配置哈希** | `UNTRUSTED_OR_TAMPERED` | ⚠️ ATTENTION / FAIL | 信封校验: False, 配置指纹: a6cf893fe1f64c33275911e35e2656e5808182642e38898bc218720d60182a76 |
 
 ---
@@ -38,7 +38,10 @@
 - `universe_manifest_hash_unverified`
 - `factor_manifest_hash_missing`
 - `market_manifest_hash_missing`
+- `corporate_action_manifest_hash_missing`
 - `manifest_chain_unverified`
+- `market_data_provenance_unverified`
+- `actual_backtest_window_or_universe_coverage_dates_missing`
 - `universe_provenance_unverified`
 - `universe_raw_evidence_unverified`
 - `universe_dataset_hash_unverified`
@@ -50,14 +53,18 @@
 - `corporate_action_coverage_incomplete`
 - `corporate_action_bias_risk_present`
 - `corporate_action_provenance_unverified`
+- `cache_fingerprint_unverified`
+- `raw_data_provenance_lost`
 - `adjustment_not_point_in_time_safe`
 - `future_adjustment_leakage_test_not_passed`
-- `benchmark_source_unverified`
-- `benchmark_coverage_ratio_less_than_100pct`
+- `market_data_source_unverified`
+- `order_quantity_conservation_failed`
 - `calendar_not_exchange_official`
+- `missing_external_trust_root_pin_QUANT_TRUSTED_KEYRING_SHA256`
 - `unregistered_runtime_signing_key_DEV_UNTRUSTED_KEY`
 - `runtime_started_from_dirty_source_code`
 - `current_source_code_dirty`
+- `missing_external_trust_root_pin_QUANT_TRUSTED_KEYRING_SHA256`
 
 ---
 

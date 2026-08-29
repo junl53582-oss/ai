@@ -129,6 +129,17 @@ MANIFEST_REQUIRED_FIELDS: Dict[ManifestType, List[str]] = {
     ]
 }
 
+MANIFEST_PARENT_REQUIRED_FIELDS: Dict[ManifestType, List[str]] = {
+    ManifestType.MARKET: ["parent_runtime_config_hash"],
+    ManifestType.UNIVERSE: ["parent_runtime_config_hash"],
+    ManifestType.FACTOR: [
+        "parent_runtime_config_hash",
+        "parent_market_manifest_hash",
+        "parent_universe_manifest_hash"
+    ],
+    ManifestType.CORPORATE_ACTION: ["parent_runtime_config_hash"]
+}
+
 
 @dataclass
 class ManifestVerificationResult:
@@ -164,14 +175,15 @@ class ManifestVerifier:
         manifest_path: Union[str, Path],
         expected_hash: Optional[str] = None,
         expected_parents: Optional[Dict[str, str]] = None,
-        manifest_type: Optional[Union[ManifestType, str]] = None
+        manifest_type: Optional[Union[ManifestType, str]] = None,
+        production_mode: bool = True
     ) -> ManifestVerificationResult:
         """
         全要素物理验证 Manifest 文件：
         1. 必须提供上层 expected_hash，缺失直接 Fail-Closed (hash_verified=False)。
         2. 必须实际比对实际文件 SHA256。
         3. 必须通过 ManifestType 强类型 Schema 校验 (拒绝 {} 或字段缺失)。
-        4. 必须验证 Parent Chain 级联依赖一致性。
+        4. 生产模式下必须验证 Parent Chain 级联依赖锚点与一致性。
         """
         p = Path(manifest_path)
         m_type_str = manifest_type.value if isinstance(manifest_type, ManifestType) else str(manifest_type) if manifest_type else None
@@ -248,8 +260,26 @@ class ManifestVerifier:
                 # 通用基础 Schema 校验
                 res.schema_verified = isinstance(data, dict) and len(data) >= 3
 
-            # 3. 校验父链哈希 (Parent Chain Verification)
-            if expected_parents:
+            # 3. 校验父链哈希 (Parent Chain Verification - P0 Mandatory)
+            req_parents = MANIFEST_PARENT_REQUIRED_FIELDS.get(m_type_enum, []) if m_type_enum else []
+            if req_parents and production_mode:
+                if not expected_parents:
+                    res.parent_chain_verified = False
+                    res.failed_checks.append("manifest_parent_anchor_missing")
+                else:
+                    parent_ok = True
+                    for pk in req_parents:
+                        if pk not in expected_parents:
+                            res.failed_checks.append(f"manifest_parent_anchor_missing_{pk}")
+                            parent_ok = False
+                        else:
+                            exp_val = expected_parents[pk]
+                            act_val = data.get(pk)
+                            if not act_val or str(act_val).lower() != str(exp_val).lower():
+                                res.failed_checks.append(f"parent_chain_mismatch_{pk}_{exp_val}_vs_{act_val}")
+                                parent_ok = False
+                    res.parent_chain_verified = parent_ok
+            elif expected_parents:
                 parent_ok = True
                 for parent_key, expected_parent_val in expected_parents.items():
                     actual_parent_val = data.get(parent_key)
@@ -258,7 +288,9 @@ class ManifestVerifier:
                         parent_ok = False
                 res.parent_chain_verified = parent_ok
             else:
-                res.parent_chain_verified = True
+                res.parent_chain_verified = not production_mode
+                if production_mode and m_type_enum:
+                    res.failed_checks.append("manifest_parent_anchor_missing")
 
         except Exception as e:
             res.schema_verified = False
@@ -304,6 +336,7 @@ class AuditMetadata:
     data_source: str = "unknown"
     data_source_breakdown: Dict[str, int] = field(default_factory=dict)
     synthetic_data_used: bool = True  # 严格默认为 True (Fail-Closed)
+    market_data_provenance_verified: bool = False  # P1: 来源鉴证状态独立区分
     cache_fingerprint_verified: bool = False
     cache_manifest_version: str = "3.1"
     raw_data_provenance_preserved: bool = False
@@ -451,11 +484,20 @@ class CertificationPolicy:
         elif not meta.market_manifest_hash_verified:
             failed_checks.append("market_manifest_hash_unverified")
 
-        if meta.corporate_action_manifest_hash and not meta.corporate_action_manifest_hash_verified:
+        # Corporate Action Manifest 物理验签硬门禁 (P0)
+        if not meta.corporate_action_manifest_hash or not HEX_64_PATTERN.match(str(meta.corporate_action_manifest_hash)):
+            failed_checks.append("corporate_action_manifest_hash_missing")
+        elif not meta.corporate_action_manifest_hash_verified:
             failed_checks.append("corporate_action_manifest_hash_unverified")
 
         if not meta.manifest_chain_verified:
             failed_checks.append("manifest_chain_unverified")
+
+        # P1: 真实市场数据来源鉴证门禁 (杜绝无证据声称官方)
+        if meta.synthetic_data_used:
+            failed_checks.append("synthetic_data_used")
+        if not meta.market_data_provenance_verified:
+            failed_checks.append("market_data_provenance_unverified")
 
         # 2. 实际回测窗口与 PIT 股票池覆盖独立校验
         if (
@@ -555,6 +597,7 @@ class CertificationPolicy:
             "external_trust_root_unverified",
             "survivorship_bias_risk_present",
             "synthetic_data_used",
+            "market_data_provenance_unverified",
             "order_quantity_conservation_failed",
             "future_adjustment_leakage_test_not_passed",
             "universe_raw_evidence_unverified",
@@ -565,6 +608,7 @@ class CertificationPolicy:
             "factor_manifest_hash_unverified",
             "market_manifest_hash_missing",
             "market_manifest_hash_unverified",
+            "corporate_action_manifest_hash_missing",
             "corporate_action_manifest_hash_unverified",
             "corporate_action_provenance_unverified",
             "manifest_chain_unverified",
@@ -642,7 +686,7 @@ class AuditCollector:
                 meta.market_manifest_hash_verified = market_res.hash_verified and market_res.schema_verified
             else:
                 meta.market_manifest_hash = getattr(data_manager, "manifest_hash", None)
-                meta.market_manifest_hash_verified = bool(getattr(data_manager, "manifest_hash_verified", False))
+                meta.market_manifest_hash_verified = False
 
             # 股票池提供器数据采集
             provider = getattr(data_manager, "universe_provider", None)
@@ -662,7 +706,7 @@ class AuditCollector:
                     meta.universe_manifest_hash_verified = universe_res.hash_verified and universe_res.schema_verified
                 else:
                     meta.universe_manifest_hash = getattr(provider, "universe_manifest_hash", None)
-                    meta.universe_manifest_hash_verified = bool(getattr(provider, "universe_manifest_hash_verified", False))
+                    meta.universe_manifest_hash_verified = False
 
                 meta.universe_verification_failures = list(getattr(provider, "universe_verification_failures", []))
                 meta.survivorship_bias_risk = provider.has_survivorship_bias_risk(meta.actual_backtest_start_date, meta.actual_backtest_end_date)
@@ -701,7 +745,7 @@ class AuditCollector:
                 meta.factor_manifest_hash_verified = factor_res.hash_verified and factor_res.schema_verified
             else:
                 meta.factor_manifest_hash = getattr(factor_processor, "manifest_hash", None)
-                meta.factor_manifest_hash_verified = bool(getattr(factor_processor, "manifest_hash_verified", False))
+                meta.factor_manifest_hash_verified = False
 
         # 3. 策略组合层采集
         if portfolio_builder is not None:
@@ -734,44 +778,26 @@ class AuditCollector:
                 meta.corporate_action_manifest_hash_verified = corp_res.hash_verified and corp_res.schema_verified
             else:
                 meta.corporate_action_manifest_hash = getattr(engine, "corporate_action_manifest_hash", None)
-                meta.corporate_action_manifest_hash_verified = bool(getattr(engine, "corporate_action_manifest_hash_verified", False))
+                meta.corporate_action_manifest_hash_verified = False
 
         # 5. 链式父哈希完整性校验 (Parent Chain Verification from Real Upstream Verification Results)
         chain_ok = True
-        config_hash = meta.runtime_config_hash
 
         # Market Parent == Runtime Config
-        if market_res and market_res.parent_chain_verified:
-            pass
-        elif meta.market_manifest_hash_verified:
-            pass
-        else:
+        if not (market_res and market_res.parent_chain_verified):
             chain_ok = False
 
         # Universe Parent == Runtime Config
-        if universe_res and universe_res.parent_chain_verified:
-            pass
-        elif meta.universe_manifest_hash_verified:
-            pass
-        else:
+        if not (universe_res and universe_res.parent_chain_verified):
             chain_ok = False
 
         # Factor Parent == Market + Universe + Runtime Config
-        if factor_res and factor_res.parent_chain_verified:
-            pass
-        elif meta.factor_manifest_hash_verified:
-            pass
-        else:
+        if not (factor_res and factor_res.parent_chain_verified):
             chain_ok = False
 
         # Corporate Action Parent == Runtime Config (if present)
-        if meta.corporate_action_manifest_hash:
-            if corp_res and corp_res.parent_chain_verified:
-                pass
-            elif meta.corporate_action_manifest_hash_verified:
-                pass
-            else:
-                chain_ok = False
+        if meta.corporate_action_manifest_hash and not (corp_res and corp_res.parent_chain_verified):
+            chain_ok = False
 
         meta.manifest_chain_verified = bool(
             chain_ok
@@ -782,7 +808,7 @@ class AuditCollector:
 
         # 6. runtime_config_hash_verified 语义严格推导：必须有 config_hash 且全链条与该 config_hash 一致
         meta.runtime_config_hash_verified = bool(
-            config_hash is not None
+            meta.runtime_config_hash is not None
             and meta.manifest_chain_verified
         )
 

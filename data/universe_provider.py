@@ -165,6 +165,9 @@ class PointInTimeUniverseProvider(UniverseProvider):
             for sym in self.baseline_symbols:
                 self.add_constituent_change(self.baseline_snapshot_date, sym, "IN")
 
+        if changes_df is not None and not changes_df.empty:
+            self.load_changes_from_dataframe(changes_df)
+
     def verify_universe_manifest(
         self,
         manifest_path: Union[str, Path],
@@ -184,9 +187,6 @@ class PointInTimeUniverseProvider(UniverseProvider):
         self.universe_manifest_hash = res.actual_hash
         self.universe_manifest_hash_verified = res.hash_verified and res.schema_verified
         return res
-
-        if changes_df is not None and not changes_df.empty:
-            self.load_changes_from_dataframe(changes_df)
 
     @classmethod
     def for_test_fixture(
@@ -276,6 +276,7 @@ class PointInTimeUniverseProvider(UniverseProvider):
             "symbol": sym_clean,
             "action": act_clean
         })
+        self.constituent_event_count = len(self._changes)
         self._cached_universe_by_date.clear()
 
         if self.coverage_start is None or date_str < self.coverage_start:

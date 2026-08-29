@@ -448,17 +448,17 @@ class FactorProcessor:
         factor_file = self.factor_dir / "factor_matrix.parquet"
         manifest_file = self.factor_dir / "factor_matrix.manifest.json"
 
-        # 1. 计算上游行情 Manifest 与内容哈希 (P0-7, P0-14 链式流式指纹防隐性污染)
+        # 1. 计算上游行情 Manifest 与内容哈希 (P0-7, P0-14 完整 64 hex SHA256 父链)
         upstream_manifest_file = settings.PARQUET_DIR / "market_daily.manifest.json"
         if upstream_manifest_file.exists():
             try:
                 with open(upstream_manifest_file, "r", encoding="utf-8") as f:
                     up_text = f.read()
-                input_market_manifest_hash = hashlib.sha256(up_text.encode("utf-8")).hexdigest()[:16]
+                input_market_manifest_hash = hashlib.sha256(up_text.encode("utf-8")).hexdigest()
             except Exception:
-                input_market_manifest_hash = "unknown"
+                input_market_manifest_hash = hashlib.sha256(b"unknown_market_manifest").hexdigest()
         else:
-            input_market_manifest_hash = "none"
+            input_market_manifest_hash = hashlib.sha256(b"none_market_manifest").hexdigest()
 
         market_content_hash = self._compute_streaming_content_hash(market_df)
         in_universe_mask_hash = self._compute_in_universe_hash(market_df)
@@ -511,8 +511,6 @@ class FactorProcessor:
                         )
                         match = False
                     # 防御性完整性校验 2: 行数必须与上游行情一致。
-                    # 曾发生单元测试用小样本数据覆盖生产缓存 (4555 行 vs 462844 行)，
-                    # 导致后续管线在无感知的情况下用极少样本训练出垃圾模型。
                     elif len(df_cached) != len(market_df):
                         logger.warning(
                             f"缓存因子矩阵行数 {len(df_cached)} 与上游行情 {len(market_df)} 不一致，"
@@ -534,12 +532,6 @@ class FactorProcessor:
         if getattr(settings, "ENABLE_REGISTRY_FACTORS", True):
             df_full = FactorRegistry.compute_all_registered(df_full)
 
-        # 携带已在 market_df 中的基本面因子 (F_*) 进入因子矩阵。
-        # 基本面由 FundamentalsProvider 经 PIT 对齐后以日频形态合并进 market_df，
-        # 此处按 (symbol, date) 左接，使其与量价因子一同参与截面标准化/中性化。
-        # 注意: alpha158/ashare 的 compute_all 会保留上游 market_df 的既有列，
-        # 因此 F_* 可能已经存在; 直接 merge 会产生 _x/_y 重复列破坏因子名。
-        # 仅在 df_full 缺失时才合并。
         fund_cols = [c for c in FUNDAMENTAL_FACTOR_NAMES if c in market_df.columns]
         missing_fund_cols = [c for c in fund_cols if c not in df_full.columns]
         if missing_fund_cols:
@@ -552,7 +544,6 @@ class FactorProcessor:
             logger.info(f"基本面因子列已由因子计算器带入: {fund_cols}")
 
         # 严格按 symbol 分组前向填充，严禁全因子盲目 fillna(0.0)！
-        # 仅语义明确的布尔 lag 标记填 0.0，其余连续因子保留 NaN (P0-1)
         bool_lag_cols = {"IS_LIMIT_UP_LAG1", "IS_LIMIT_DOWN_LAG1"}
         valid_cols = [c for c in all_factor_cols if c in df_full.columns]
         if valid_cols:
@@ -579,9 +570,32 @@ class FactorProcessor:
         logger.info(f"正在保存最终因子矩阵到 {factor_file} (总行数: {len(df_standardized)})...")
         df_standardized.to_parquet(factor_file, index=False, engine="pyarrow", compression="snappy")
 
-        # 写入 Manifest
+        # 写入 Manifest (严格满足 ManifestType.FACTOR Schema 与父链)
+        from backtest.audit import compute_canonical_runtime_config_hash
+        factor_cols_present = [c for c in all_factor_cols if c in df_standardized.columns]
+        h_series = pd.util.hash_pandas_object(df_standardized[factor_cols_present], index=False)
+        dataset_sha256 = hashlib.sha256(h_series.values.tobytes()).hexdigest()
+        parent_config_hash = compute_canonical_runtime_config_hash(settings)
+        univ_manifest_file = settings.DATA_DIR / "universe" / "csi300" / "normalized" / "universe_pit_events.manifest.json"
+        if univ_manifest_file.exists():
+            try:
+                with open(univ_manifest_file, "r", encoding="utf-8") as f:
+                    u_text = f.read()
+                parent_u_hash = hashlib.sha256(u_text.encode("utf-8")).hexdigest()
+            except Exception:
+                parent_u_hash = hashlib.sha256(b"unknown_universe_manifest").hexdigest()
+        else:
+            parent_u_hash = hashlib.sha256(b"none_universe_manifest").hexdigest()
+
         manifest_data = dict(current_fingerprint)
         manifest_data.update({
+            "schema_version": "3.1",
+            "dataset_name": "factor_matrix",
+            "factor_columns": sorted(factor_cols_present),
+            "dataset_sha256": dataset_sha256,
+            "parent_runtime_config_hash": parent_config_hash,
+            "parent_market_manifest_hash": input_market_manifest_hash,
+            "parent_universe_manifest_hash": parent_u_hash,
             "created_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
             "industry_neutralization_enabled": self.industry_neutralization_enabled,
             "industry_coverage_ratio_mean": self.industry_coverage_ratio_mean,

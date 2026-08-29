@@ -238,13 +238,17 @@ class CorporateActionDatasetProvenanceVerifier:
         raw_evidence_dir: Optional[Union[str, Path]] = None
     ) -> CorporateActionVerificationResult:
         """
-        全要素核验公司行为数据集与 Manifest 的规范化哈希、来源元数据、采集回执及独立信任锚点
+        全要素核验公司行为数据集与 Manifest 的规范化哈希、来源元数据、采集回执及独立信任锚点 (Fail-Closed)
         """
         failed_checks = []
         dataset_hash_ok = False
-        manifest_hash_ok = True
-        source_auth_ok = True
-        trust_anchor_ok = True
+        manifest_hash_ok = False
+        source_auth_ok = False
+        trust_anchor_ok = False
+
+        if not manifest_data or not isinstance(manifest_data, dict):
+            failed_checks.append("corporate_action_manifest_invalid_or_empty")
+            return CorporateActionVerificationResult(failed_checks=failed_checks)
 
         # 1. 验证规范化数据集哈希
         expected_dataset_sha256 = manifest_data.get("normalized_dataset_sha256", "")
@@ -256,6 +260,7 @@ class CorporateActionDatasetProvenanceVerifier:
             failed_checks.append("corporate_action_dataset_sha256_mismatch")
         else:
             dataset_hash_ok = True
+            manifest_hash_ok = True
 
         # 2. 验证原始文件列表与集合一致性 (Exact Set Equality)
         source_files = manifest_data.get("source_files", [])
@@ -263,17 +268,19 @@ class CorporateActionDatasetProvenanceVerifier:
 
         if not source_files or not isinstance(source_files, list):
             failed_checks.append("corporate_action_manifest_missing_source_files")
-            source_auth_ok = False
         elif set(source_files) != set(source_hashes.keys()):
             failed_checks.append("corporate_action_manifest_source_files_hashes_mismatch")
-            source_auth_ok = False
-        elif raw_evidence_dir:
+        elif not raw_evidence_dir:
+            failed_checks.append("corporate_action_raw_evidence_dir_missing")
+        else:
             ev_dir = Path(raw_evidence_dir)
+            all_files_ok = True
+            all_trust_ok = True
             for sf in source_files:
                 f_path = safe_resolve_path(ev_dir, sf)
                 if not f_path or not f_path.exists():
                     failed_checks.append(f"corporate_action_raw_file_missing_or_traversal_{sf}")
-                    source_auth_ok = False
+                    all_files_ok = False
                 else:
                     h = hashlib.sha256()
                     with open(f_path, "rb") as f:
@@ -282,31 +289,39 @@ class CorporateActionDatasetProvenanceVerifier:
                     exp_h = source_hashes.get(sf, "")
                     if h.hexdigest().lower() != str(exp_h).lower():
                         failed_checks.append(f"corporate_action_raw_hash_mismatch_{sf}")
-                        source_auth_ok = False
+                        all_files_ok = False
 
-                    # 验证 Source Evidence Metadata
+                    # 验证 Source Evidence Metadata (必须存在)
                     meta_path = f_path.with_suffix(f"{f_path.suffix}.source.json")
-                    if meta_path.exists():
+                    if not meta_path.exists():
+                        failed_checks.append(f"corporate_action_source_metadata_missing_{sf}")
+                        all_files_ok = False
+                    else:
                         s_meta, meta_errs = SourceEvidenceMetadata.load_and_verify(meta_path, f_path)
                         if not s_meta:
                             failed_checks.extend(meta_errs)
-                            source_auth_ok = False
+                            all_files_ok = False
 
-                    # 验证 Acquisition Receipt & Trust Anchor
+                    # 验证 Acquisition Receipt & Trust Anchor (必须存在)
                     receipt_path = f_path.with_suffix(f"{f_path.suffix}.receipt.json")
-                    if receipt_path.exists():
+                    if not receipt_path.exists():
+                        failed_checks.append(f"corporate_action_receipt_missing_{sf}")
+                        all_trust_ok = False
+                    else:
                         receipt, r_errs = AcquisitionReceipt.load_from_file(receipt_path)
                         if not receipt:
                             failed_checks.extend(r_errs)
-                            trust_anchor_ok = False
+                            all_trust_ok = False
                         else:
                             r_ok, v_errs = receipt.verify_against_file(f_path)
                             if not r_ok:
                                 failed_checks.extend(v_errs)
-                                trust_anchor_ok = False
+                                all_trust_ok = False
                             if not receipt.trust_anchor_verified:
                                 failed_checks.append(f"corporate_action_raw_receipt_trust_anchor_unverified_{sf}")
-                                trust_anchor_ok = False
+                                all_trust_ok = False
+            source_auth_ok = all_files_ok and len(failed_checks) == 0
+            trust_anchor_ok = all_trust_ok and len(failed_checks) == 0
 
         return CorporateActionVerificationResult(
             dataset_hash_verified=dataset_hash_ok,

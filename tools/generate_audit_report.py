@@ -25,6 +25,7 @@ if str(root_dir) not in sys.path:
 
 from backtest.audit import CertificationPolicy, AuditMetadata
 from backtest.runtime_attestation import RuntimeAttestationEnvelope, compute_canonical_audit_payload_hash
+from data.crypto_anchor import verify_trust_root
 
 
 def parse_junit_xml(xml_path: Path) -> Dict[str, Any]:
@@ -304,8 +305,9 @@ def generate_runtime_attestation(
             envelope_valid, envelope_errors = envelope_obj.verify(
                 audit_payload_data=audit_data,
                 require_clean_git=True,
-                verify_current_git_binding=True,
-                is_historical=is_historical
+                verify_current_git_binding=not is_historical,
+                is_historical=is_historical,
+                require_trust_root=True
             )
         except Exception as e:
             envelope_valid = False
@@ -320,6 +322,17 @@ def generate_runtime_attestation(
     for k, v in audit_data.items():
         if hasattr(meta, k):
             setattr(meta, k, v)
+
+    # 独立核验当前执行环境的 External Trust Root Pinning (P0 杜绝手工篡改 trust_root_verified 绕过)
+    tr_ok, actual_h, pin_h, tr_errs = verify_trust_root()
+    meta.trust_root_verified = tr_ok
+    meta.trusted_keyring_hash = actual_h
+    meta.external_trusted_keyring_hash = pin_h
+    meta.trust_root_source = "ENVIRONMENT_PINNED_TRUST_ROOT" if tr_ok else ("PIN_MISMATCH" if pin_h else "UNPINNED_SELF_TRUST")
+
+    if not tr_ok:
+        envelope_valid = False
+        envelope_errors.extend(tr_errs)
 
     reliability, failed_checks = CertificationPolicy.evaluate(meta)
 
@@ -359,10 +372,10 @@ def generate_runtime_attestation(
         },
         {
             "name": "真实数据源 (No Synthetic)",
-            "val": ("REAL_DATA_VERIFIED" if (not meta.synthetic_data_used and meta.data_source != "unknown" and meta.raw_data_provenance_preserved)
-                    else ("REAL_DATA_UNVERIFIED" if not meta.synthetic_data_used else "SYNTHETIC_DATA")),
-            "passed": bool(not meta.synthetic_data_used and meta.data_source != "unknown"),
-            "detail": f"数据源: {meta.data_source}, 分布: {meta.data_source_breakdown}"
+            "val": ("REAL_DATA_AUTHENTICATED" if (not meta.synthetic_data_used and meta.market_data_provenance_verified)
+                    else ("NON_SYNTHETIC_UNAUTHENTICATED" if not meta.synthetic_data_used else "SYNTHETIC_DATA")),
+            "passed": bool(not meta.synthetic_data_used and meta.market_data_provenance_verified),
+            "detail": f"数据源: {meta.data_source}, 分布: {meta.data_source_breakdown}, 来源鉴证: {meta.market_data_provenance_verified}"
         },
         {
             "name": "交易所官方交易日历",
@@ -427,7 +440,8 @@ def generate_runtime_attestation(
     else:
         failed_desc = "### ✅ 全要素认证门禁检验全部通过！"
 
-    report = f"""# A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
+    header_tag = "HISTORICAL_ATTESTATION" if is_historical else "RUNTIME_ATTESTATION"
+    report = f"""# A股量化系统 · 本次回测真实性认证证书 ({header_tag})
 
 > **运行时实例 ID**: `{run_id}`  
 > **认证类型**: `{mode_label}`  

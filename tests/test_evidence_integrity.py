@@ -310,27 +310,81 @@ def test_audit_collector_anti_forgery_blocks_override():
 
 
 @pytest.mark.unit
-def test_corporate_action_coverage_with_zero_events(tmp_path):
+def test_corporate_action_coverage_with_zero_events(tmp_path, monkeypatch):
+    from data.crypto_anchor import TRUSTED_KEY_REGISTRY, DOMAIN_SEPARATOR_ACQUISITION
+    from cryptography.hazmat.primitives.asymmetric import ed25519 as crypto_ed25519
+    from data.source_registry import AcquisitionReceipt
+    from dataclasses import asdict
+    import json
+
+    priv = crypto_ed25519.Ed25519PrivateKey.generate()
+    sk_hex = priv.private_bytes_raw().hex()
+    pk_hex = priv.public_key().public_bytes_raw().hex()
+
+    monkeypatch.setitem(TRUSTED_KEY_REGISTRY, "PROD_DOWNLOADER_KEY_TEST", {
+        "algorithm": "ED25519",
+        "key_id": "PROD_DOWNLOADER_KEY_TEST",
+        "public_key_hex": pk_hex,
+        "allowed_purposes": ["ACQUISITION_RECEIPT"],
+        "issuer_type": "PROJECT",
+        "status": "ACTIVE",
+        "not_before": "2025-01-01T00:00:00Z",
+        "not_after": "2030-01-01T00:00:00Z",
+        "is_production": True
+    })
+
     prov = CorporateActionProvider()
     raw_f = tmp_path / "raw.json"
-    raw_f.write_text("{}", encoding="utf-8")
+    raw_f.write_text("[]", encoding="utf-8")
     h_raw = hashlib.sha256(raw_f.read_bytes()).hexdigest()
     resp_f = tmp_path / "resp.json"
-    resp_f.write_text("{}", encoding="utf-8")
+    resp_f.write_text("[]", encoding="utf-8")
     h_resp = hashlib.sha256(resp_f.read_bytes()).hexdigest()
+
+    meta_f = tmp_path / "raw.json.source.json"
+    meta_f.write_text(json.dumps({
+        "source_id": "SSE",
+        "source_url": "https://www.sse.com.cn/disclosure/events.json",
+        "retrieved_at_utc": "2026-01-01T00:00:00Z",
+        "sha256": h_raw,
+        "original_filename": "raw.json",
+        "byte_size": raw_f.stat().st_size,
+        "downloader_version": "3.1"
+    }), encoding="utf-8")
+
+    rec = AcquisitionReceipt(
+        receipt_id="REC_001",
+        source_id="SSE",
+        source_url="https://www.sse.com.cn/disclosure/events.json",
+        requested_at="2026-01-01T00:00:00Z",
+        downloaded_at="2026-01-01T00:00:00Z",
+        raw_sha256=h_raw,
+        original_filename="raw.json",
+        trust_anchor_type="TRUSTED_KEY_ATTESTATION",
+        signing_key_id="PROD_DOWNLOADER_KEY_TEST"
+    )
+    digest = rec.compute_integrity_digest()
+    msg_to_sign = f"{DOMAIN_SEPARATOR_ACQUISITION}:".encode("utf-8") + digest.encode("utf-8")
+    sig = priv.sign(msg_to_sign)
+    rec.attestation_signature = sig.hex()
+
+    rec_f = tmp_path / "raw.json.receipt.json"
+    rec_f.write_text(json.dumps(asdict(rec)), encoding="utf-8")
 
     ev = CorporateActionCoverageEvidence(
         symbol='600519.SH',
         query_start='2021-01-01',
         query_end='2023-12-31',
-        source_id='CSI',
+        source_id='SSE',
         query_success=True,
         empty_result=True,
         empty_result_verified=True,
         raw_result_file="raw.json",
         raw_result_hash=h_raw,
         response_file="resp.json",
-        response_hash=h_resp
+        response_hash=h_resp,
+        source_metadata_file="raw.json.source.json",
+        acquisition_receipt_file="raw.json.receipt.json"
     )
     prov.register_coverage_record(ev)
     
@@ -610,6 +664,7 @@ def test_certification_policy_truth_table():
         corporate_action_manifest_hash_verified=True,
         manifest_chain_verified=True,
         corporate_action_provenance_verified=True,
+        market_data_provenance_verified=True,
         data_source="csi_official_direct",
         benchmark_source="csi_000300_official",
         actual_backtest_start_date="2020-01-01",
@@ -667,6 +722,7 @@ def test_certification_policy_truth_table():
         corporate_action_manifest_hash_verified=True,
         manifest_chain_verified=True,
         corporate_action_provenance_verified=True,
+        market_data_provenance_verified=True,
         data_source="csi_official_direct",
         benchmark_source="csi_000300_official",
         actual_backtest_start_date="2020-01-01",

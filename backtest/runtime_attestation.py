@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, Dict, Any, Tuple, List, Union
 
-from backtest.audit import AuditMetadata, CertificationPolicy
+from backtest.audit import AuditMetadata, CertificationPolicy, compute_canonical_runtime_config_hash
 from data.crypto_anchor import (
     TRUSTED_KEY_REGISTRY,
     DOMAIN_SEPARATOR_RUNTIME,
@@ -190,7 +190,7 @@ class RuntimeAttestationEnvelope:
         require_clean_git: bool = True,
         verify_current_git_binding: bool = True,
         is_historical: bool = False,
-        require_trust_root: bool = False,
+        require_trust_root: bool = True,
         external_keyring_pin: Optional[str] = None
     ) -> Tuple[bool, List[str]]:
         """

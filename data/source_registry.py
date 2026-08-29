@@ -413,8 +413,51 @@ class AcquisitionReceipt:
 
 
 # =========================================================================
-# 4. 公司行为审计证据实体 (CorporateActionCoverageEvidence - Fail-Closed)
+# 4. 公司行为响应独立解析器与审计证据实体 (Fail-Closed)
 # =========================================================================
+
+class CorporateActionResponseParser:
+    """对原始数据文件/API响应内容进行独立解析，提取事件数并推导真实 Zero Event 结论 (P0 Derived Proof)"""
+    @classmethod
+    def parse_response_content(cls, content_bytes: bytes, file_format: str = "json") -> Tuple[List[Dict[str, Any]], List[str]]:
+        errors = []
+        events = []
+        if not content_bytes or len(content_bytes.strip()) == 0:
+            return [], []
+        try:
+            trimmed = content_bytes.strip()
+            if trimmed.startswith(b"{") or trimmed.startswith(b"["):
+                data = json.loads(content_bytes.decode("utf-8"))
+                if isinstance(data, list):
+                    events = data
+                elif isinstance(data, dict):
+                    if "data" in data and isinstance(data["data"], list):
+                        events = data["data"]
+                    elif "items" in data and isinstance(data["items"], list):
+                        events = data["items"]
+                    elif "events" in data and isinstance(data["events"], list):
+                        events = data["events"]
+                    elif "result" in data and isinstance(data["result"], list):
+                        events = data["result"]
+                    elif len(data) == 0:
+                        events = []
+                    else:
+                        if "symbol" in data and "ex_date" in data:
+                            events = [data]
+                        else:
+                            events = []
+            elif b"," in trimmed or b"\n" in trimmed:
+                import io
+                import pandas as pd
+                df = pd.read_csv(io.BytesIO(content_bytes))
+                if not df.empty:
+                    events = df.to_dict(orient="records")
+                else:
+                    events = []
+        except Exception as e:
+            errors.append(f"response_parsing_error_{str(e)}")
+        return events, errors
+
 
 @dataclass
 class CorporateActionCoverageEvidence:
@@ -445,7 +488,8 @@ class CorporateActionCoverageEvidence:
         backtest_end: str,
         evidence_dir: Optional[Path] = None
     ) -> Tuple[bool, List[str]]:
-        """检验该证据是否足以证明指定标的在指定回测区间内确实不存在任何除权除息事件"""
+        """检验该证据是否足以证明指定标的在指定回测区间内确实不存在任何除权除息事件 (P0 必须完整闭环)"""
+        from data.provenance import SourceEvidenceMetadata
         errors = []
 
         if not self.production_eligible:
@@ -460,11 +504,18 @@ class CorporateActionCoverageEvidence:
         if not self.empty_result:
             errors.append("has_corporate_actions_cannot_claim_zero_event")
 
-        if not self.empty_result_verified:
-            errors.append("empty_result_not_verified_by_audit")
+        # P0: 强制要求采集回执与元数据文件，绝不可缺省跳过
+        if not self.acquisition_receipt_file:
+            errors.append("corporate_action_acquisition_receipt_required")
 
-        if not self.raw_result_hash or not self.response_hash:
-            errors.append("missing_raw_response_hash")
+        if not self.source_metadata_file:
+            errors.append("corporate_action_source_metadata_required")
+
+        if not self.raw_result_file or not self.raw_result_hash:
+            errors.append("missing_raw_result_file_or_hash")
+
+        if not self.response_file or not self.response_hash:
+            errors.append("missing_response_file_or_hash")
 
         if self.source_id not in TRUSTED_SOURCE_REGISTRY:
             errors.append(f"untrusted_source_id_{self.source_id}")
@@ -479,7 +530,7 @@ class CorporateActionCoverageEvidence:
             errors.append("evidence_dir_missing_required_for_production_verification")
             return False, errors
 
-        # 路径安全约束与物理文件哈希校验
+        # 1. 路径安全约束与物理文件哈希校验
         raw_p = safe_resolve_path(evidence_dir, self.raw_result_file) if self.raw_result_file else None
         if not raw_p or not raw_p.exists():
             errors.append(f"corporate_action_raw_result_file_missing_or_traversal_{self.raw_result_file}")
@@ -502,7 +553,33 @@ class CorporateActionCoverageEvidence:
             if h_resp.hexdigest().lower() != str(self.response_hash).lower():
                 errors.append(f"corporate_action_response_file_hash_mismatch_{self.response_hash}_vs_{h_resp.hexdigest()}")
 
-        # 来源真实性与可信采集回执认证 (Source Authenticity & Trust Anchor Verification)
+            # 2. 从响应真实内容解析推导 Zero Event (拒绝裸布尔自证)
+            with open(resp_p, "rb") as f:
+                resp_bytes = f.read()
+            parsed_events, parse_errs = CorporateActionResponseParser.parse_response_content(resp_bytes)
+            if parse_errs:
+                errors.extend(parse_errs)
+                self.empty_result_verified = False
+            elif len(parsed_events) > 0:
+                errors.append(f"response_contains_{len(parsed_events)}_events_cannot_claim_zero_event")
+                self.empty_result_verified = False
+            else:
+                self.empty_result_verified = True
+
+        # 3. 来源元数据 SourceEvidenceMetadata 强核验
+        s_meta = None
+        if self.source_metadata_file and raw_p and raw_p.exists():
+            meta_p = safe_resolve_path(evidence_dir, self.source_metadata_file)
+            if not meta_p or not meta_p.exists():
+                errors.append(f"corporate_action_source_metadata_missing_{self.source_metadata_file}")
+            else:
+                s_meta, m_errs = SourceEvidenceMetadata.load_and_verify(meta_p, raw_p)
+                if not s_meta:
+                    errors.extend(m_errs)
+                elif s_meta.source_id.strip().upper() != self.source_id.strip().upper():
+                    errors.append(f"source_metadata_id_mismatch_{s_meta.source_id}_vs_{self.source_id}")
+
+        # 4. 可信采集回执 AcquisitionReceipt & Trust Anchor 强核验
         if self.acquisition_receipt_file and raw_p and raw_p.exists():
             rec_p = safe_resolve_path(evidence_dir, self.acquisition_receipt_file)
             if not rec_p or not rec_p.exists():
@@ -515,8 +592,14 @@ class CorporateActionCoverageEvidence:
                     r_ok, v_errs = receipt.verify_against_file(raw_p)
                     if not r_ok:
                         errors.extend(v_errs)
+                    if s_meta:
+                        b_ok, b_errs = receipt.verify_exact_binding(s_meta, raw_p)
+                        if not b_ok:
+                            errors.extend(b_errs)
                     if not receipt.trust_anchor_verified:
                         errors.append("corporate_action_trust_anchor_unverified")
+                    if receipt.source_id.strip().upper() != self.source_id.strip().upper():
+                        errors.append(f"receipt_source_id_mismatch_{receipt.source_id}_vs_{self.source_id}")
 
         return len(errors) == 0, errors
 
@@ -527,7 +610,8 @@ class CorporateActionCoverageEvidence:
         backtest_end: str,
         evidence_dir: Optional[Path] = None
     ) -> Tuple[bool, List[str]]:
-        """非空公司行为事件数据集物理证据与来源认证核验"""
+        """非空公司行为事件数据集物理证据与来源完整认证核验 (P0)"""
+        from data.provenance import SourceEvidenceMetadata
         errors = []
         if not self.production_eligible:
             errors.append("evidence_marked_non_production_eligible")
@@ -537,6 +621,18 @@ class CorporateActionCoverageEvidence:
 
         if not self.query_success:
             errors.append("query_not_successful")
+
+        if not self.acquisition_receipt_file:
+            errors.append("corporate_action_acquisition_receipt_required")
+
+        if not self.source_metadata_file:
+            errors.append("corporate_action_source_metadata_required")
+
+        if not self.raw_result_file or not self.raw_result_hash:
+            errors.append("missing_raw_result_file_or_hash")
+
+        if not self.response_file or not self.response_hash:
+            errors.append("missing_response_file_or_hash")
 
         if self.source_id not in TRUSTED_SOURCE_REGISTRY:
             errors.append(f"untrusted_source_id_{self.source_id}")
@@ -561,5 +657,50 @@ class CorporateActionCoverageEvidence:
                     h.update(chunk)
             if h.hexdigest().lower() != str(self.raw_result_hash).lower():
                 errors.append(f"corporate_action_raw_file_hash_mismatch_{self.raw_result_hash}_vs_{h.hexdigest()}")
+
+        resp_p = safe_resolve_path(evidence_dir, self.response_file) if self.response_file else None
+        if not resp_p or not resp_p.exists():
+            errors.append(f"corporate_action_response_file_missing_or_traversal_{self.response_file}")
+        else:
+            h_resp = hashlib.sha256()
+            with open(resp_p, "rb") as f:
+                while chunk := f.read(65536):
+                    h_resp.update(chunk)
+            if h_resp.hexdigest().lower() != str(self.response_hash).lower():
+                errors.append(f"corporate_action_response_file_hash_mismatch_{self.response_hash}_vs_{h_resp.hexdigest()}")
+
+        # 来源元数据与采集回执
+        s_meta = None
+        if self.source_metadata_file and raw_p and raw_p.exists():
+            meta_p = safe_resolve_path(evidence_dir, self.source_metadata_file)
+            if not meta_p or not meta_p.exists():
+                errors.append(f"corporate_action_source_metadata_missing_{self.source_metadata_file}")
+            else:
+                s_meta, m_errs = SourceEvidenceMetadata.load_and_verify(meta_p, raw_p)
+                if not s_meta:
+                    errors.extend(m_errs)
+                elif s_meta.source_id.strip().upper() != self.source_id.strip().upper():
+                    errors.append(f"source_metadata_id_mismatch_{s_meta.source_id}_vs_{self.source_id}")
+
+        if self.acquisition_receipt_file and raw_p and raw_p.exists():
+            rec_p = safe_resolve_path(evidence_dir, self.acquisition_receipt_file)
+            if not rec_p or not rec_p.exists():
+                errors.append(f"corporate_action_receipt_file_missing_{self.acquisition_receipt_file}")
+            else:
+                receipt, r_errs = AcquisitionReceipt.load_from_file(rec_p)
+                if not receipt:
+                    errors.extend(r_errs)
+                else:
+                    r_ok, v_errs = receipt.verify_against_file(raw_p)
+                    if not r_ok:
+                        errors.extend(v_errs)
+                    if s_meta:
+                        b_ok, b_errs = receipt.verify_exact_binding(s_meta, raw_p)
+                        if not b_ok:
+                            errors.extend(b_errs)
+                    if not receipt.trust_anchor_verified:
+                        errors.append("corporate_action_trust_anchor_unverified")
+                    if receipt.source_id.strip().upper() != self.source_id.strip().upper():
+                        errors.append(f"receipt_source_id_mismatch_{receipt.source_id}_vs_{self.source_id}")
 
         return len(errors) == 0, errors

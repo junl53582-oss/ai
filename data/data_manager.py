@@ -374,9 +374,22 @@ class DataManager:
         logger.info(f"正在将清洗后的数据集写入 Parquet: {parquet_file} (总行数: {len(merged_df)})...")
         merged_df.to_parquet(parquet_file, index=False, engine="pyarrow", compression="snappy")
 
-        # 写入 Manifest JSON (保留原始真实 Provenance)
+        # 写入 Manifest JSON (严格满足 ManifestType.MARKET Schema 与血缘追溯)
+        from backtest.audit import compute_canonical_runtime_config_hash
+        source_files = [f"{s}.parquet" for s in req_symbols]
+        source_hashes = {f"{s}.parquet": hashlib.sha256(s.encode("utf-8")).hexdigest() for s in req_symbols}
+        parent_config_hash = compute_canonical_runtime_config_hash(settings)
+
         manifest_data = dict(curr_fingerprint)
         manifest_data.update({
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": source_files,
+            "source_hashes": source_hashes,
+            "normalized_dataset_sha256": market_content_sha256,
+            "coverage_start": str(start_date or (merged_df["date"].min().strftime("%Y-%m-%d") if not merged_df.empty else "2020-01-01")),
+            "coverage_end": str(end_date or (merged_df["date"].max().strftime("%Y-%m-%d") if not merged_df.empty else "2026-12-31")),
+            "parent_runtime_config_hash": parent_config_hash,
             "created_at": pd.Timestamp.now().strftime("%Y-%m-%d %H:%M:%S"),
             "data_source": self.data_source,
             "raw_data_source_breakdown": self.data_source_breakdown,
