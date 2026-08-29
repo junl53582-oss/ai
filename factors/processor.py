@@ -12,7 +12,7 @@ import hashlib
 import os
 import time
 from pathlib import Path
-from typing import List, Optional, Tuple, Dict, Any
+from typing import List, Optional, Tuple, Dict, Any, Union
 import pandas as pd
 import numpy as np
 
@@ -183,6 +183,41 @@ class FactorProcessor:
         self.future_adjustment_leakage_test_passed: bool = False
         self.empty_universe_day_count: int = 0
         self.unknown_membership_row_count: int = 0
+
+        # Manifest 校验指纹与实体 (P0)
+        self.manifest_hash: Optional[str] = None
+        self.manifest_hash_verified: bool = False
+        self.manifest_verification_result: Optional[Any] = None
+
+    def verify_factor_manifest(
+        self,
+        manifest_path: Optional[Union[str, Path]] = None,
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None,
+        parent_market_manifest_hash: Optional[str] = None,
+        parent_universe_manifest_hash: Optional[str] = None
+    ) -> Any:
+        """从磁盘实际校验因子 Manifest 物理文件、严格 Schema 与父链"""
+        from backtest.audit import ManifestVerifier, ManifestType
+        target_path = Path(manifest_path) if manifest_path else self.factor_dir / "factor_matrix.manifest.json"
+        parents = {}
+        if parent_runtime_config_hash:
+            parents["parent_runtime_config_hash"] = parent_runtime_config_hash
+        if parent_market_manifest_hash:
+            parents["parent_market_manifest_hash"] = parent_market_manifest_hash
+        if parent_universe_manifest_hash:
+            parents["parent_universe_manifest_hash"] = parent_universe_manifest_hash
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=target_path,
+            expected_hash=expected_hash,
+            expected_parents=parents if parents else None,
+            manifest_type=ManifestType.FACTOR
+        )
+        self.manifest_verification_result = res
+        self.manifest_hash = res.actual_hash
+        self.manifest_hash_verified = res.hash_verified and res.schema_verified
+        return res
 
     def cross_sectional_standardize(
         self,

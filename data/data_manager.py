@@ -88,10 +88,34 @@ class DataManager:
         self.empty_universe_day_count: int = 0
         self.unknown_membership_row_count: int = 0
 
-        # 缓存校验指纹
+        # 缓存校验指纹与 Manifest 验证实体 (P0)
         self.cache_fingerprint_verified: bool = False
-        self.cache_manifest_version: str = "2.0"
+        self.cache_manifest_version: str = "3.1"
         self.raw_data_provenance_preserved: bool = False
+        self.manifest_hash: Optional[str] = None
+        self.manifest_hash_verified: bool = False
+        self.manifest_verification_result: Optional[Any] = None
+
+    def verify_market_manifest(
+        self,
+        manifest_path: Optional[Union[str, Path]] = None,
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None
+    ) -> Any:
+        """从磁盘实际校验行情 Manifest 物理文件、严格 Schema 与父链"""
+        from backtest.audit import ManifestVerifier, ManifestType
+        target_path = Path(manifest_path) if manifest_path else self.parquet_dir / "market_daily.manifest.json"
+        parents = {"parent_runtime_config_hash": parent_runtime_config_hash} if parent_runtime_config_hash else None
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=target_path,
+            expected_hash=expected_hash,
+            expected_parents=parents,
+            manifest_type=ManifestType.MARKET
+        )
+        self.manifest_verification_result = res
+        self.manifest_hash = res.actual_hash
+        self.manifest_hash_verified = res.hash_verified and res.schema_verified
+        return res
 
     def get_trading_calendar(self) -> List[pd.Timestamp]:
         """获取 A 股交易日历序列，并如实标记来源真实性与资质等级"""

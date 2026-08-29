@@ -140,6 +140,8 @@ class PointInTimeUniverseProvider(UniverseProvider):
         self.actual_backtest_end_date: Optional[str] = None
 
         self.universe_manifest_hash: Optional[str] = manifest_hash
+        self.universe_manifest_hash_verified: bool = False
+        self.manifest_verification_result: Optional[Any] = None
 
         # P0: 认证属性严格且唯一从 verification_result 派生，彻底删除 legacy kwargs 后门
         if verification_result is not None:
@@ -162,6 +164,26 @@ class PointInTimeUniverseProvider(UniverseProvider):
         if self.baseline_snapshot_date and self.baseline_symbols:
             for sym in self.baseline_symbols:
                 self.add_constituent_change(self.baseline_snapshot_date, sym, "IN")
+
+    def verify_universe_manifest(
+        self,
+        manifest_path: Union[str, Path],
+        expected_hash: Optional[str] = None,
+        parent_runtime_config_hash: Optional[str] = None
+    ) -> Any:
+        """从磁盘实际校验 Universe Manifest 物理文件、严格 Schema 与父链"""
+        from backtest.audit import ManifestVerifier, ManifestType
+        parents = {"parent_runtime_config_hash": parent_runtime_config_hash} if parent_runtime_config_hash else None
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=manifest_path,
+            expected_hash=expected_hash,
+            expected_parents=parents,
+            manifest_type=ManifestType.UNIVERSE
+        )
+        self.manifest_verification_result = res
+        self.universe_manifest_hash = res.actual_hash
+        self.universe_manifest_hash_verified = res.hash_verified and res.schema_verified
+        return res
 
         if changes_df is not None and not changes_df.empty:
             self.load_changes_from_dataframe(changes_df)

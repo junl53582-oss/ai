@@ -35,7 +35,10 @@ from data.crypto_anchor import (
     ed25519_publickey_pure,
     ed25519_sign_pure,
     ed25519_verify_pure,
-    generate_keypair
+    generate_keypair,
+    compute_canonical_keyring_hash,
+    verify_trust_root,
+    safe_resolve_path
 )
 from data.source_registry import (
     TRUSTED_SOURCE_REGISTRY,
@@ -56,7 +59,9 @@ from data.provenance import (
     CSIConstituentSnapshotParser,
     PITUniverseStateMachineVerifier
 )
+from data.data_manager import DataManager
 from data.universe_provider import PointInTimeUniverseProvider, StaticUniverseProvider, create_universe_provider
+from factors.processor import FactorProcessor
 from backtest.audit import (
     AuditMetadata,
     CertificationPolicy,
@@ -64,7 +69,8 @@ from backtest.audit import (
     NON_CERTIFICATION_OVERRIDE_FIELDS,
     compute_canonical_runtime_config_hash,
     ManifestVerifier,
-    ManifestVerificationResult
+    ManifestVerificationResult,
+    ManifestType
 )
 from backtest.runtime_attestation import (
     RuntimeAttestationEnvelope,
@@ -76,7 +82,8 @@ from strategy.corporate_actions import (
     CorporateAction,
     CorporateActionCoverageRecord,
     CorporateActionProvider,
-    CorporateActionDatasetVerifier
+    CorporateActionDatasetVerifier,
+    CorporateActionDatasetProvenanceVerifier
 )
 from config.settings import QuantConfig, settings
 
@@ -146,19 +153,19 @@ class TestAdversarialCertification:
         """攻击: 使用钓鱼域名冒充官方"""
         ok, errs = validate_trusted_url("https://csindex.com.cn.attacker.com/data.csv", ["csindex.com.cn"])
         assert ok is False
-        assert any("not_in_allowed_domains" in e for e in errs)
+        assert any("untrusted_domain" in e for e in errs)
 
     def test_ip_literal_url_rejected(self):
         """攻击: 使用裸 IP 地址伪装官方数据源"""
         ok, errs = validate_trusted_url("https://1.2.3.4/data.csv", ["csindex.com.cn"])
         assert ok is False
-        assert any("ip_literal_host_rejected" in e for e in errs)
+        assert any("ip_literal_host" in e for e in errs)
 
     def test_userinfo_in_url_rejected(self):
         """攻击: 使用包含 @ 符号的混淆 URL"""
         ok, errs = validate_trusted_url("https://csindex.com.cn@evil.com/data.csv", ["csindex.com.cn"])
         assert ok is False
-        assert any("suspicious_userinfo" in e for e in errs)
+        assert any("userinfo" in e for e in errs)
 
     # =========================================================================
     # 2. ATTACK 1: Operator Fake Signature 攻击防御 (Ed25519 真验签)
@@ -525,7 +532,7 @@ class TestAdversarialCertification:
 
     def test_legacy_corporate_record_non_certifying(self):
         """红队 ATTACK 4: Legacy CorporateActionCoverageRecord 绝不能赋予生产覆盖资格 (P0)"""
-        provider = CorporateActionProvider(coverage_start="2020-01-01", coverage_end="2024-12-31")
+        provider = CorporateActionProvider()
         rec = CorporateActionCoverageRecord(
             symbol="600519.SH",
             query_start="2020-01-01",
@@ -656,9 +663,9 @@ class TestAdversarialCertification:
             "source_files": ["raw_action.csv"],
             "source_hashes": {"raw_action.csv": h_raw}
         }
-        ok, fails, details = CorporateActionDatasetVerifier.verify_dataset(df, manifest, raw_evidence_dir=tmp_path)
-        assert ok is True
-        assert len(fails) == 0
+        res = CorporateActionDatasetVerifier.verify_dataset(df, manifest, raw_evidence_dir=tmp_path)
+        assert res.dataset_hash_verified is True
+        assert len(res.failed_checks) == 0
 
     # =========================================================================
     # 7. ATTACK 6: Fake Manifest Hash 字符串攻击防御 (物理 Manifest 与 Parent Chain)
@@ -969,3 +976,383 @@ class TestAdversarialCertification:
         provider = PointInTimeUniverseProvider()
         provider.set_baseline_snapshot("2020-01-01", ["600519.SH"] * 300)
         assert provider.universe_provenance_verified is False
+
+    def test_test_fixture_provider_never_production_verified(self):
+        """测试 Fixture 绝不可生产认证: 来源为 TEST_FIXTURE 时 Fail-Closed"""
+        provider = PointInTimeUniverseProvider.for_test_fixture(
+            fallback_symbols=["600519.SH"],
+            coverage_start="2020-01-01",
+            coverage_end="2024-12-31"
+        )
+        assert provider.universe_provenance_verified is False
+        assert provider.universe_source_class == SourceClass.TEST_FIXTURE.value
+
+    # =========================================================================
+    # 13. External Trust Root Pinning & Agent Replacement Attack Tests (P0)
+    # =========================================================================
+
+    def test_external_trust_root_missing_blocks_verified(self, monkeypatch):
+        """攻击: 未设置 QUANT_TRUSTED_KEYRING_SHA256 环境变量时，最高认证必须 Fail-Closed"""
+        monkeypatch.delenv("QUANT_TRUSTED_KEYRING_SHA256", raising=False)
+        is_ok, actual_h, pin_h, errors = verify_trust_root()
+        assert is_ok is False
+        assert pin_h is None
+        assert any("missing_external_trust_root_pin" in e for e in errors)
+
+        meta = AuditMetadata()
+        meta.trust_root_verified = is_ok
+        rating, failed = CertificationPolicy.evaluate(meta)
+        assert rating == "HIGH_RISK"
+        assert "external_trust_root_unverified" in failed
+
+    def test_external_trust_root_mismatch_blocks_verified(self, monkeypatch):
+        """攻击: 外部 Pin 与仓库公钥环哈希不匹配时，判定为 TAMPERED 拒绝 VERIFIED"""
+        monkeypatch.setenv("QUANT_TRUSTED_KEYRING_SHA256", "0" * 64)
+        is_ok, actual_h, pin_h, errors = verify_trust_root()
+        assert is_ok is False
+        assert any("trust_root_tampered" in e for e in errors)
+
+    def test_agent_replaces_runtime_public_key_but_external_pin_rejects(self, monkeypatch):
+        """
+        红队核心攻击 A: Agent 拥有仓库修改权限，临时生成新密钥对 B 并替换仓库中的公钥表，
+        使用私钥 B 签发数学合法的 Runtime 信封，但外部 Trust Root Pin 依然锁定旧 Keyring。
+        系统必须识别 Trust Root Mismatch 并 Fail-Closed。
+        """
+        # 1. 记录原始合法 Keyring Hash 作为外部 Pin
+        original_pin = compute_canonical_keyring_hash()
+        monkeypatch.setenv("QUANT_TRUSTED_KEYRING_SHA256", original_pin)
+
+        # 2. 攻击者生成新密钥对 B
+        sk_b, pk_b = generate_keypair()
+
+        # 3. 攻击者篡改仓库公钥表为 pk_b
+        tampered_keyring = dict(TRUSTED_KEY_REGISTRY)
+        tampered_keyring["PROD_RUNTIME_KEY_2026_V1"] = dict(tampered_keyring["PROD_RUNTIME_KEY_2026_V1"])
+        tampered_keyring["PROD_RUNTIME_KEY_2026_V1"]["public_key_hex"] = pk_b.hex()
+
+        # 4. 核验 Trust Root: 发现仓库已篡改
+        is_ok, actual_tampered_h, _, errors = verify_trust_root(keyring=tampered_keyring)
+        assert is_ok is False
+        assert any("trust_root_tampered" in e for e in errors)
+
+    def test_agent_replaces_all_public_keys_but_external_pin_rejects(self, monkeypatch):
+        """红队核心攻击 B: Agent 同时替换全部 Runtime, Downloader, Operator 公钥"""
+        original_pin = compute_canonical_keyring_hash()
+        monkeypatch.setenv("QUANT_TRUSTED_KEYRING_SHA256", original_pin)
+
+        tampered = {}
+        for k, v in TRUSTED_KEY_REGISTRY.items():
+            _, pk = generate_keypair()
+            item = dict(v)
+            item["public_key_hex"] = pk.hex()
+            tampered[k] = item
+
+        is_ok, _, _, errors = verify_trust_root(keyring=tampered)
+        assert is_ok is False
+        assert any("trust_root_tampered" in e for e in errors)
+
+    def test_runtime_envelope_binds_trusted_keyring_hash(self):
+        """防伪验证: RuntimeAttestationEnvelope 待签名载荷必须绑定 trusted_keyring_hash"""
+        meta = AuditMetadata()
+        envelope = RuntimeAttestationEnvelope(
+            runtime_instance_id="test_run",
+            audit_payload_hash="a" * 64,
+            trusted_keyring_hash=compute_canonical_keyring_hash()
+        )
+        canonical_bytes = envelope.compute_canonical_bytes()
+        assert b"trusted_keyring_hash" in canonical_bytes
+        assert compute_canonical_keyring_hash().encode("utf-8") in canonical_bytes
+
+    def test_trust_root_cannot_be_auto_initialized(self, monkeypatch):
+        """安全原则: 缺少 Pin 时系统绝不自动执行环境变量写入或假定当前哈希合法"""
+        monkeypatch.delenv("QUANT_TRUSTED_KEYRING_SHA256", raising=False)
+        is_ok, _, pin, _ = verify_trust_root()
+        assert is_ok is False
+        assert pin is None
+        assert os.environ.get("QUANT_TRUSTED_KEYRING_SHA256") is None
+
+    # =========================================================================
+    # 14. Corporate Action Source Authenticity & Provenance Tests (P0)
+    # =========================================================================
+
+    def test_corporate_zero_event_requires_authenticated_receipt(self, tmp_path):
+        """攻击: 本地构造正确哈希的零事件文件，但缺少 AcquisitionReceipt 无法获得完整认证"""
+        raw_f = tmp_path / "raw.json"
+        raw_f.write_text("{}", encoding="utf-8")
+        h_raw = hashlib.sha256(raw_f.read_bytes()).hexdigest()
+
+        resp_f = tmp_path / "resp.json"
+        resp_f.write_text("{}", encoding="utf-8")
+        h_resp = hashlib.sha256(resp_f.read_bytes()).hexdigest()
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2024-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            empty_result_verified=True,
+            raw_result_file="raw.json",
+            raw_result_hash=h_raw,
+            response_file="resp.json",
+            response_hash=h_resp,
+            acquisition_receipt_file="missing_receipt.json"
+        )
+        is_valid, errors = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2024-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("receipt_file_missing" in e for e in errors)
+
+    def test_fake_zero_event_files_with_correct_hash_rejected(self, tmp_path):
+        """攻击: 伪造虚假未签名回执时，零事件证明必须被拒绝"""
+        raw_f = tmp_path / "raw.json"
+        raw_f.write_text("{}", encoding="utf-8")
+        h_raw = hashlib.sha256(raw_f.read_bytes()).hexdigest()
+
+        resp_f = tmp_path / "resp.json"
+        resp_f.write_text("{}", encoding="utf-8")
+        h_resp = hashlib.sha256(resp_f.read_bytes()).hexdigest()
+
+        rec_f = tmp_path / "raw.json.receipt.json"
+        rec_f.write_text(json.dumps({
+            "receipt_id": "REC_001",
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/raw.json",
+            "requested_at": "2026-01-01T00:00:00Z",
+            "downloaded_at": "2026-01-01T00:00:00Z",
+            "http_status": 200,
+            "content_length": 2,
+            "raw_sha256": h_raw,
+            "original_filename": "raw.json",
+            "trust_anchor_type": "SELF_DIGEST"
+        }), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2024-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            empty_result_verified=True,
+            raw_result_file="raw.json",
+            raw_result_hash=h_raw,
+            response_file="resp.json",
+            response_hash=h_resp,
+            acquisition_receipt_file="raw.json.receipt.json"
+        )
+        is_valid, errors = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2024-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("trust_anchor_unverified" in e for e in errors)
+
+    def test_nonempty_corporate_coverage_requires_authenticated_dataset(self):
+        """非空公司行为覆盖必须具备认证的数据集与证据"""
+        prov = CorporateActionProvider()
+        prov.set_required_symbols(["600519.SH"])
+        # 未注册任何有效 evidence
+        assert prov.validate_coverage() is False
+        assert prov.coverage_complete is False
+
+    def test_corporate_dataset_source_metadata_required(self, tmp_path):
+        """公司行为数据集 Manifest 校验必须包含 source_files 与 source_hashes"""
+        df = pd.DataFrame([{"symbol": "600519.SH", "ex_date": "2022-06-01", "action_type": "CASH_DIVIDEND", "cash_dividend_per_share": 21.675, "share_ratio": 0.0}])
+        manifest_data = {
+            "normalized_dataset_sha256": CorporateActionDatasetProvenanceVerifier.compute_dataframe_sha256(df),
+            "source_files": ["actions.csv"],
+            "source_hashes": {}  # 集合不一致
+        }
+        res = CorporateActionDatasetProvenanceVerifier.verify_dataset(df, manifest_data, raw_evidence_dir=tmp_path)
+        assert res.source_authentication_verified is False
+        assert any("mismatch" in e for e in res.failed_checks)
+
+    # =========================================================================
+    # 15. Manifest Expected Hash & Strict Schema Tests (P0)
+    # =========================================================================
+
+    def test_manifest_expected_hash_missing_not_verified(self, tmp_path):
+        """门禁规则: ManifestVerifier 在不传 expected_hash 时必须判 hash_verified=False"""
+        m_file = tmp_path / "market.manifest.json"
+        m_file.write_text(json.dumps({"schema_version": "3.1", "data": 123}), encoding="utf-8")
+
+        res = ManifestVerifier.verify_manifest_file(m_file, expected_hash=None)
+        assert res.hash_verified is False
+        assert "manifest_expected_hash_missing" in res.failed_checks
+
+    def test_empty_manifest_schema_rejected(self, tmp_path):
+        """攻击: 空 JSON {} 必须被严格 Schema 校验器拒绝"""
+        m_file = tmp_path / "empty.manifest.json"
+        m_file.write_text("{}", encoding="utf-8")
+        h = hashlib.sha256(b"{}").hexdigest()
+
+        res = ManifestVerifier.verify_manifest_file(m_file, expected_hash=h, manifest_type=ManifestType.MARKET)
+        assert res.schema_verified is False
+        assert any("empty_or_not_dict" in e or "missing_required_fields" in e for e in res.failed_checks)
+
+    def test_manifest_self_hash_without_parent_anchor_rejected(self, tmp_path):
+        """攻击: 程序自算 hash 作为 expected_hash 但父链断裂，必须阻断"""
+        m_file = tmp_path / "factor.manifest.json"
+        m_file.write_text(json.dumps({
+            "schema_version": "3.1",
+            "dataset_name": "factor_matrix",
+            "factor_columns": ["F1"],
+            "dataset_sha256": "0" * 64,
+            "parent_runtime_config_hash": "a" * 64,
+            "parent_market_manifest_hash": "b" * 64,
+            "parent_universe_manifest_hash": "c" * 64,
+            "created_at": "2026-01-01T00:00:00Z"
+        }), encoding="utf-8")
+        h = ManifestVerifier.compute_manifest_hash(m_file)
+
+        # 传入错误的父哈希要求
+        res = ManifestVerifier.verify_manifest_file(
+            m_file,
+            expected_hash=h,
+            expected_parents={"parent_runtime_config_hash": "f" * 64},
+            manifest_type=ManifestType.FACTOR
+        )
+        assert res.hash_verified is True
+        assert res.parent_chain_verified is False
+
+    def test_market_manifest_pipeline_integration(self, tmp_path):
+        """流水线集成: DataManager 实际执行 verify_market_manifest"""
+        dm = DataManager(parquet_dir=tmp_path)
+        m_file = tmp_path / "market_daily.manifest.json"
+        m_content = {
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": ["000001.SZ.csv"],
+            "source_hashes": {"000001.SZ.csv": "a" * 64},
+            "normalized_dataset_sha256": "b" * 64,
+            "coverage_start": "2020-01-01",
+            "coverage_end": "2024-12-31",
+            "created_at": "2026-01-01T00:00:00Z",
+            "parent_runtime_config_hash": "c" * 64
+        }
+        m_file.write_text(json.dumps(m_content), encoding="utf-8")
+        h = ManifestVerifier.compute_manifest_hash(m_file)
+
+        res = dm.verify_market_manifest(m_file, expected_hash=h, parent_runtime_config_hash="c" * 64)
+        assert res.hash_verified is True
+        assert res.schema_verified is True
+        assert res.parent_chain_verified is True
+        assert dm.manifest_hash_verified is True
+
+    def test_factor_manifest_pipeline_integration(self, tmp_path):
+        """流水线集成: FactorProcessor 实际执行 verify_factor_manifest"""
+        fp = FactorProcessor(factor_dir=tmp_path)
+        m_file = tmp_path / "factor_matrix.manifest.json"
+        m_content = {
+            "schema_version": "3.1",
+            "dataset_name": "factor_matrix",
+            "factor_columns": ["ALPHA_001"],
+            "dataset_sha256": "a" * 64,
+            "parent_runtime_config_hash": "1" * 64,
+            "parent_market_manifest_hash": "2" * 64,
+            "parent_universe_manifest_hash": "3" * 64,
+            "created_at": "2026-01-01T00:00:00Z"
+        }
+        m_file.write_text(json.dumps(m_content), encoding="utf-8")
+        h = ManifestVerifier.compute_manifest_hash(m_file)
+
+        res = fp.verify_factor_manifest(
+            m_file,
+            expected_hash=h,
+            parent_runtime_config_hash="1" * 64,
+            parent_market_manifest_hash="2" * 64,
+            parent_universe_manifest_hash="3" * 64
+        )
+        assert res.hash_verified is True
+        assert res.schema_verified is True
+        assert res.parent_chain_verified is True
+        assert fp.manifest_hash_verified is True
+
+    def test_universe_manifest_pipeline_integration(self, tmp_path):
+        """流水线集成: PointInTimeUniverseProvider 实际执行 verify_universe_manifest"""
+        provider = PointInTimeUniverseProvider()
+        m_file = tmp_path / "universe.manifest.json"
+        m_content = {
+            "schema_version": "3.1",
+            "dataset_name": "hs300_universe",
+            "index_code": "000300.SH",
+            "baseline_snapshot_file": "baseline.json",
+            "baseline_snapshot_sha256": "b" * 64,
+            "source_files": ["changes.csv"],
+            "raw_evidence_hashes": {"changes.csv": "c" * 64},
+            "normalized_dataset_sha256": "4" * 64,
+            "coverage_start": "2020-01-01",
+            "coverage_end": "2024-12-31",
+            "created_at": "2026-01-01T00:00:00Z",
+            "parent_runtime_config_hash": "5" * 64
+        }
+        m_file.write_text(json.dumps(m_content), encoding="utf-8")
+        h = ManifestVerifier.compute_manifest_hash(m_file)
+
+        res = provider.verify_universe_manifest(m_file, expected_hash=h, parent_runtime_config_hash="5" * 64)
+        assert res.hash_verified is True
+        assert res.schema_verified is True
+        assert provider.universe_manifest_hash_verified is True
+
+    def test_raw_boolean_manifest_verified_not_trusted(self):
+        """AuditCollector: 裸布尔值必须不被直接采信，优先检验真实 ManifestVerificationResult"""
+        meta = AuditCollector.collect(config=settings)
+        assert meta.manifest_chain_verified is False
+        assert meta.runtime_config_hash_verified is False
+
+    # =========================================================================
+    # 16. Cryptography Backend & Path Traversal Security Tests (P1)
+    # =========================================================================
+
+    def test_production_crypto_fails_without_cryptography(self, monkeypatch):
+        """安全原则: 生产模式下若 cryptography 库不可用，必须 Fail-Closed 拒绝签名与验签"""
+        import data.crypto_anchor as ca
+        monkeypatch.setattr(ca, "_HAS_CRYPTOGRAPHY", False)
+
+        sig, errs = ca.sign_with_environment_key(
+            message=b"test",
+            key_id="PROD_RUNTIME_KEY_2026_V1",
+            required_purpose="RUNTIME_ATTESTATION",
+            production_mode=True,
+            explicit_private_key_hex="00" * 32
+        )
+        assert sig is None
+        assert "cryptography_library_required_for_production_signing" in errs
+
+        ok, v_errs = ca.verify_ed25519_signature(
+            message=b"test",
+            signature_hex="00" * 64,
+            key_id="PROD_RUNTIME_KEY_2026_V1",
+            required_purpose="RUNTIME_ATTESTATION",
+            production_mode=True
+        )
+        assert ok is False
+        assert "cryptography_library_required_for_production_verification" in v_errs
+
+    def test_source_path_traversal_rejected(self, tmp_path):
+        """安全原则: safe_resolve_path 必须拦截 ../ 与逃逸路径"""
+        root = tmp_path / "safe_dir"
+        root.mkdir()
+        outside_file = tmp_path / "outside.txt"
+        outside_file.write_text("secret", encoding="utf-8")
+
+        assert safe_resolve_path(root, "../outside.txt") is None
+        assert safe_resolve_path(root, "subdir/../../outside.txt") is None
+        assert safe_resolve_path(root, str(outside_file)) is None
+
+    def test_corporate_evidence_path_traversal_rejected(self, tmp_path):
+        """安全原则: CorporateActionCoverageEvidence 遇到路径穿越时必须失败"""
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2024-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            empty_result_verified=True,
+            raw_result_file="../outside.json",
+            raw_result_hash="0" * 64,
+            response_file="../resp.json",
+            response_hash="0" * 64
+        )
+        ok, errors = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2024-12-31", evidence_dir=tmp_path)
+        assert ok is False
+        assert any("traversal" in e for e in errors)

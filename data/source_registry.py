@@ -1,123 +1,184 @@
 """
-受信任数据源注册中心与采集证据规约 (data/source_registry.py)
+受信任权威数据源注册表与数据获取回执 (data/source_registry.py)
 核心原则：
-1. TRUSTED SOURCE REGISTRY: 仅允许已在注册中心备案的机构与规范域名 (CSI / SSE / SZSE / WIND / CHOICE)。
-2. OPERATOR ATTESTATION: 针对 LICENSED_VENDOR 的人工导出凭据实施 Ed25519 密码学验签，严禁明文 mock 字符串通过。
-3. EXACT BINDING: 原始证据元数据必须与物理文件、下载回执及哈希值保持双向强一致。
-4. FAIL-CLOSED: 任何未登记来源、非 HTTPS 协议、公钥用途不符或篡改一律判定为 UNKNOWN / FAIL。
+1. 真实非对称签名：支持项目可信采集签名 (Ed25519) 与持牌机构终端操作员签名 (OperatorAttestation)。
+2. 完整信任链：SourceMetadata + AcquisitionReceipt + Trust Anchor + Physical SHA256 双向强绑定。
+3. 严格路径隔离：所有证据文件解析均强制经过 safe_resolve_path 进行路径穿越防御。
+4. 命名准确性：机构名称明确为 PROJECT_REGISTERED_VENDOR_OPERATOR / PROJECT_TRUSTED_DOWNLOADER_AUTHORITY，绝不冒充交易所官方数字签名。
 """
 import re
 import json
 import hashlib
 from urllib.parse import urlparse
 from dataclasses import dataclass, asdict, field
-from typing import Dict, Any, Optional, List, Tuple, Union
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Dict, Any, Optional, List, Tuple, Union
 
 from data.crypto_anchor import (
     TRUSTED_KEY_REGISTRY,
     TRUSTED_OPERATOR_REGISTRY,
     DOMAIN_SEPARATOR_ACQUISITION,
     DOMAIN_SEPARATOR_OPERATOR,
-    DOMAIN_SEPARATOR_CORPORATE_ACTION,
     verify_ed25519_signature,
-    sign_with_environment_key
+    safe_resolve_path
 )
 
-TRUSTED_ACQUISITION_KEYS = TRUSTED_KEY_REGISTRY
+# 仅允许用于数据采集鉴证的公钥子集 (保持向后兼容)
+TRUSTED_ACQUISITION_KEYS = {
+    k: v for k, v in TRUSTED_KEY_REGISTRY.items()
+    if "ACQUISITION_RECEIPT" in v.get("allowed_purposes", [])
+}
 
 
 # =========================================================================
-# 1. 受信任数据源注册表 (Trusted Source Registry)
+# 1. 注册受信任数据源 (TRUSTED SOURCE REGISTRY)
 # =========================================================================
 
 TRUSTED_SOURCE_REGISTRY: Dict[str, Dict[str, Any]] = {
     "CSI": {
+        "canonical_source_name": "China Securities Index Co., Ltd.",
+        "short_name": "中证指数官网",
         "source_class": "OFFICIAL_PRIMARY",
-        "canonical_source_name": "China Securities Index Co., Ltd. (中证指数有限公司)",
-        "allowed_domains": ["csindex.com.cn", "www.csindex.com.cn"],
-        "allowed_evidence_types": ["INDEX_CONSTITUENT_ADJUSTMENT", "BASELINE_SNAPSHOT", "SECURITY_MASTER", "CALENDAR"]
+        "allowed_domains": [
+            "csindex.com.cn",
+            "www.csindex.com.cn"
+        ],
+        "allowed_evidence_types": [
+            "CONSTITUENT_CHANGE",
+            "CONSTITUENT_WEIGHT",
+            "CORPORATE_ACTION",
+            "INDEX_DAILY"
+        ]
     },
     "SSE": {
+        "canonical_source_name": "Shanghai Stock Exchange",
+        "short_name": "上海证券交易所",
         "source_class": "OFFICIAL_PRIMARY",
-        "canonical_source_name": "Shanghai Stock Exchange (上海证券交易所)",
-        "allowed_domains": ["sse.com.cn", "www.sse.com.cn", "query.sse.com.cn"],
-        "allowed_evidence_types": ["SECURITY_MASTER", "CALENDAR", "CORPORATE_ACTION"]
+        "allowed_domains": [
+            "sse.com.cn",
+            "www.sse.com.cn",
+            "query.sse.com.cn"
+        ],
+        "allowed_evidence_types": [
+            "CORPORATE_ACTION",
+            "LISTING_NOTICE",
+            "DELISTING_NOTICE",
+            "ST_NOTICE",
+            "TRADING_CALENDAR"
+        ]
     },
     "SZSE": {
+        "canonical_source_name": "Shenzhen Stock Exchange",
+        "short_name": "深圳证券交易所",
         "source_class": "OFFICIAL_PRIMARY",
-        "canonical_source_name": "Shenzhen Stock Exchange (深圳证券交易所)",
-        "allowed_domains": ["szse.cn", "www.szse.cn"],
-        "allowed_evidence_types": ["SECURITY_MASTER", "CALENDAR", "CORPORATE_ACTION"]
+        "allowed_domains": [
+            "szse.cn",
+            "www.szse.cn"
+        ],
+        "allowed_evidence_types": [
+            "CORPORATE_ACTION",
+            "LISTING_NOTICE",
+            "DELISTING_NOTICE",
+            "ST_NOTICE",
+            "TRADING_CALENDAR"
+        ]
     },
     "WIND": {
+        "canonical_source_name": "Wind Information Co., Ltd.",
+        "short_name": "万得金融终端",
         "source_class": "LICENSED_VENDOR",
-        "canonical_source_name": "Wind Financial Terminal (万得信息技术股份有限公司)",
-        "allowed_domains": ["wind.com.cn", "www.wind.com.cn", "api.wind.com.cn"],
-        "allowed_evidence_types": ["INDEX_CONSTITUENT_ADJUSTMENT", "BASELINE_SNAPSHOT", "SECURITY_MASTER", "CALENDAR", "CORPORATE_ACTION"]
+        "allowed_domains": [
+            "wind.com.cn",
+            "www.wind.com.cn"
+        ],
+        "allowed_evidence_types": [
+            "PIT_UNIVERSE_DATASET",
+            "HISTORICAL_ST_TIMELINE",
+            "CORPORATE_ACTION_DATASET",
+            "TRADING_CALENDAR"
+        ]
     },
     "CHOICE": {
+        "canonical_source_name": "Eastmoney Choice Financial Terminal",
+        "short_name": "东方财富 Choice 终端",
         "source_class": "LICENSED_VENDOR",
-        "canonical_source_name": "EastMoney Choice Terminal (东方财富信息股份有限公司)",
-        "allowed_domains": ["eastmoney.com", "choice.eastmoney.com"],
-        "allowed_evidence_types": ["INDEX_CONSTITUENT_ADJUSTMENT", "BASELINE_SNAPSHOT", "SECURITY_MASTER", "CALENDAR", "CORPORATE_ACTION"]
+        "allowed_domains": [
+            "choice.eastmoney.com",
+            "eastmoney.com"
+        ],
+        "allowed_evidence_types": [
+            "PIT_UNIVERSE_DATASET",
+            "HISTORICAL_ST_TIMELINE",
+            "CORPORATE_ACTION_DATASET",
+            "TRADING_CALENDAR"
+        ]
     }
 }
 
 
-def validate_trusted_url(url: Optional[str], allowed_domains: List[str]) -> Tuple[bool, List[str]]:
-    """严格校验官方/持牌来源 URL 的协议、域名及防伪装特征"""
-    if not url:
-        return False, ["missing_source_url"]
+def extract_domain(url: str) -> Optional[str]:
+    """严格解析 URL 中的域名"""
     try:
-        parsed = urlparse(str(url).strip())
-        if parsed.scheme.lower() != "https":
-            return False, [f"insecure_url_scheme_{parsed.scheme}_only_https_allowed"]
-        
+        parsed = urlparse(url.strip())
+        if not parsed.scheme or not parsed.netloc:
+            return None
         hostname = parsed.hostname
         if not hostname:
-            return False, ["missing_hostname_in_url"]
-
-        if parsed.username or parsed.password or "@" in (parsed.netloc or ""):
-            return False, ["suspicious_userinfo_or_at_symbol_in_url"]
-
-        if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", hostname):
-            return False, ["ip_literal_host_rejected_for_official_source"]
-
-        host_lower = hostname.lower()
-        matched = False
-        for allowed in allowed_domains:
-            allowed_lower = allowed.lower()
-            if host_lower == allowed_lower or host_lower.endswith("." + allowed_lower):
-                matched = True
-                break
-
-        if not matched:
-            return False, [f"domain_{hostname}_not_in_allowed_domains_{allowed_domains}"]
-
-        return True, []
-    except Exception as e:
-        return False, [f"url_validation_error_{str(e)}"]
-
-
-def extract_domain(url: Optional[str]) -> Optional[str]:
-    """从 URL 中解析提取小写域名 Hostname"""
-    if not url:
-        return None
-    try:
-        parsed = urlparse(str(url).strip())
-        return parsed.hostname.lower() if parsed.hostname else None
+            return None
+        return hostname.lower().strip()
     except Exception:
         return None
 
 
+def validate_trusted_url(url: str, allowed_domains: List[str]) -> Tuple[bool, List[str]]:
+    """严格校验 URL 合法性与域名白名单 (拒绝 HTTP、子域名仿冒、IP 与 UserInfo 混淆)"""
+    errors = []
+    if not url:
+        return False, ["url_is_empty"]
+
+    clean_url = str(url).strip()
+    try:
+        parsed = urlparse(clean_url)
+    except Exception as e:
+        return False, [f"url_parse_error_{str(e)}"]
+
+    if parsed.scheme.lower() != "https":
+        errors.append(f"insecure_url_scheme_{parsed.scheme}_must_be_https")
+
+    if parsed.username or parsed.password:
+        errors.append("url_contains_userinfo_disallowed")
+
+    hostname = parsed.hostname
+    if not hostname:
+        errors.append("url_missing_hostname")
+        return False, errors
+
+    hostname = hostname.lower().strip()
+
+    if re.match(r"^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}$", hostname) or ":" in hostname:
+        errors.append(f"ip_literal_host_disallowed_{hostname}")
+
+    matched = False
+    for allowed in allowed_domains:
+        allowed = allowed.lower().strip()
+        if hostname == allowed or hostname.endswith(f".{allowed}"):
+            matched = True
+            break
+
+    if not matched:
+        errors.append(f"untrusted_domain_{hostname}_not_in_allowed_{allowed_domains}")
+
+    return len(errors) == 0, errors
+
+
 # =========================================================================
-# 2. 持牌供应商操作员鉴证实体 (OperatorAttestation - Ed25519 Protected)
+# 2. 终端操作员凭据实体 (OperatorAttestation - Ed25519 Verified)
 # =========================================================================
 
 @dataclass
 class OperatorAttestation:
-    """持牌供应商 (Wind/Choice) 终端操作员人工导出凭据实体 (P0 Ed25519 签名防护)"""
+    """针对商业终端 (Wind/Choice) 人工导出数据的操作员数字签名凭据"""
     operator_id: str
     vendor_source_id: str
     terminal_reference: str
@@ -127,54 +188,53 @@ class OperatorAttestation:
     signature: str
 
     def compute_canonical_payload(self) -> Dict[str, Any]:
-        """确定性计算操作员鉴证 Payload"""
+        """生成规范化字典"""
         return {
-            "exported_at": str(self.exported_at),
-            "operator_id": str(self.operator_id),
-            "raw_sha256": str(self.raw_sha256).lower(),
-            "terminal_reference": str(self.terminal_reference),
-            "vendor_source_id": str(self.vendor_source_id).upper()
+            "exported_at": self.exported_at,
+            "operator_id": self.operator_id,
+            "raw_sha256": self.raw_sha256.lower().strip(),
+            "signing_key_id": self.signing_key_id,
+            "terminal_reference": self.terminal_reference,
+            "vendor_source_id": self.vendor_source_id
         }
 
     def compute_canonical_bytes(self) -> bytes:
-        payload = self.compute_canonical_payload()
-        sorted_json = json.dumps(payload, sort_keys=True, ensure_ascii=False, separators=(',', ':'))
-        return sorted_json.encode('utf-8')
+        """确定性序列化签名载荷字节流"""
+        sorted_json = json.dumps(self.compute_canonical_payload(), sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        return sorted_json.encode("utf-8")
 
     def verify_against_file(self, raw_file_path: Path) -> Tuple[bool, List[str]]:
-        """对操作员凭据进行注册合法性与 Ed25519 密码学非对称验签"""
+        """全方位校验操作员注册状态、物理文件哈希及 Ed25519 数字签名"""
         errors = []
+        if not raw_file_path.exists():
+            return False, [f"operator_attestation_target_file_missing_{raw_file_path.name}"]
 
-        # 1. 检验 operator_id 登记状态
+        # 1. 验证操作员注册状态
         if self.operator_id not in TRUSTED_OPERATOR_REGISTRY:
-            return False, [f"unregistered_operator_id_{self.operator_id}"]
+            errors.append(f"unregistered_operator_id_{self.operator_id}")
+            return False, errors
 
         op_info = TRUSTED_OPERATOR_REGISTRY[self.operator_id]
         if op_info.get("status") != "ACTIVE":
-            return False, [f"operator_status_is_{op_info.get('status')}"]
+            errors.append(f"operator_{self.operator_id}_status_is_{op_info.get('status')}")
 
-        # 2. vendor_source_id 一致性
-        if str(self.vendor_source_id).upper() != str(op_info.get("vendor_source_id")).upper():
-            errors.append(f"operator_vendor_mismatch_{self.vendor_source_id}_vs_{op_info.get('vendor_source_id')}")
+        if op_info.get("vendor_source_id") != self.vendor_source_id:
+            errors.append(f"operator_vendor_mismatch_{op_info.get('vendor_source_id')}_vs_{self.vendor_source_id}")
 
-        # 3. signing_key_id 一致性
-        if str(self.signing_key_id) != str(op_info.get("signing_key_id")):
-            errors.append(f"operator_signing_key_mismatch_{self.signing_key_id}_vs_{op_info.get('signing_key_id')}")
+        if op_info.get("signing_key_id") != self.signing_key_id:
+            errors.append(f"operator_key_id_mismatch_{op_info.get('signing_key_id')}_vs_{self.signing_key_id}")
 
-        # 4. 物理文件存在性与哈希核验
-        if not raw_file_path.exists():
-            return False, [f"raw_file_missing_{raw_file_path.name}"]
-
+        # 2. 验证物理文件哈希
         h = hashlib.sha256()
         with open(raw_file_path, "rb") as f:
             while chunk := f.read(65536):
                 h.update(chunk)
-        actual_hash = h.hexdigest()
+        actual_sha = h.hexdigest()
 
-        if actual_hash.lower() != str(self.raw_sha256).lower():
-            errors.append(f"operator_raw_sha256_mismatch_{self.raw_sha256}_vs_{actual_hash}")
+        if actual_sha.lower() != self.raw_sha256.lower():
+            errors.append(f"operator_attestation_file_hash_mismatch_{self.raw_sha256}_vs_{actual_sha}")
 
-        # 5. Ed25519 非对称密码学验签 (严禁任何 operator_signature='hello' 绕过)
+        # 3. 校验 Ed25519 签名
         msg_bytes = self.compute_canonical_bytes()
         sig_ok, sig_errs = verify_ed25519_signature(
             message=msg_bytes,
@@ -182,7 +242,8 @@ class OperatorAttestation:
             key_id=self.signing_key_id,
             required_purpose="LICENSED_VENDOR_OPERATOR_ATTESTATION",
             domain_separator=DOMAIN_SEPARATOR_OPERATOR,
-            created_at_iso=self.exported_at
+            created_at_iso=self.exported_at,
+            production_mode=True
         )
         if not sig_ok:
             errors.extend(sig_errs)
@@ -196,7 +257,7 @@ class OperatorAttestation:
 
 @dataclass
 class AcquisitionReceipt:
-    """受信任数据同步回执 (Acquisition Receipt - 包含信任锚点鉴真)"""
+    """官方原始证据下载凭据回执 (Trust Anchor Protected)"""
     receipt_id: str
     source_id: str
     source_url: str
@@ -206,10 +267,10 @@ class AcquisitionReceipt:
     content_length: int = 0
     raw_sha256: str = ""
     original_filename: str = ""
-    receipt_integrity_digest: Optional[str] = None  # 本地 JSON 完整性校验摘要 (不作为数字签名)
-    trust_anchor_type: str = "SELF_DIGEST"          # TRUSTED_KEY_ATTESTATION / OPERATOR_ATTESTED / SELF_DIGEST
+    receipt_integrity_digest: Optional[str] = None
+    trust_anchor_type: str = "SELF_DIGEST"
     signing_key_id: Optional[str] = None
-    attestation_signature: Optional[str] = None     # 由受信任私钥对完整性摘要签署的 Ed25519 签名
+    attestation_signature: Optional[str] = None
     operator_attestation: Optional[Union[Dict[str, Any], OperatorAttestation]] = None
     trust_anchor_verified: bool = False
 
@@ -263,7 +324,7 @@ class AcquisitionReceipt:
         if self.receipt_integrity_digest and self.receipt_integrity_digest.lower() != computed_digest.lower():
             errors.append("receipt_integrity_digest_tampered")
 
-        # 7. 独立 Trust Anchor 非对称密码学数字签名校验 (P0 Trust Anchor Guard)
+        # 7. 独立 Trust Anchor 非对称密码学数字签名校验
         if self.trust_anchor_type == "TRUSTED_KEY_ATTESTATION":
             if not self.signing_key_id or self.signing_key_id not in TRUSTED_KEY_REGISTRY:
                 errors.append(f"untrusted_or_missing_signing_key_id_{self.signing_key_id}")
@@ -278,7 +339,8 @@ class AcquisitionReceipt:
                     key_id=self.signing_key_id,
                     required_purpose="ACQUISITION_RECEIPT",
                     domain_separator=DOMAIN_SEPARATOR_ACQUISITION,
-                    created_at_iso=self.downloaded_at
+                    created_at_iso=self.downloaded_at,
+                    production_mode=True
                 )
                 if sig_ok:
                     self.trust_anchor_verified = True
@@ -287,7 +349,6 @@ class AcquisitionReceipt:
                     self.trust_anchor_verified = False
 
         elif self.trust_anchor_type == "OPERATOR_ATTESTED":
-            # 针对 LICENSED_VENDOR (Wind/Choice) 的终端人工导出凭据真验签
             if not self.operator_attestation:
                 errors.append("missing_operator_attestation_for_licensed_vendor")
                 self.trust_anchor_verified = False
@@ -314,7 +375,6 @@ class AcquisitionReceipt:
                 else:
                     self.trust_anchor_verified = False
         else:
-            # 默认 SELF_DIGEST：属于自签名/本地无权威证明状态，不能获得生产最高认证
             self.trust_anchor_verified = False
 
         return len(errors) == 0, errors
@@ -364,17 +424,19 @@ class CorporateActionCoverageEvidence:
     query_end: str
     source_id: str = "UNKNOWN"
     source_reference: Optional[str] = None
-    query_success: bool = False  # 严格默认为 False
+    query_success: bool = False
     raw_result_hash: Optional[str] = None
     raw_result_file: Optional[str] = None
     response_hash: Optional[str] = None
-    response_file: Optional[str] = None  # 必须绑定物理响应证明文件
-    queried_at: str = ""
+    response_file: Optional[str] = None
+    source_metadata_file: Optional[str] = None
+    acquisition_receipt_file: Optional[str] = None
+    queried_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     empty_result: bool = False
-    empty_result_verified: bool = False  # 必须严格默认为 False (Fail-Closed)
+    empty_result_verified: bool = False
     source_class: str = "UNKNOWN"
     evidence_manifest_hash: Optional[str] = None
-    production_eligible: bool = True     # Evidence 默认具备进入生产认证的候选资格
+    production_eligible: bool = True
 
     def is_valid_zero_event_proof(
         self,
@@ -413,39 +475,91 @@ class CorporateActionCoverageEvidence:
         if self.query_end < backtest_end:
             errors.append(f"query_end_{self.query_end}_before_backtest_end_{backtest_end}")
 
-        # 生产环境强制要求 evidence_dir 与真实物理文件
         if not evidence_dir:
             errors.append("evidence_dir_missing_required_for_production_verification")
-        else:
-            evidence_p = Path(evidence_dir)
-            # 1. 校验 raw_result_file
-            if not self.raw_result_file:
-                errors.append("missing_raw_result_file_in_evidence")
-            else:
-                raw_p = evidence_p / self.raw_result_file
-                if not raw_p.exists():
-                    errors.append(f"corporate_action_raw_result_file_missing_{self.raw_result_file}")
-                else:
-                    h = hashlib.sha256()
-                    with open(raw_p, "rb") as f:
-                        while chunk := f.read(65536):
-                            h.update(chunk)
-                    if h.hexdigest().lower() != str(self.raw_result_hash).lower():
-                        errors.append(f"corporate_action_raw_file_hash_mismatch_{self.raw_result_hash}_vs_{h.hexdigest()}")
+            return False, errors
 
-            # 2. 校验 response_file
-            if not self.response_file:
-                errors.append("missing_response_file_in_evidence")
+        # 路径安全约束与物理文件哈希校验
+        raw_p = safe_resolve_path(evidence_dir, self.raw_result_file) if self.raw_result_file else None
+        if not raw_p or not raw_p.exists():
+            errors.append(f"corporate_action_raw_result_file_missing_or_traversal_{self.raw_result_file}")
+        else:
+            h = hashlib.sha256()
+            with open(raw_p, "rb") as f:
+                while chunk := f.read(65536):
+                    h.update(chunk)
+            if h.hexdigest().lower() != str(self.raw_result_hash).lower():
+                errors.append(f"corporate_action_raw_file_hash_mismatch_{self.raw_result_hash}_vs_{h.hexdigest()}")
+
+        resp_p = safe_resolve_path(evidence_dir, self.response_file) if self.response_file else None
+        if not resp_p or not resp_p.exists():
+            errors.append(f"corporate_action_response_file_missing_or_traversal_{self.response_file}")
+        else:
+            h_resp = hashlib.sha256()
+            with open(resp_p, "rb") as f:
+                while chunk := f.read(65536):
+                    h_resp.update(chunk)
+            if h_resp.hexdigest().lower() != str(self.response_hash).lower():
+                errors.append(f"corporate_action_response_file_hash_mismatch_{self.response_hash}_vs_{h_resp.hexdigest()}")
+
+        # 来源真实性与可信采集回执认证 (Source Authenticity & Trust Anchor Verification)
+        if self.acquisition_receipt_file and raw_p and raw_p.exists():
+            rec_p = safe_resolve_path(evidence_dir, self.acquisition_receipt_file)
+            if not rec_p or not rec_p.exists():
+                errors.append(f"corporate_action_receipt_file_missing_{self.acquisition_receipt_file}")
             else:
-                resp_p = evidence_p / self.response_file
-                if not resp_p.exists():
-                    errors.append(f"corporate_action_response_file_missing_{self.response_file}")
+                receipt, r_errs = AcquisitionReceipt.load_from_file(rec_p)
+                if not receipt:
+                    errors.extend(r_errs)
                 else:
-                    h_resp = hashlib.sha256()
-                    with open(resp_p, "rb") as f:
-                        while chunk := f.read(65536):
-                            h_resp.update(chunk)
-                    if h_resp.hexdigest().lower() != str(self.response_hash).lower():
-                        errors.append(f"corporate_action_response_file_hash_mismatch_{self.response_hash}_vs_{h_resp.hexdigest()}")
+                    r_ok, v_errs = receipt.verify_against_file(raw_p)
+                    if not r_ok:
+                        errors.extend(v_errs)
+                    if not receipt.trust_anchor_verified:
+                        errors.append("corporate_action_trust_anchor_unverified")
+
+        return len(errors) == 0, errors
+
+    def verify_dataset_evidence(
+        self,
+        target_symbol: str,
+        backtest_start: str,
+        backtest_end: str,
+        evidence_dir: Optional[Path] = None
+    ) -> Tuple[bool, List[str]]:
+        """非空公司行为事件数据集物理证据与来源认证核验"""
+        errors = []
+        if not self.production_eligible:
+            errors.append("evidence_marked_non_production_eligible")
+
+        if self.symbol.strip().upper() != target_symbol.strip().upper():
+            errors.append(f"symbol_mismatch_{self.symbol}_vs_{target_symbol}")
+
+        if not self.query_success:
+            errors.append("query_not_successful")
+
+        if self.source_id not in TRUSTED_SOURCE_REGISTRY:
+            errors.append(f"untrusted_source_id_{self.source_id}")
+
+        if self.query_start > backtest_start:
+            errors.append(f"query_start_{self.query_start}_after_backtest_start_{backtest_start}")
+
+        if self.query_end < backtest_end:
+            errors.append(f"query_end_{self.query_end}_before_backtest_end_{backtest_end}")
+
+        if not evidence_dir:
+            errors.append("evidence_dir_missing_required_for_production_verification")
+            return False, errors
+
+        raw_p = safe_resolve_path(evidence_dir, self.raw_result_file) if self.raw_result_file else None
+        if not raw_p or not raw_p.exists():
+            errors.append(f"corporate_action_raw_result_file_missing_or_traversal_{self.raw_result_file}")
+        else:
+            h = hashlib.sha256()
+            with open(raw_p, "rb") as f:
+                while chunk := f.read(65536):
+                    h.update(chunk)
+            if h.hexdigest().lower() != str(self.raw_result_hash).lower():
+                errors.append(f"corporate_action_raw_file_hash_mismatch_{self.raw_result_hash}_vs_{h.hexdigest()}")
 
         return len(errors) == 0, errors

@@ -774,3 +774,43 @@ class BacktestEngine:
                                 reason="Top-K目标再平衡减仓"
                             ))
                             existing_order_symbols.add(sym)
+
+    @property
+    def corporate_action_source(self) -> str:
+        return getattr(self.corporate_actions, "source", "unknown")
+
+    @property
+    def corporate_action_coverage_ratio(self) -> float:
+        return getattr(self.corporate_actions, "coverage_ratio", 0.0)
+
+    @property
+    def corporate_action_coverage_complete(self) -> bool:
+        return getattr(self.corporate_actions, "coverage_complete", False)
+
+    @property
+    def corporate_action_bias_risk(self) -> bool:
+        return not self.corporate_action_coverage_complete
+
+    @property
+    def corporate_action_zero_event_proof_verified(self) -> bool:
+        return getattr(self.corporate_actions, "zero_event_proof_verified", False)
+
+    @property
+    def corporate_action_provenance_verified(self) -> bool:
+        return getattr(self.corporate_actions, "corporate_action_provenance_verified", False)
+
+    @property
+    def corporate_action_dataset_hash_verified(self) -> bool:
+        return getattr(self.corporate_actions, "corporate_action_dataset_hash_verified", False)
+
+    @property
+    def corporate_action_manifest_hash(self) -> Optional[str]:
+        return getattr(self.corporate_actions, "corporate_action_manifest_hash", None)
+
+    @property
+    def corporate_action_manifest_hash_verified(self) -> bool:
+        return getattr(self.corporate_actions, "corporate_action_manifest_hash_verified", False)
+
+    @property
+    def corporate_action_manifest_result(self) -> Optional[Any]:
+        return getattr(self.corporate_actions, "manifest_verification_result", None)

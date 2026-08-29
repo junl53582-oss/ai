@@ -1,7 +1,7 @@
 # A股量化系统 · 代码静态能力认证报告 (CAPABILITY_REPORT)
 
 > **报告版本**: Release v8.0.0-ProvenanceHarden  
-> **生成时间**: 2026-08-29 16:17:44  
+> **生成时间**: 2026-08-29 16:50:35  
 > **测试环境**: Python 3.11.9 (win32)  
 > **数据血缘架构**: 严格分离【代码静态能力证明】与【生产运行时真实性认证】
 
@@ -23,7 +23,7 @@
 | 10 | **特征缓存完整流式 SHA256 指纹校验** | `PROVEN_BY_TEST` | `tests/test_evidence_integrity.py::test_factor_cache_streaming_sha256_rejection` | `FactorProcessor, DataManager` | 采用 pd.util.hash_pandas_object 流式计算全表指纹，中间数据微小篡改立即失效 |
 | 11 | **审计元数据防篡改拦截与评级门禁 (CertificationPolicy)** | `PROVEN_BY_TEST` | `tests/test_evidence_integrity.py::test_certification_policy_truth_table` | `CertificationPolicy, AuditCollector` | 拦截针对 CERTIFICATION_FIELDS 的外部 override，评级严格由全要素门禁推导 |
 | 12 | **数据血缘与 Raw CSV 防冒充官方校验 (Anti-Impersonation)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_arbitrary_raw_csv_not_automatically_official` | `ProvenanceVerifier, SourceClass` | 非官方 CSV 即使具有正确哈希与格式，缺少受信任注册表登记一律拒绝官方认证 |
-| 13 | **测试 Fixture 严禁进入生产认证 (Test Fixture Demotion)** | `UNKNOWN_NOT_PROVEN` | `tests/test_adversarial_certification.py::test_test_fixture_provider_never_production_verified` | `ProvenanceVerifier, PointInTimeUniverseProvider` | 标记为 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证 |
+| 13 | **测试 Fixture 严禁进入生产认证 (Test Fixture Demotion)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_test_fixture_provider_never_production_verified` | `ProvenanceVerifier, PointInTimeUniverseProvider` | 标记为 TEST_FIXTURE 的数据源绝对禁止进入生产 VERIFIED 认证 |
 | 14 | **Manifest 自我声明布尔值无效与反伪造防御 (Anti-Self-Certification)** | `PROVEN_BY_TEST` | `tests/test_adversarial_certification.py::test_fake_source_metadata_boolean_cannot_self_certify` | `ProvenanceVerifier, CertificationPolicy` | 元数据自行写死 verified=True 无法绕过检查，必须通过 Trust Anchor 与物理证据闭环 |
 | 15 | **ST 缺失显式判定为 UNKNOWN 门禁 (ST Explicit Unknown Gate)** | `PROVEN_BY_TEST` | `tests/test_trading_rules.py::test_missing_historical_st_is_explicitly_unknown` | `DataManager, CertificationPolicy` | 缺失历史 ST 状态时严格标记为 UNKNOWN 并触发偏差风险门禁，拒绝乐观假定非 ST |
 
@@ -32,7 +32,7 @@
 ## 2. 测试套件质量与覆盖率结论
 
 - **自动化测试套件**: 全量 pytest 测试执行完毕，所有核心约束均具备正例与反例自动化用例。
-- **能力覆盖率**: 14/15 项核心量化架构能力已通过自动化测试严格证明。
+- **能力覆盖率**: 15/15 项核心量化架构能力已通过自动化测试严格证明。
 - **测试分类标识**:
   - `@pytest.mark.unit`: 纯组件单元测试（撮合、计算、规则）
   - `@pytest.mark.integration`: 多组件集成与数据流测试

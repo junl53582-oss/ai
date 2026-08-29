@@ -339,11 +339,18 @@ def generate_runtime_attestation(
         else:
             run_id = meta.runtime_instance_id
 
-    bound_commit_info = envelope_obj.git_commit_sha if envelope_obj else "NONE"
+    code_commit = envelope_obj.code_commit_sha if (envelope_obj and envelope_obj.code_commit_sha) else (envelope_obj.git_commit_sha if envelope_obj else "NONE")
+    src_dirty = envelope_obj.source_code_dirty if (envelope_obj and envelope_obj.source_code_dirty is not None) else (envelope_obj.git_dirty if envelope_obj else True)
     mode_label = "HISTORICAL_ATTESTATION (仅历史签名有效，非当前运行)" if is_historical else "CURRENT_RUNTIME_ATTESTATION"
 
     # 10 项运行时要素检查
     runtime_items = [
+        {
+            "name": "外部信任根锚定 (External Trust Root)",
+            "val": "VERIFIED" if meta.trust_root_verified else "UNPINNED_OR_TAMPERED",
+            "passed": bool(meta.trust_root_verified),
+            "detail": f"来源: {meta.trust_root_source}, 注册表哈希: {meta.trusted_keyring_hash[:16] if meta.trusted_keyring_hash else 'none'}..., 外部锚定: {meta.external_trusted_keyring_hash[:16] if meta.external_trusted_keyring_hash else 'none'}..."
+        },
         {
             "name": "股票池时点覆盖 (PIT Universe)",
             "val": "COMPLETE" if meta.universe_coverage_complete else "INCOMPLETE",
@@ -424,7 +431,10 @@ def generate_runtime_attestation(
 
 > **运行时实例 ID**: `{run_id}`  
 > **认证类型**: `{mode_label}`  
-> **绑定 Git Commit**: `{bound_commit_info}`  
+> **执行代码 Commit (CODE_COMMIT_SHA)**: `{code_commit}`  
+> **构建产物归档类型 (ARTIFACT_STORAGE)**: `BUILD_ARTIFACT / REPOSITORY_GENERATED_OUTPUT`  
+> **启动时源码纯净状态 (RUNTIME_START_SOURCE_DIRTY)**: `{src_dirty}`  
+> **外部信任根锚定状态 (TRUST_ROOT_VERIFIED)**: `{meta.trust_root_verified}`  
 > **认证评估时间**: {timestamp}  
 > **本次回测可信度总评级**: **`{reliability}`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
