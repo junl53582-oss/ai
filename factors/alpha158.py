@@ -12,6 +12,11 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
+class MarketSchemaError(ValueError):
+    """行情数据字段缺失或 Schema 不兼容异常 (Fail-Closed)"""
+    pass
+
+
 class Alpha158Subset:
     """Qlib Alpha158 核心子集因子计算器 (共 64 个因子)"""
 
@@ -33,8 +38,8 @@ class Alpha158Subset:
     def compute_all(self, df: pd.DataFrame) -> pd.DataFrame:
         """输入包含多只股票时序的 DataFrame，按股票分组向量化计算 Alpha 特征"""
         logger.info("开始计算 Qlib Alpha158 精选子集因子 (64个核心因子)...")
-        df = df.copy()
-        df.sort_values(by=["symbol", "date"], inplace=True)
+        if df.empty:
+            return df
 
         processed_dfs = []
         for sym, grp in df.groupby("symbol"):
@@ -51,12 +56,45 @@ class Alpha158Subset:
         """单只股票的向量化因子计算（优先使用前复权价格）"""
         df = df.copy()
 
-        open_p = df["adj_open"] if "adj_open" in df.columns else df["open"]
-        high_p = df["adj_high"] if "adj_high" in df.columns else df["high"]
-        low_p = df["adj_low"] if "adj_low" in df.columns else df["low"]
-        close_p = df["adj_close"] if "adj_close" in df.columns else df["close"]
-        pct_chg = df["adj_pct_change"] if "adj_pct_change" in df.columns else df["pct_change"]
-        vol = df["volume"]
+        if "adj_open" in df.columns:
+            open_p = df["adj_open"]
+        elif "open" in df.columns:
+            open_p = df["open"]
+        else:
+            raise MarketSchemaError("Alpha158 计算需要 'adj_open' 或 'open' 字段，但输入数据集均不存在！")
+
+        if "adj_high" in df.columns:
+            high_p = df["adj_high"]
+        elif "high" in df.columns:
+            high_p = df["high"]
+        else:
+            raise MarketSchemaError("Alpha158 计算需要 'adj_high' 或 'high' 字段，但输入数据集均不存在！")
+
+        if "adj_low" in df.columns:
+            low_p = df["adj_low"]
+        elif "low" in df.columns:
+            low_p = df["low"]
+        else:
+            raise MarketSchemaError("Alpha158 计算需要 'adj_low' 或 'low' 字段，但输入数据集均不存在！")
+
+        if "adj_close" in df.columns:
+            close_p = df["adj_close"]
+        elif "close" in df.columns:
+            close_p = df["close"]
+        else:
+            raise MarketSchemaError("Alpha158 计算需要 'adj_close' 或 'close' 字段，但输入数据集均不存在！")
+
+        if "adj_pct_change" in df.columns:
+            pct_chg = df["adj_pct_change"]
+        elif "pct_change" in df.columns:
+            pct_chg = df["pct_change"]
+        else:
+            pct_chg = close_p.pct_change()
+
+        if "volume" in df.columns:
+            vol = df["volume"]
+        else:
+            raise MarketSchemaError("Alpha158 计算需要 'volume' 字段，但输入数据集不存在！")
 
         eps = 1e-8
 

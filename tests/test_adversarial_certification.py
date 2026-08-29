@@ -2888,12 +2888,12 @@ class TestAdversarialCertification:
         assert is_valid is False
         assert any("evidence_dir_missing_required" in e for e in errs)
 
-    def test_cached_parquet_does_not_imply_raw_provenance(self, tmp_path, monkeypatch):
+    def test_cached_parquet_does_not_imply_raw_provenance(self, tmp_path):
         """P1-5: 仅加载 Parquet 缓存不意味着 raw_data_provenance_preserved=True"""
         from data.data_manager import DataManager
-        monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
-        dm = DataManager()
-        dm.parquet_dir.mkdir(parents=True, exist_ok=True)
+        p_dir = tmp_path / "parquet"
+        p_dir.mkdir(parents=True, exist_ok=True)
+        dm = DataManager(parquet_dir=p_dir)
 
         df = pd.DataFrame([{"date": "2021-01-04", "symbol": "600519.SH", "close": 100}])
         df.to_parquet(dm.parquet_dir / "market_daily.parquet")
@@ -2913,12 +2913,12 @@ class TestAdversarialCertification:
         assert dm.raw_data_provenance_preserved is False
         assert dm.market_data_provenance_verified is False
 
-    def test_cached_market_requires_manifest_verification_for_provenance(self, tmp_path, monkeypatch):
+    def test_cached_market_requires_manifest_verification_for_provenance(self, tmp_path):
         """P1-5: 加载缓存后必须经 verify_market_manifest 才能判定 provenance_verified"""
         from data.data_manager import DataManager
-        monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
-        dm = DataManager()
-        dm.parquet_dir.mkdir(parents=True, exist_ok=True)
+        p_dir = tmp_path / "parquet"
+        p_dir.mkdir(parents=True, exist_ok=True)
+        dm = DataManager(parquet_dir=p_dir)
 
         df = pd.DataFrame([{"date": "2021-01-04", "symbol": "600519.SH", "close": 100}])
         df.to_parquet(dm.parquet_dir / "market_daily.parquet")
@@ -3052,8 +3052,7 @@ class TestAdversarialCertification:
         from data.data_manager import DataManager
         from config.settings import settings
 
-        dm = DataManager()
-        dm.parquet_dir = tmp_path
+        dm = DataManager(parquet_dir=tmp_path)
         p = tmp_path / "market_daily.parquet"
         m = tmp_path / "market_daily.manifest.json"
 
@@ -3098,8 +3097,7 @@ class TestAdversarialCertification:
         raw_file.write_bytes(raw_bytes)
         raw_h = hashlib.sha256(raw_bytes).hexdigest()
 
-        dm = DataManager()
-        dm.parquet_dir = tmp_path
+        dm = DataManager(parquet_dir=tmp_path)
         p = tmp_path / "market_daily.parquet"
         m = tmp_path / "market_daily.manifest.json"
 

@@ -397,3 +397,94 @@ def test_changing_validation_prices_cannot_affect_train_factor_selection(synthet
     fold2_selected = res2["folds_detail"][0]["selected_factors"]
     
     assert fold1_selected == fold2_selected
+
+
+# ------------------------------------------------------------------------------
+# Test 16: P0-1 Market dataset contains Alpha158 required price columns
+# ------------------------------------------------------------------------------
+def test_market_dataset_contains_alpha158_required_price_columns():
+    from tools.check_committed_dataset_schema import REQUIRED_MARKET_COLS
+    from pathlib import Path
+    market_file = Path("data_storage/parquet/market_daily.parquet")
+    assert market_file.exists(), "Committed market_daily.parquet does not exist!"
+    df = pd.read_parquet(market_file)
+    for col in ["open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close", "volume"]:
+        assert col in df.columns, f"Market dataset missing Alpha158 required column '{col}'!"
+
+
+# ------------------------------------------------------------------------------
+# Test 17: P0-2 Committed factor matrix contains benchmark_open
+# ------------------------------------------------------------------------------
+def test_committed_factor_matrix_contains_benchmark_open():
+    from pathlib import Path
+    factor_file = Path("data_storage/factors/factor_matrix.parquet")
+    assert factor_file.exists(), "Committed factor_matrix.parquet does not exist!"
+    df = pd.read_parquet(factor_file)
+    assert "benchmark_open" in df.columns, "Committed factor matrix missing 'benchmark_open'!"
+    cov = float((df["benchmark_open"] > 0).mean())
+    assert cov >= 0.80, f"benchmark_open coverage ratio {cov:.2f} is below required 80%!"
+
+
+# ------------------------------------------------------------------------------
+# Test 18: P0-3 Schema gate rejects missing open/adj_open
+# ------------------------------------------------------------------------------
+def test_clean_checkout_schema_gate_rejects_missing_open(tmp_path):
+    from tools.check_committed_dataset_schema import check_market_dataset
+    bad_df = pd.DataFrame([{"date": "2021-01-01", "symbol": "000001.SZ", "close": 10.0}])
+    bad_path = tmp_path / "bad_market.parquet"
+    bad_df.to_parquet(bad_path)
+    assert check_market_dataset(bad_path) is False
+
+
+# ------------------------------------------------------------------------------
+# Test 19: Alpha158 fails with explicit MarketSchemaError not KeyError
+# ------------------------------------------------------------------------------
+def test_alpha158_fails_with_explicit_schema_error_not_keyerror():
+    from factors.alpha158 import Alpha158Subset, MarketSchemaError
+    bad_df = pd.DataFrame([{"date": "2021-01-01", "symbol": "000001.SZ", "close": 10.0}])
+    calc = Alpha158Subset()
+    with pytest.raises(MarketSchemaError) as exc_info:
+        calc.compute_all(bad_df)
+    assert "adj_open" in str(exc_info.value) or "open" in str(exc_info.value)
+
+
+# ------------------------------------------------------------------------------
+# Test 20: Factor rebuild from committed market dataset succeeds
+# ------------------------------------------------------------------------------
+def test_factor_rebuild_from_committed_market_dataset_succeeds(tmp_path):
+    from factors.processor import FactorProcessor
+    from pathlib import Path
+    market_file = Path("data_storage/parquet/market_daily.parquet")
+    assert market_file.exists()
+    market_df = pd.read_parquet(market_file)
+    
+    # 抽取 2 只股票小样本验证构建链无异常
+    sub_market = market_df[market_df["symbol"].isin(["600519.SH", "000858.SZ"])].copy()
+    fp = FactorProcessor(factor_dir=tmp_path / "factors")
+    factor_df = fp.build_and_save_factor_matrix(sub_market, force_update=True)
+    assert not factor_df.empty
+    assert "adj_open" in factor_df.columns
+    assert "benchmark_open" in factor_df.columns
+
+
+# ------------------------------------------------------------------------------
+# Test 21: Clean checkout research pipeline smoke test (3 factors)
+# ------------------------------------------------------------------------------
+def test_clean_checkout_research_pipeline_smoke(tmp_path):
+    from research import FactorResearchEngine, default_research_config
+    from pathlib import Path
+    factor_file = Path("data_storage/factors/factor_matrix.parquet")
+    assert factor_file.exists()
+    factor_df = pd.read_parquet(factor_file)
+    
+    engine = FactorResearchEngine(config=default_research_config)
+    res = engine.run_full_research(
+        df=factor_df,
+        factor_cols=["KMID", "ROC5", "ROC20"],
+        primary_horizon=20,
+        output_dir=tmp_path / "reports"
+    )
+    assert res is not None
+    assert (tmp_path / "reports" / "FACTOR_RESEARCH_REPORT.md").exists()
+    assert (tmp_path / "reports" / "research_run_manifest.json").exists()
+

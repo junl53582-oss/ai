@@ -28,6 +28,10 @@ jobs:
         run: |
           python -m pytest -s --junitxml=artifacts/pytest.xml
 
+      - name: Validate Committed Research Dataset Schema
+        run: |
+          python -u tools/check_committed_dataset_schema.py
+
       - name: Run Factor Research Pipeline
         run: |
           python -u tools/run_factor_research.py

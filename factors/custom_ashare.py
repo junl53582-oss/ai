@@ -43,11 +43,21 @@ class AShareFactorCalculator:
         open_p = df["adj_open"] if "adj_open" in df.columns else df["open"]
         high_p = df["adj_high"] if "adj_high" in df.columns else df["high"]
         low_p = df["adj_low"] if "adj_low" in df.columns else df["low"]
-        raw_close = df["close"]
-        amount = df["amount"]
-        turnover = df["turnover"]
-        pct_chg = df["adj_pct_change"] if "adj_pct_change" in df.columns else df["pct_change"]
-        symbol = df["symbol"].iloc[0]
+        raw_close = df["close"] if "close" in df.columns else close_p
+        amount = df["amount"] if "amount" in df.columns else (df["volume"] * close_p)
+        
+        # 换手率提取或近似计算
+        if "turnover" in df.columns:
+            turnover = df["turnover"]
+        elif "LOG_CIRC_MV" in df.columns:
+            turnover = amount / (np.exp(df["LOG_CIRC_MV"]) + eps)
+        elif "volume" in df.columns:
+            turnover = df["volume"] / (df["volume"].rolling(20).mean() * 100 + eps)
+        else:
+            turnover = pd.Series(0.01, index=df.index)
+
+        pct_chg = df["adj_pct_change"] if "adj_pct_change" in df.columns else (df["pct_change"] if "pct_change" in df.columns else close_p.pct_change())
+        symbol = str(df["symbol"].iloc[0]) if "symbol" in df.columns and len(df) > 0 else "000001.SZ"
 
         limit_rate = settings.PRICE_LIMIT_CHINEXT if (symbol.startswith("300") or symbol.startswith("688")) else settings.PRICE_LIMIT_MAIN
 
@@ -61,9 +71,11 @@ class AShareFactorCalculator:
         limit_up_price = df.get("limit_up_price", raw_close.shift(1) * (1 + limit_rate))
         df["LIMIT_UP_SPACE"] = np.maximum(0.0, (limit_up_price - raw_close) / (raw_close + eps))
         
-        # 滞后 1 日涨跌停状态 (shift 后首日为 NaN，用 eq 严格比较避免对象列 fillna 的 FutureWarning)
-        df["IS_LIMIT_UP_LAG1"] = df["is_limit_up"].shift(1).eq(True).astype(float)
-        df["IS_LIMIT_DOWN_LAG1"] = df["is_limit_down"].shift(1).eq(True).astype(float)
+        # 滞后 1 日涨跌停状态 (优先使用 is_limit_up_locked / is_limit_down_locked)
+        is_lup = df["is_limit_up_locked"] if "is_limit_up_locked" in df.columns else df.get("is_limit_up", pd.Series(False, index=df.index))
+        is_ldown = df["is_limit_down_locked"] if "is_limit_down_locked" in df.columns else df.get("is_limit_down", pd.Series(False, index=df.index))
+        df["IS_LIMIT_UP_LAG1"] = is_lup.shift(1).eq(True).astype(float)
+        df["IS_LIMIT_DOWN_LAG1"] = is_ldown.shift(1).eq(True).astype(float)
 
         # ---------------- 3. 日内多空博弈 (4个) ----------------
         entity = (close_p - open_p).abs()
