@@ -1,6 +1,6 @@
 """
 因子研究与 Alpha 验证全局配置 (research/config.py)
-定义因子研究视界、分层数、交易摩擦成本假设、评分权重与分级门禁阈值。
+定义因子研究视界、分层数、交易摩擦成本假设、评分权重、门禁阈值与 Purged Walk-Forward 参数。
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -27,7 +27,8 @@ class ResearchConfig:
     MARKET_REGIME_THRESHOLD: float = 0.03       # 20日收益 > +3% 牛市, < -3% 熊市, 其它震荡
     
     # ---------------- 多重检验与 Bootstrap ----------------
-    FDR_ALPHA: float = 0.05                     # Benjamini-Hochberg FDR 显著性水平
+    FDR_ALPHA: float = 0.05                     # Benjamini-Hochberg FDR 显著性水平 (STRONG 门禁)
+    FDR_USEFUL_ALPHA: float = 0.20              # USEFUL 因子宽松 FDR 显著性水平
     BOOTSTRAP_ROUNDS: int = 500                 # Block Bootstrap 抽样轮数
     BOOTSTRAP_BLOCK_SIZE: int = 20              # 时间块长度 (20交易日)
     BOOTSTRAP_CONFIDENCE: float = 0.95          # 置信区间
@@ -45,7 +46,7 @@ class ResearchConfig:
     
     # ---------------- 因子状态分级阈值 ----------------
     STRONG_RANK_IC: float = 0.04
-    STRONG_IC_IR: float = 0.50
+    STRONG_IC_IR: float = 0.50                  # 年化 RankIC IR (或日度 >= 0.14)
     STRONG_SIGN_STABILITY: float = 0.70
     STRONG_COVERAGE: float = 0.80
     
@@ -58,9 +59,12 @@ class ResearchConfig:
     # ---------------- 冗余相关性阈值 ----------------
     REDUNDANCY_CORR_THRESHOLD: float = 0.85     # 截面相关性 > 0.85 标记为冗余
     
-    # ---------------- Walk-Forward 因子选择参数 ----------------
+    # ---------------- Purged Walk-Forward 因子选择参数 (P0-2) ----------------
     WF_TRAIN_YEARS: float = 2.0
     WF_VALIDATION_YEARS: float = 1.0
+    WF_PURGE_DAYS: int = 25                     # Purge 隔离天数 >= max(HORIZONS)=20，杜绝跨区泄漏
+    WF_EMBARGO_DAYS: int = 5                    # Embargo 滞后缓冲天数
+    MIN_WF_FOLDS_FOR_CERTIFICATION: int = 3     # 达到 OOS_VALIDATED 所需的最少 Fold 门禁
 
 
 default_research_config = ResearchConfig()

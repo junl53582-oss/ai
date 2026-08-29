@@ -83,10 +83,10 @@ class FactorStabilityEngine:
             # 计算该年度的多空收益
             sub_yr_df = df[pd.to_datetime(df["date"]).dt.year.astype(str) == yr]
             direction = 1 if overall_mean >= 0 else -1
-            ls_res = FactorMetricsEngine.compute_turnover_and_long_short(
-                sub_yr_df, factor_col, return_col, n_quantiles=5, direction=direction
+            ls_res = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(
+                sub_yr_df, factor_col=factor_col, direction=direction, n_quantiles=5
             )
-            annual_ls[yr] = round(ls_res["net_long_short_return"], 6)
+            annual_ls[yr] = round(ls_res["annualized_return"], 4)
 
         sign_consistency = round(sign_match_count / max(total_years, 1), 4)
 

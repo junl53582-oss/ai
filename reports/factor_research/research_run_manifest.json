@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.1",
+  "git_commit": "ca7363f618ed490a7b283ea006e6a13ae1716ae3",
+  "factor_matrix_hash": "4bfd9739d469dc6e5504bebf3cc085a981e2f587e29f69604c6ef76e27a03473",
+  "dataset_rows": 4555,
+  "symbol_count": 5,
+  "factor_count": 79,
+  "start_date": "2021-01-01",
+  "end_date": "2024-06-28",
+  "primary_horizon": 20,
+  "horizons_tested": [
+    1,
+    3,
+    5,
+    10,
+    20
+  ],
+  "wf_purge_days": 25,
+  "wf_embargo_days": 5,
+  "min_wf_folds_required": 3,
+  "walk_forward_status": "OOS_PRELIMINARY",
+  "selected_strong_count": 0,
+  "selected_useful_count": 0,
+  "generated_at": "2026-08-29T13:32:23.176176+00:00"
+}

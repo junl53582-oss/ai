@@ -1,7 +1,9 @@
 """
-因子综合评分、状态分级与 Walk-Forward 严密筛选引擎 (research/factor_selection.py)
-综合 RankIC 强度、ICIR、单调性、时间稳定性、多空夏普与换手/缺失惩罚，透明可配置化打分，
-结合 Purged Walk-Forward 滚动窗口杜绝 In-Sample 自嗨，输出 selected_factors.json。
+因子评分、等级划分与严格 Purged Walk-Forward 滚动筛选引擎 (research/factor_selection.py)
+P0-2: 严密实现 Purge Gap >= max(HORIZONS)，杜绝训练/验证边界标签泄露
+P0-6/7: 每折在训练集内独立执行全套特征选择(方向、最优视界、FDR、冗余过滤)，验证集仅评估冻结决策
+P1-1: 强化 FDR 门禁 (STRONG 必须 FDR <= 0.05)
+P1-6: 最少 Fold 数门禁 (MIN_WF_FOLDS_FOR_CERTIFICATION >= 3)
 """
 import logging
 import json
@@ -12,9 +14,9 @@ import pandas as pd
 
 from .config import ResearchConfig, default_research_config
 from .factor_metrics import FactorMetricsEngine, FactorEvaluationMetrics
-from .factor_decay import FactorDecayResult
-from .factor_stability import FactorStabilityResult
-from .factor_correlation import CorrelationAnalysisResult
+from .factor_decay import FactorDecayResult, FactorDecayEngine
+from .factor_stability import FactorStabilityResult, FactorStabilityEngine
+from .factor_correlation import CorrelationAnalysisResult, FactorCorrelationEngine
 
 logger = logging.getLogger(__name__)
 
@@ -32,8 +34,9 @@ class FactorSelectionResult:
     best_horizons: Dict[str, str] = field(default_factory=dict)
     rejection_reasons: Dict[str, List[str]] = field(default_factory=dict)
     status_summary: Dict[str, str] = field(default_factory=dict) # factor -> STRONG | USEFUL | WEAK | REJECT
+    research_grade: Dict[str, str] = field(default_factory=dict) # OOS_VALIDATED | OOS_PRELIMINARY | IN_SAMPLE_STRONG | REJECT
     
-    # 走步筛选 (Walk-Forward) 稳定性报告
+    # 严格 Purged Walk-Forward 审计报告 (P0-2)
     walk_forward_stability: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -49,7 +52,7 @@ class FactorSelectionEngine:
         config: Optional[ResearchConfig] = None
     ) -> pd.DataFrame:
         """
-        多维度标准化综合评分 (透明公式化)
+        多维度标准化综合评分
         """
         cfg = config or default_research_config
         rows = []
@@ -63,7 +66,7 @@ class FactorSelectionEngine:
                 "factor_name": name,
                 "abs_rank_ic": abs(m.mean_rank_ic),
                 "rank_ic": m.mean_rank_ic,
-                "rank_ic_ir": abs(m.rank_ic_ir),
+                "rank_ic_ir": abs(m.annualized_rank_icir),
                 "monotonicity": abs(m.monotonicity_score),
                 "sign_stability": sign_stab,
                 "net_sharpe": max(m.net_sharpe_ratio, 0.0),
@@ -78,7 +81,6 @@ class FactorSelectionEngine:
         if df.empty:
             return df
 
-        # Z-Score 截面标准化打分组件
         def _z(s):
             std = s.std(ddof=1)
             return (s - s.mean()) / (std if std > 1e-8 else 1.0)
@@ -91,7 +93,6 @@ class FactorSelectionEngine:
         z_turn = _z(df["turnover"])
         z_miss = _z(df["missing_ratio"])
 
-        # 线性组合打分
         score = (
             cfg.WEIGHT_RANK_IC * z_ic
             + cfg.WEIGHT_IC_IR * z_ir
@@ -119,7 +120,8 @@ class FactorSelectionEngine:
         config: Optional[ResearchConfig] = None
     ) -> FactorSelectionResult:
         """
-        根据门禁阈值将因子分为 STRONG / USEFUL / WEAK / REJECT 四大等级
+        根据门禁阈值将因子分为 STRONG / USEFUL / WEAK / REJECT
+        P1-1 强化: STRONG 必须满足 rank_ic_fdr_p_value <= FDR_ALPHA (0.05)
         """
         cfg = config or default_research_config
         selected = []
@@ -131,8 +133,9 @@ class FactorSelectionEngine:
         best_horizons = {}
         reasons = {}
         status_map = {}
+        grades = {}
 
-        # 冗余组去重追踪: 冗余组内只保留评分最高的因子，其余降级为 REJECT(REDUNDANT)
+        # 冗余组去重
         kept_group_representatives = set()
 
         for _, row in scores_df.iterrows():
@@ -160,38 +163,46 @@ class FactorSelectionEngine:
                 else:
                     kept_group_representatives.add(gid)
 
-            # 状态分级决策树
+            # 状态分级决策树 (P1-1 严格 FDR 门禁)
             if is_redundant_drop:
                 status = "REJECT"
                 rejected.append(name)
+                grades[name] = "REJECT"
             elif (
                 abs_ic >= cfg.STRONG_RANK_IC
                 and effective_icir >= cfg.STRONG_IC_IR
                 and sign_stab >= cfg.STRONG_SIGN_STABILITY
                 and cov >= cfg.STRONG_COVERAGE
-                and m.rank_ic_p_value < 0.05
+                and m.rank_ic_fdr_p_value <= cfg.FDR_ALPHA  # 严格 FDR <= 0.05
             ):
                 status = "STRONG"
                 selected.append(name)
+                grades[name] = "IN_SAMPLE_STRONG"
             elif (
                 abs_ic >= cfg.USEFUL_RANK_IC
                 and effective_icir >= cfg.USEFUL_IC_IR
                 and cov >= cfg.USEFUL_COVERAGE
+                and m.rank_ic_fdr_p_value <= cfg.FDR_USEFUL_ALPHA
             ):
                 status = "USEFUL"
                 useful.append(name)
+                grades[name] = "USEFUL"
             elif abs_ic >= cfg.WEAK_RANK_IC:
                 status = "WEAK"
                 weak.append(name)
+                grades[name] = "WEAK"
             else:
                 status = "REJECT"
                 rejected.append(name)
+                grades[name] = "REJECT"
                 if abs_ic < cfg.WEAK_RANK_IC:
                     factor_reasons.append("insignificant_rank_ic")
                 if effective_icir < cfg.USEFUL_IC_IR:
                     factor_reasons.append("low_icir_stability")
                 if cov < cfg.USEFUL_COVERAGE:
                     factor_reasons.append("insufficient_coverage")
+                if m.rank_ic_fdr_p_value > cfg.FDR_USEFUL_ALPHA:
+                    factor_reasons.append(f"fdr_rejected_pval_{m.rank_ic_fdr_p_value:.3f}")
 
             status_map[name] = status
             reasons[name] = factor_reasons
@@ -205,79 +216,160 @@ class FactorSelectionEngine:
             factor_directions=directions,
             best_horizons=best_horizons,
             rejection_reasons=reasons,
-            status_summary=status_map
+            status_summary=status_map,
+            research_grade=grades
         )
 
     @classmethod
-    def run_walk_forward_selection(
+    def run_purged_walk_forward(
         cls,
         df: pd.DataFrame,
         factor_cols: List[str],
-        return_col: str,
         config: Optional[ResearchConfig] = None
     ) -> Dict[str, Any]:
         """
-        滚动走步 (Walk-Forward) 因子验证：
-        在训练窗口 (e.g. 2年) 筛选出有效因子，在后续紧邻的样本外验证窗口 (e.g. 1年) 评估 OOS RankIC 与 ICIR，
-        统计因子在滚动窗口中的入选频率与 OOS 预测能力，杜绝 In-Sample 过拟合自嗨。
+        P0-2 / P0-6 / P0-7 严格 Purged Walk-Forward 因子样本外验证:
+        1. 训练集 -> Purge Gap (>= max(HORIZONS)=25天) -> 验证集，杜绝标签前视泄露;
+        2. 训练窗口内完全独立执行方向、最优视界、FDR 与因子选择 pipeline;
+        3. 验证窗口严格冻结并仅评估训练集选出的因子 (Frozen Direction & Frozen Horizon);
+        4. 未入选因子绝不记入 selected OOS 成绩。
         """
         cfg = config or default_research_config
         dates = sorted(pd.to_datetime(df["date"].unique()))
-        if len(dates) < 500: # 不足 2 年数据时进行单折切分
-            return {"status": "insufficient_history_for_full_walk_forward"}
-
+        
         train_days = int(cfg.WF_TRAIN_YEARS * 252)
         val_days = int(cfg.WF_VALIDATION_YEARS * 252)
+        purge_gap = max(cfg.WF_PURGE_DAYS, max(cfg.HORIZONS))
+        embargo = cfg.WF_EMBARGO_DAYS
         step_days = val_days
 
-        folds = []
+        folds_info = []
         start_idx = 0
-        while start_idx + train_days + val_days <= len(dates):
-            t_train = dates[start_idx : start_idx + train_days]
-            t_val = dates[start_idx + train_days : start_idx + train_days + val_days]
-            folds.append((t_train, t_val))
+
+        while start_idx + train_days + purge_gap + embargo + val_days <= len(dates):
+            t_train_dates = dates[start_idx : start_idx + train_days]
+            t_purge_dates = dates[start_idx + train_days : start_idx + train_days + purge_gap + embargo]
+            t_val_dates = dates[start_idx + train_days + purge_gap + embargo : start_idx + train_days + purge_gap + embargo + val_days]
+            
+            folds_info.append({
+                "fold_id": len(folds_info) + 1,
+                "train_dates": t_train_dates,
+                "purge_dates": t_purge_dates,
+                "val_dates": t_val_dates
+            })
             start_idx += step_days
 
-        if not folds:
-            return {"status": "no_valid_folds_generated"}
+        if not folds_info:
+            return {
+                "walk_forward_status": "PRELIMINARY",
+                "reason": "insufficient_history_for_purged_folds",
+                "total_folds": 0,
+                "folds_detail": []
+            }
 
         factor_selected_counts = {f: 0 for f in factor_cols}
-        factor_oos_rank_ics = {f: [] for f in factor_cols}
+        factor_oos_rank_ics: Dict[str, List[float]] = {f: [] for f in factor_cols}
+        factor_oos_icirs: Dict[str, List[float]] = {f: [] for f in factor_cols}
+        folds_detail = []
 
-        for f_idx, (t_train, t_val) in enumerate(folds):
-            train_df = df[pd.to_datetime(df["date"]).isin(t_train)]
-            val_df = df[pd.to_datetime(df["date"]).isin(t_val)]
+        for f_dict in folds_info:
+            f_id = f_dict["fold_id"]
+            train_d = f_dict["train_dates"]
+            purge_d = f_dict["purge_dates"]
+            val_d = f_dict["val_dates"]
 
-            # 1. 训练窗口评估
-            train_metrics = {}
+            train_df = df[pd.to_datetime(df["date"]).isin(train_d)].copy()
+            val_df = df[pd.to_datetime(df["date"]).isin(val_d)].copy()
+
+            # 1. 训练窗口全要素评估 (P0-7)
+            train_metrics: Dict[str, FactorEvaluationMetrics] = {}
+            train_decay: Dict[str, FactorDecayResult] = {}
+            train_pvals = []
+            
             for f in factor_cols:
-                train_metrics[f] = FactorMetricsEngine.evaluate_factor(train_df, f, return_col, config=cfg)
+                dec = FactorDecayEngine.analyze_decay(train_df, f, horizons=cfg.HORIZONS)
+                train_decay[f] = dec
+                best_h = int(dec.best_horizon.replace("D", ""))
+                ret_col = f"future_excess_return_{best_h}d" if f"future_excess_return_{best_h}d" in train_df.columns else f"future_return_{best_h}d"
+                
+                m = FactorMetricsEngine.evaluate_factor(train_df, f, ret_col, horizon=best_h, config=cfg)
+                train_metrics[f] = m
+                train_pvals.append(m.rank_ic_p_value)
 
-            # 选出该折选出的因子 (|RankIC| >= USEFUL_RANK_IC 且 ICIR >= USEFUL_IC_IR)
-            fold_selected = [
-                f for f, m in train_metrics.items()
-                if abs(m.mean_rank_ic) >= cfg.USEFUL_RANK_IC and max(abs(m.rank_ic_ir), abs(m.annualized_rank_icir)) >= cfg.USEFUL_IC_IR
-            ]
+            # 训练集 FDR 校正
+            train_fdr = FactorMetricsEngine.compute_fdr_pvalues(train_pvals)
+            for idx, f in enumerate(factor_cols):
+                train_metrics[f].rank_ic_fdr_p_value = train_fdr[idx]
+
+            # 训练集选拔因子 (STRONG 或 USEFUL 且 FDR <= 0.20)
+            fold_selected = []
+            fold_directions = {}
+            fold_horizons = {}
+
+            for f in factor_cols:
+                m = train_metrics[f]
+                dec = train_decay[f]
+                eff_icir = max(abs(m.rank_ic_ir), abs(m.annualized_rank_icir))
+                if (abs(m.mean_rank_ic) >= cfg.USEFUL_RANK_IC and eff_icir >= cfg.USEFUL_IC_IR and m.rank_ic_fdr_p_value <= cfg.FDR_USEFUL_ALPHA):
+                    fold_selected.append(f)
+                    fold_directions[f] = m.recommended_direction
+                    fold_horizons[f] = dec.best_horizon
 
             for f in fold_selected:
                 factor_selected_counts[f] += 1
 
-            # 2. 样本外验证窗口评估
-            for f in factor_cols:
-                val_ic_s = FactorMetricsEngine.compute_daily_ic(val_df, f, return_col, method="spearman")
+            # 2. 验证窗口严格冻结评估 (P0-6: 仅对选出因子评估冻结参数)
+            val_results = {}
+            for f in fold_selected:
+                h_int = int(fold_horizons[f].replace("D", ""))
+                val_ret_col = f"future_excess_return_{h_int}d" if f"future_excess_return_{h_int}d" in val_df.columns else f"future_return_{h_int}d"
+                
+                val_ic_s = FactorMetricsEngine.compute_daily_ic(val_df, f, val_ret_col, method="spearman")
                 if not val_ic_s.empty:
-                    factor_oos_rank_ics[f].append(float(val_ic_s.mean()))
+                    # 依据训练期冻结方向调正
+                    aligned_ic = val_ic_s * fold_directions[f]
+                    m_val_ic = float(aligned_ic.mean())
+                    std_val_ic = float(aligned_ic.std(ddof=1)) if len(aligned_ic) > 1 else 1e-6
+                    val_icir = (m_val_ic / std_val_ic) if std_val_ic > 1e-8 else 0.0
 
-        total_folds = len(folds)
+                    factor_oos_rank_ics[f].append(m_val_ic)
+                    factor_oos_icirs[f].append(val_icir)
+                    val_results[f] = {"oos_rank_ic": round(m_val_ic, 4), "oos_icir": round(val_icir, 4)}
+
+            folds_detail.append({
+                "fold_id": f_id,
+                "train_start": str(train_d[0].date()),
+                "train_end": str(train_d[-1].date()),
+                "purge_start": str(purge_d[0].date()),
+                "purge_end": str(purge_d[-1].date()),
+                "validation_start": str(val_d[0].date()),
+                "validation_end": str(val_d[-1].date()),
+                "train_sample_count": len(train_df),
+                "validation_sample_count": len(val_df),
+                "selected_factors_count": len(fold_selected),
+                "selected_factors": fold_selected,
+                "oos_evaluation": val_results
+            })
+
+        total_folds = len(folds_info)
+        wf_status = "OOS_VALIDATED" if total_folds >= cfg.MIN_WF_FOLDS_FOR_CERTIFICATION else "OOS_PRELIMINARY"
+
         summary = {}
         for f in factor_cols:
             ics = factor_oos_rank_ics[f]
+            icirs = factor_oos_icirs[f]
             summary[f] = {
                 "selected_frequency": round(factor_selected_counts[f] / max(total_folds, 1), 4),
                 "selected_count": factor_selected_counts[f],
                 "total_folds": total_folds,
                 "oos_mean_rank_ic": round(float(np.mean(ics)), 4) if ics else 0.0,
-                "oos_std_rank_ic": round(float(np.std(ics, ddof=1)), 4) if len(ics) > 1 else 0.0
+                "oos_icir": round(float(np.mean(icirs)), 4) if icirs else 0.0
             }
 
-        return {"total_folds": total_folds, "factor_summary": summary}
+        return {
+            "walk_forward_status": wf_status,
+            "total_folds": total_folds,
+            "min_folds_required": cfg.MIN_WF_FOLDS_FOR_CERTIFICATION,
+            "folds_detail": folds_detail,
+            "factor_summary": summary
+        }

@@ -58,8 +58,8 @@ class GramSchmidtOrthogonalizer:
             return day_df
 
         if date_col in df_out.columns:
-            df_out = df_out.groupby(date_col, group_keys=False).apply(_ortho_one_day)
+            df_out[valid_factors] = df_out.groupby(date_col, group_keys=False)[valid_factors].apply(lambda g: _ortho_one_day(g)[valid_factors])
         else:
-            df_out = _ortho_one_day(df_out)
+            df_out[valid_factors] = _ortho_one_day(df_out)[valid_factors]
 
         return df_out
