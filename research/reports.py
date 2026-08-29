@@ -1,6 +1,6 @@
 """
 因子研究报告生成器 (research/reports.py)
-输出包含 20 份全要素结构化证据文件、selected_factors.json、research_run_manifest.json
+Phase 1.5: 严密输出 20 份全要素结构化证据文件、selected_factors.json、research_run_manifest.json
 以及全景 FACTOR_RESEARCH_REPORT.md 与可视化图表。
 """
 import logging
@@ -42,6 +42,8 @@ class FactorReportGenerator:
         output_dir.mkdir(parents=True, exist_ok=True)
         charts_dir = output_dir / "charts"
         charts_dir.mkdir(parents=True, exist_ok=True)
+
+        bench_valid = (benchmark_evidence.get("benchmark_timing_status") == "VALID") if benchmark_evidence else False
 
         # 1. factor_summary.csv
         summary_rows = []
@@ -85,8 +87,8 @@ class FactorReportGenerator:
                 "long_only_sharpe": m.long_only_sharpe,
                 "long_only_max_drawdown": m.long_only_max_drawdown,
                 "long_only_win_rate": m.long_only_win_rate,
-                "long_only_excess_annual_return": m.long_only_excess_annual_return,
-                "long_only_excess_sharpe": m.long_only_excess_sharpe,
+                "long_only_excess_annual_return": m.long_only_excess_annual_return if bench_valid else None,
+                "long_only_excess_sharpe": m.long_only_excess_sharpe if bench_valid else None,
                 "long_turnover": m.long_turnover,
                 "diagnostic_spread_annual": m.diagnostic_spread_annual,
                 "diagnostic_spread_sharpe": m.diagnostic_spread_sharpe,
@@ -130,7 +132,7 @@ class FactorReportGenerator:
             q_rows.append(row)
         pd.DataFrame(q_rows).to_csv(output_dir / "factor_quantile_returns.csv", index=False, encoding="utf-8-sig")
 
-        # 5. factor_cost_sensitivity.csv (GENERIC_COST_SENSITIVITY)
+        # 5. factor_cost_sensitivity.csv
         cost_rows = []
         for name, m in metrics_dict.items():
             row = {"factor_name": name, "long_turnover": m.long_turnover, "long_gross_return": m.long_only_gross_return, "long_sharpe": m.long_only_sharpe}
@@ -179,13 +181,13 @@ class FactorReportGenerator:
         if horizon_significance_df is not None and not horizon_significance_df.empty:
             horizon_significance_df.to_csv(output_dir / "factor_horizon_significance.csv", index=False, encoding="utf-8-sig")
 
-        # 10. walk_forward_factor_horizon_significance.csv (Phase 1.4 P0-3)
+        # 10. walk_forward_factor_horizon_significance.csv
         if wf_horizon_significance_df is not None and not wf_horizon_significance_df.empty:
             wf_horizon_significance_df.to_csv(output_dir / "walk_forward_factor_horizon_significance.csv", index=False, encoding="utf-8-sig")
         else:
             pd.DataFrame(columns=["fold_id", "factor", "horizon", "train_mean_rank_ic", "train_hac_t", "train_hac_p", "train_global_fdr_p", "selected", "selected_horizon", "train_direction", "validation_raw_rank_ic", "validation_aligned_rank_ic"]).to_csv(output_dir / "walk_forward_factor_horizon_significance.csv", index=False, encoding="utf-8-sig")
 
-        # 11. trade_rejection_evidence.csv (Phase 1.4 P0-5)
+        # 11. trade_rejection_evidence.csv
         all_rejections = []
         for m in metrics_dict.values():
             if m.trade_rejections:
@@ -193,9 +195,9 @@ class FactorReportGenerator:
         if all_rejections:
             pd.DataFrame(all_rejections).drop_duplicates().to_csv(output_dir / "trade_rejection_evidence.csv", index=False, encoding="utf-8-sig")
         else:
-            pd.DataFrame(columns=["signal_date", "entry_date", "exit_date", "symbol", "side", "reject_stage", "reject_reason"]).to_csv(output_dir / "trade_rejection_evidence.csv", index=False, encoding="utf-8-sig")
+            pd.DataFrame(columns=["signal_date", "entry_date", "earliest_exit_date", "symbol", "side", "reject_stage", "reject_reason"]).to_csv(output_dir / "trade_rejection_evidence.csv", index=False, encoding="utf-8-sig")
 
-        # 12. research_run_manifest.json (Phase 1.4 P0-4)
+        # 12. research_run_manifest.json
         if run_manifest:
             with open(output_dir / "research_run_manifest.json", "w", encoding="utf-8") as f:
                 json.dump(run_manifest, f, indent=2, ensure_ascii=False)
@@ -217,12 +219,12 @@ class FactorReportGenerator:
             ortho_rows = [{"factor_name": k, **v} for k, v in orthogonalization_comp.items()]
             pd.DataFrame(ortho_rows).to_csv(output_dir / "orthogonalization_evidence.csv", index=False, encoding="utf-8-sig")
 
-        # 16. daily_portfolio_pnl.csv (Phase 1.4 P0-1 / P0-6)
+        # 16. daily_portfolio_pnl.csv (包含 delayed exit 与实际执行状态)
         top_factor = df_summary["factor_name"].iloc[0] if not df_summary.empty else None
         if top_factor and top_factor in metrics_dict and metrics_dict[top_factor].daily_pnl_df is not None:
             metrics_dict[top_factor].daily_pnl_df.to_csv(output_dir / "daily_portfolio_pnl.csv", index=False, encoding="utf-8-sig")
         else:
-            pd.DataFrame(columns=["signal_date", "entry_date", "entry_price_type", "earliest_exit_date", "actual_exit_date", "exit_price_type", "requested_long_count", "executed_long_count", "rejected_long_count", "long_gross_return", "benchmark_return", "long_excess_return", "entry_commission", "exit_commission", "stamp_duty", "slippage", "total_cost", "long_net_return", "long_equity_curve", "factor_diagnostic_spread"]).to_csv(output_dir / "daily_portfolio_pnl.csv", index=False, encoding="utf-8-sig")
+            pd.DataFrame(columns=["signal_date", "entry_date", "entry_price_type", "earliest_exit_date", "actual_exit_date", "exit_delay_days", "exit_attempt_count", "exit_status", "exit_price_type", "requested_long_count", "executed_long_count", "rejected_long_count", "long_gross_return", "benchmark_return", "long_excess_return", "entry_commission", "exit_commission", "stamp_duty", "slippage", "total_cost", "long_net_return", "long_equity_curve", "factor_diagnostic_spread"]).to_csv(output_dir / "daily_portfolio_pnl.csv", index=False, encoding="utf-8-sig")
 
         # 17. 可视化图表
         cls._generate_charts(charts_dir, metrics_dict, decay_dict, corr_result, selection_result)
@@ -291,32 +293,32 @@ class FactorReportGenerator:
         benchmark_evidence: Optional[Dict[str, Any]] = None
     ):
         top10_df = df_summary.head(10)
-        rejected_df = df_summary[df_summary["status"] == "REJECT"].head(10)
         wf_info = selection_result.walk_forward_stability
         manifest = run_manifest or {}
         bench = benchmark_evidence or {}
 
         val_status = manifest.get("research_validity_status", "DEVELOPMENT_SAMPLE")
+        bench_status = bench.get("benchmark_timing_status", "BENCHMARK_DATA_INVALID")
         n_strong = len(selection_result.selected_factors)
         n_useful = len(selection_result.useful_factors)
 
         ranking_title = "Top 10 核心有效因子排行榜" if (n_strong + n_useful > 0) else "Top 10 探索性候选因子表现 (Exploratory Candidates)"
 
         lines = [
-            "# A股多因子研究与 Alpha 真实性验证报告 (Phase 1.4 T+1 Settlement & Lineage Closure)",
+            "# A股多因子研究与 Alpha 真实性验证报告 (Phase 1.5 Production Tradability & Benchmark Closure)",
             "",
             f"> **研究证据级别 (Validity Status)**: `{val_status}` (数据样本数: {manifest.get('symbol_count', 0)} 标的, 行数: {manifest.get('dataset_rows', 0)})",
             "> **结算规则 (Settlement Rule)**: `A_SHARE_T_PLUS_1_NO_SAME_DAY_SELL` (严禁日内开仓平仓回转)",
-            "> **执行模型 (Execution Definition)**: `Signal at T Close -> Long Entry at T+1 Open -> Earliest Exit at T+2 Open`",
-            f"> **基准时序状态 (Benchmark Timing)**: `{bench.get('benchmark_timing_status', 'UNAVAILABLE')}` (开盘覆盖率: {bench.get('benchmark_open_coverage_ratio', 0.0)*100:.1f}%, 收盘覆盖率: {bench.get('benchmark_close_coverage_ratio', 0.0)*100:.1f}%)",
+            "> **执行模型 (Execution Definition)**: `Signal at T Close -> Long Entry at T+1 Open -> Earliest Exit at T+2 Open (Delayed Exit on Lock/Suspension)`",
+            f"> **基准时序状态 (Benchmark Timing)**: `{bench_status}` (开盘覆盖率: {bench.get('benchmark_open_coverage_ratio', 0.0)*100:.1f}%, 收盘覆盖率: {bench.get('benchmark_close_coverage_ratio', 0.0)*100:.1f}%)",
             "",
-            "## 1. 核心架构与真实性闭环要点 (Phase 1.4 Integrity Highlights)",
-            "- **P0-1 严格区分诊断与可交易收益**: T+1 Open->Close 明确标记为 `INTRADAY_FACTOR_DIAGNOSTIC_RETURN`；真实可执行策略遵循 `T Close Signal -> T+1 Open Entry -> T+2 Open Earliest Exit`；",
-            "- **P0-2 Benchmark Open 数据链与单维映射**: 消除基准价格直接参与相减的错误，基准指数严格按 `date` 单维映射，同一日期所有标的基准收益严格一致；",
-            "- **P0-3 Walk-Forward 全家族 Global FDR**: 每一个 Train Fold 内部严格运行完整 $79 \times 5 = 395$ 假设的 Global BH-FDR，仅允许通过 FDR 的视界入选并在验证折评估冻结决策；",
-            "- **P0-4 Canonical Date+Symbol 组合哈希**: Factor Matrix 与 Research Input Dataset 均严格绑定 `[date, symbol]` 联合唯一索引排序后生成不可篡改 SHA-256 指纹；",
-            "- **P0-5 完整可交易性与拒单审计**: 严格审计一字涨停无法买入、一字跌停无法卖出与停牌，导出 `trade_rejection_evidence.csv`；",
-            "- **P0-6 独立 Long-Only 策略与非对称交易成本**: 买入计收佣金与滑点，卖出计收佣金、印花税与滑点，独立输出纯多头净值曲线与诊断用多空利差。",
+            "## 1. 核心架构与真实性闭环要点 (Phase 1.5 Integrity Highlights)",
+            "- **P0-1/P0-2 基准缺失严格 Fail-Closed**: 基准开盘价缺失或不达标时，所有超额收益标签严格置为 NaN，超额指标显示 `N/A` (`BENCHMARK_TIMING_INVALID`)，绝不进行假想平价或 0 回退；",
+            "- **P0-3 严密缓存失效与必需列校验**: Factor / Market 缓存架构升级至 v3.2，严格要求 `[date, symbol, adj_open, adj_close, benchmark_open, benchmark_close, in_universe]`，残缺缓存自动触发重构；",
+            "- **P0-4 生产交易 Schema 完全对齐**: Execution 引擎原生接入 `is_limit_up_locked`, `is_limit_down_locked`, `limit_up_price`, `limit_down_price`，准确拦截涨停买入与 ST；",
+            "- **P0-5 真实 Delayed Exit 展期机制**: 当 $T+2$ 遇到跌停或停牌无法卖出时，持仓顺延至 $T+3..T+k$ 成交，交易成本严格发生在实际成交日 `actual_exit_date`；",
+            "- **P1-1 真实物理父链 Manifest**: 绝不使用伪造哈希，缺失父链如实标记为 `null` / `MISSING`；",
+            "- **P1-3 几何复合增长率 (CAGR)**: 纯多头复合收益率严格采用 `(final_equity / initial_equity)**(252/N) - 1`，彻底消除算术均值年化误差。",
             "",
             "## 2. 研究概览与因子分级统计",
             f"- **候选因子总数**: {len(df_summary)} 个",
@@ -329,17 +331,22 @@ class FactorReportGenerator:
             "",
             f"## 3. {ranking_title}",
             "",
-            "| 排名 | 因子名称 | 分级状态 | 证据级别 | 推荐方向 | 最优视界 | Mean RankIC | HAC t-stat | FDR p-val | 纯多头年化 | 纯多头夏普 | 日均换手 | 纯多头超额年化 |",
+            "| 排名 | 因子名称 | 分级状态 | 证据级别 | 推荐方向 | 最优视界 | Mean RankIC | HAC t-stat | FDR p-val | 纯多头 CAGR | 纯多头夏普 | 日均换手 | 纯多头超额年化 |",
             "| :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |"
         ]
 
         rank = 1
         for _, r in top10_df.iterrows():
             dir_str = "正向 (+1)" if r["recommended_direction"] == 1 else "反向 (-1)"
-            ann_ret_str = f"{r['long_only_cagr']*100:.1f}%" if r['long_only_cagr'] > -0.99 else "-99.0%"
-            long_only_str = f"{r['long_only_excess_annual_return']*100:.1f}%" if r['long_only_excess_annual_return'] > -0.99 else "-99.0%"
+            cagr_str = f"{r['long_only_cagr']*100:.1f}%" if (pd.notna(r['long_only_cagr']) and r['long_only_cagr'] > -0.99) else "-99.0%"
+            
+            if bench_status == "VALID" and pd.notna(r['long_only_excess_annual_return']):
+                excess_str = f"{r['long_only_excess_annual_return']*100:.1f}%"
+            else:
+                excess_str = "N/A (BENCHMARK_INVALID)"
+
             lines.append(
-                f"| {rank} | `{r['factor_name']}` | `{r['status']}` | `{r['research_grade']}` | {dir_str} | {r['best_horizon']} | {r['mean_rank_ic']:.4f} | {r['rank_ic_hac_t_stat']:.2f} | {r['rank_ic_fdr_p_value']:.4f} | {ann_ret_str} | {r['long_only_sharpe']:.2f} | {r['long_turnover']*100:.1f}% | {long_only_str} |"
+                f"| {rank} | `{r['factor_name']}` | `{r['status']}` | `{r['research_grade']}` | {dir_str} | {r['best_horizon']} | {r['mean_rank_ic']:.4f} | {r['rank_ic_hac_t_stat']:.2f} | {r['rank_ic_fdr_p_value']:.4f} | {cagr_str} | {r['long_only_sharpe']:.2f} | {r['long_turnover']*100:.1f}% | {excess_str} |"
             )
             rank += 1
 

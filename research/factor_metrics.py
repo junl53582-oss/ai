@@ -1,10 +1,10 @@
 """
 因子基础统计量、交易执行与可交易性审计引擎 (research/factor_metrics.py)
-Phase 1.4 核心强化:
-1. P0-1: 严格区分 INTRADAY_FACTOR_DIAGNOSTIC_RETURN (T+1 Open->Close) 与 A-Share Tradable Return (T+1 Open -> T+2 Open/Close)
-2. P0-5: 完整可交易性过滤 (涨跌停锁死、停牌、ST) 与卖出腿锁死展期追踪
-3. P0-6: 独立输出 Long-Only 真实策略绩效与 Diagnostic Spread 诊断指标
-4. 导出 trade_rejection_evidence.csv 结构化交易拒单证据
+Phase 1.5 核心强化:
+1. P0-4: 生产 Schema 对齐 (is_limit_up_locked, is_limit_down_locked, limit_up_price, limit_down_price)
+2. P0-5: 真实 Delayed Exit 展期卖出 (T+2跌停/停牌顺延至T+k，最长 MAX_UNEXECUTED_EXIT_DAYS，超时记录 UNEXECUTED_TIMEOUT)
+3. 交易成本严格发生在 actual_exit_date
+4. P1-3: 严格几何增长复利 CAGR (final_equity / initial_equity)**(252/N) - 1
 """
 import logging
 from enum import Enum
@@ -34,9 +34,16 @@ class TradabilityStatus(str, Enum):
     UNKNOWN_TRADABILITY = "UNKNOWN_TRADABILITY"
 
 
+class ExitStatus(str, Enum):
+    EXECUTED_ON_TIME = "EXECUTED_ON_TIME"
+    DELAYED_LIMIT_DOWN = "DELAYED_LIMIT_DOWN"
+    DELAYED_SUSPENSION = "DELAYED_SUSPENSION"
+    UNEXECUTED_TIMEOUT = "UNEXECUTED_TIMEOUT"
+
+
 @dataclass
 class FactorEvaluationMetrics:
-    """单个因子的全要素量化评估指标 (Phase 1.4)"""
+    """单个因子的全要素量化评估指标 (Phase 1.5)"""
     factor_name: str
     horizon: int
     
@@ -78,14 +85,14 @@ class FactorEvaluationMetrics:
     quantile_returns_10q: Dict[str, float] = field(default_factory=dict)
     
     # A股纯多头可执行策略指标 (Real Long-Only Executable Strategy)
-    long_only_cagr: float = 0.0
+    long_only_cagr: Optional[float] = 0.0
     long_only_gross_return: float = 0.0
     long_only_net_return: float = 0.0
     long_only_sharpe: float = 0.0
     long_only_max_drawdown: float = 0.0
     long_only_win_rate: float = 0.0
-    long_only_excess_annual_return: float = 0.0 # Top 组相对于基准的纯多头超额年化收益
-    long_only_excess_sharpe: float = 0.0        # Top 组纯多头超额夏普
+    long_only_excess_annual_return: Optional[float] = 0.0 # Top 组相对于基准的纯多头超额年化收益
+    long_only_excess_sharpe: Optional[float] = 0.0        # Top 组纯多头超额夏普
     long_turnover: float = 0.0
     
     # 因子诊断多空利差指标 (FACTOR_DIAGNOSTIC_SPREAD, 非实盘裸空组合)
@@ -295,8 +302,8 @@ class FactorMetricsEngine:
         config: Optional[ResearchConfig] = None
     ) -> Dict[str, Any]:
         """
-        Phase 1.4 A股真实 T+1 结算与买卖可交易性完整执行 (P0-1 / P0-5 / P0-6)
-        时序: T 日收盘计算信号 -> T+1 日开盘买入 -> T+2 日开盘最早可卖出
+        Phase 1.5 A股真实 T+1 结算、生产 Schema 对齐与 Delayed Exit (P0-4 / P0-5 / P1-3)
+        时序: T 日收盘计算信号 -> T+1 日开盘买入 -> T+2 日开盘最早卖出 (若无法卖出则顺延至 T+k)
         """
         cfg = config or default_research_config
         df = df.copy()
@@ -342,16 +349,19 @@ class FactorMetricsEngine:
         
         bench_df = df.groupby(date_col)[[c for c in [b_close_col, b_open_col] if c]].first()
 
+        # 快速按日期建立个股字典索引
+        df_by_date = {dt: g.set_index(symbol_col) for dt, g in df.groupby(date_col)}
+
         pnl_records = []
         trade_rejections = []
         prev_top_set: Set[str] = set()
         prev_bottom_set: Set[str] = set()
 
-        # 遍历交易日 T，计算从 T+1 Open 买入，至 T+2 Open (或退出日) 的真实 A 股收益
+        # 遍历交易日 T，计算从 T+1 Open 买入，至 T+2 (或顺延 T+k) 的真实 A 股收益
         for t_idx in range(n_dates - 2):
             d_signal = dates[t_idx]
             d_entry = dates[t_idx + 1]
-            d_exit = dates[t_idx + 2]
+            d_earliest_exit = dates[t_idx + 2]
 
             day_sig_df = sub_df[sub_df[date_col] == d_signal]
             req_top_syms = set(day_sig_df[day_sig_df["quantile"] == top_q][symbol_col].unique())
@@ -360,24 +370,26 @@ class FactorMetricsEngine:
             if not req_top_syms:
                 continue
 
-            day_entry_df = df[df[date_col] == d_entry].set_index(symbol_col)
-            day_exit_df = df[df[date_col] == d_exit].set_index(symbol_col)
+            day_entry_df = df_by_date.get(d_entry, pd.DataFrame())
+            if day_entry_df.empty:
+                continue
 
-            # ---------------- Top 组 (多头买入) 可交易性检查 ----------------
-            exec_top_syms = []
+            # ---------------- Top 组 (多头买入) 可交易性检查 (P0-4) ----------------
+            exec_top_positions = []
             for sym in req_top_syms:
-                if sym not in day_entry_df.index or sym not in day_exit_df.index:
+                if sym not in day_entry_df.index:
                     trade_rejections.append({
-                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "exit_date": str(d_exit.date()),
+                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "earliest_exit_date": str(d_earliest_exit.date()),
                         "symbol": sym, "side": "BUY", "reject_stage": "ENTRY", "reject_reason": TradabilityStatus.MISSING_DATA.value
                     })
                     continue
 
                 e_row = day_entry_df.loc[sym]
+                
                 # 停牌
                 if e_row.get("is_suspended", False):
                     trade_rejections.append({
-                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "exit_date": str(d_exit.date()),
+                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "earliest_exit_date": str(d_earliest_exit.date()),
                         "symbol": sym, "side": "BUY", "reject_stage": "ENTRY", "reject_reason": TradabilityStatus.SUSPENDED.value
                     })
                     continue
@@ -386,15 +398,17 @@ class FactorMetricsEngine:
                 open_p = e_row.get(o_col, 0.0)
                 if pd.isna(open_p) or open_p <= 0:
                     trade_rejections.append({
-                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "exit_date": str(d_exit.date()),
+                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "earliest_exit_date": str(d_earliest_exit.date()),
                         "symbol": sym, "side": "BUY", "reject_stage": "ENTRY", "reject_reason": TradabilityStatus.INVALID_OPEN.value
                     })
                     continue
 
-                # 一字涨停锁死无法买入
-                if "limit_up" in e_row and open_p >= e_row["limit_up"]:
+                # 一字涨停锁死无法买入 (支持生产字段 is_limit_up_locked 与 limit_up_price)
+                is_l_up = e_row.get("is_limit_up_locked", False)
+                l_up_p = e_row.get("limit_up_price", e_row.get("limit_up", np.nan))
+                if is_l_up or (not pd.isna(l_up_p) and l_up_p > 0 and open_p >= l_up_p):
                     trade_rejections.append({
-                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "exit_date": str(d_exit.date()),
+                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "earliest_exit_date": str(d_earliest_exit.date()),
                         "symbol": sym, "side": "BUY", "reject_stage": "ENTRY", "reject_reason": TradabilityStatus.LIMIT_UP_LOCKED.value
                     })
                     continue
@@ -402,28 +416,88 @@ class FactorMetricsEngine:
                 # ST 检查
                 if not cfg.ALLOW_ST_TRADING and e_row.get("is_st", False):
                     trade_rejections.append({
-                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "exit_date": str(d_exit.date()),
+                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "earliest_exit_date": str(d_earliest_exit.date()),
                         "symbol": sym, "side": "BUY", "reject_stage": "ENTRY", "reject_reason": TradabilityStatus.ST_BLOCKED.value
                     })
                     continue
 
-                # 退出日可卖出性检查
-                x_row = day_exit_df.loc[sym]
-                exit_p = x_row.get(o_col, 0.0) if cfg.EXIT_PRICE_TYPE == "open" else x_row.get(c_col, 0.0)
-                if pd.isna(exit_p) or exit_p <= 0:
-                    trade_rejections.append({
-                        "signal_date": str(d_signal.date()), "entry_date": str(d_entry.date()), "exit_date": str(d_exit.date()),
-                        "symbol": sym, "side": "SELL", "reject_stage": "EXIT", "reject_reason": TradabilityStatus.INVALID_EXIT_PRICE.value
-                    })
-                    continue
+                # ---------------- 真实 Delayed Exit 寻找退出时点 (P0-5) ----------------
+                actual_exit_dt = None
+                actual_exit_p = None
+                exit_status_str = None
+                exit_delay = 0
+                attempt_cnt = 0
 
-                exec_top_syms.append(sym)
+                max_step = min(cfg.MAX_UNEXECUTED_EXIT_DAYS, n_dates - (t_idx + 2))
+                for step in range(max_step):
+                    attempt_cnt += 1
+                    cand_dt = dates[t_idx + 2 + step]
+                    cand_day_df = df_by_date.get(cand_dt, pd.DataFrame())
+                    if cand_day_df.empty or sym not in cand_day_df.index:
+                        continue
+                    
+                    x_row = cand_day_df.loc[sym]
+                    # 检查是否停牌
+                    if x_row.get("is_suspended", False):
+                        continue
+                    
+                    # 检查价格有效性
+                    cand_p = x_row.get(o_col, 0.0) if cfg.EXIT_PRICE_TYPE == "open" else x_row.get(c_col, 0.0)
+                    if pd.isna(cand_p) or cand_p <= 0:
+                        continue
+                    
+                    # 检查是否一字跌停锁死 (支持生产字段 is_limit_down_locked 与 limit_down_price)
+                    is_l_dn = x_row.get("is_limit_down_locked", False)
+                    l_dn_p = x_row.get("limit_down_price", x_row.get("limit_down", np.nan))
+                    if is_l_dn or (not pd.isna(l_dn_p) and l_dn_p > 0 and cand_p <= l_dn_p):
+                        continue
 
-            if not exec_top_syms:
+                    # 找到第一个可卖交易日！
+                    actual_exit_dt = cand_dt
+                    actual_exit_p = float(cand_p)
+                    exit_delay = step
+                    if step == 0:
+                        exit_status_str = ExitStatus.EXECUTED_ON_TIME.value
+                    else:
+                        # 判断顺延主因
+                        first_x_row = df_by_date.get(d_earliest_exit, pd.DataFrame()).loc[sym] if sym in df_by_date.get(d_earliest_exit, pd.DataFrame()).index else {}
+                        if first_x_row.get("is_suspended", False):
+                            exit_status_str = ExitStatus.DELAYED_SUSPENSION.value
+                        else:
+                            exit_status_str = ExitStatus.DELAYED_LIMIT_DOWN.value
+                    break
+
+                if actual_exit_dt is None:
+                    # 超过最大展期天数仍未卖出
+                    timeout_dt = dates[min(t_idx + 2 + max_step - 1, n_dates - 1)]
+                    timeout_df = df_by_date.get(timeout_dt, pd.DataFrame())
+                    if not timeout_df.empty and sym in timeout_df.index:
+                        actual_exit_p = float(timeout_df.loc[sym].get(c_col, open_p))
+                    else:
+                        actual_exit_p = float(open_p)
+                    actual_exit_dt = timeout_dt
+                    exit_delay = max_step
+                    exit_status_str = ExitStatus.UNEXECUTED_TIMEOUT.value
+
+                exec_top_positions.append({
+                    "symbol": sym,
+                    "entry_price": float(open_p),
+                    "exit_price": actual_exit_p,
+                    "earliest_exit_date": d_earliest_exit,
+                    "actual_exit_date": actual_exit_dt,
+                    "exit_delay_days": exit_delay,
+                    "exit_attempt_count": attempt_cnt,
+                    "exit_status": exit_status_str,
+                    "stock_return": (actual_exit_p / float(open_p)) - 1.0
+                })
+
+            if not exec_top_positions:
                 continue
 
-            # 多头换手率
+            exec_top_syms = [p["symbol"] for p in exec_top_positions]
             exec_top_set = set(exec_top_syms)
+
+            # 多头换手率
             if prev_top_set:
                 intersect_top = len(exec_top_set.intersection(prev_top_set))
                 long_turnover = 1.0 - (intersect_top / max(len(exec_top_set), 1))
@@ -431,55 +505,63 @@ class FactorMetricsEngine:
                 long_turnover = 1.0
             prev_top_set = exec_top_set
 
-            # 计算真实 A 股持仓收益: StockOpen[T+2] / StockOpen[T+1] - 1
-            top_returns = []
-            for sym in exec_top_syms:
-                e_p = float(day_entry_df.loc[sym, o_col])
-                x_p = float(day_exit_df.loc[sym, o_col] if cfg.EXIT_PRICE_TYPE == "open" else day_exit_df.loc[sym, c_col])
-                top_returns.append((x_p / e_p) - 1.0)
+            # 纯多头持仓收益
+            top_returns = [p["stock_return"] for p in exec_top_positions]
             long_gross_ret = float(np.mean(top_returns))
 
-            # 基准收益 (完全相同时序: BenchmarkOpen[T+2] / BenchmarkOpen[T+1] - 1)
-            if b_open_col and b_open_col in bench_df.columns and d_entry in bench_df.index and d_exit in bench_df.index:
+            # 对应退出日的基准收益
+            max_act_exit_dt = max(p["actual_exit_date"] for p in exec_top_positions)
+            if b_open_col and b_open_col in bench_df.columns and d_entry in bench_df.index and max_act_exit_dt in bench_df.index:
                 b_e = bench_df.loc[d_entry, b_open_col]
-                b_x = bench_df.loc[d_exit, b_open_col] if cfg.EXIT_PRICE_TYPE == "open" else bench_df.loc[d_exit, b_close_col]
+                b_x = bench_df.loc[max_act_exit_dt, b_open_col] if cfg.EXIT_PRICE_TYPE == "open" else bench_df.loc[max_act_exit_dt, b_close_col]
                 bench_ret = float((b_x / b_e) - 1.0) if (b_e and b_e > 0) else 0.0
-            elif b_close_col and b_close_col in bench_df.columns and d_entry in bench_df.index and d_exit in bench_df.index:
+            elif b_close_col and b_close_col in bench_df.columns and d_entry in bench_df.index and max_act_exit_dt in bench_df.index:
                 b_e = bench_df.loc[d_entry, b_close_col]
-                b_x = bench_df.loc[d_exit, b_close_col]
+                b_x = bench_df.loc[max_act_exit_dt, b_close_col]
                 bench_ret = float((b_x / b_e) - 1.0) if (b_e and b_e > 0) else 0.0
             else:
                 bench_ret = 0.0
 
-            # 真实 A 股非对称摩擦成本
+            # 真实 A 股非对称摩擦成本 (严格绑定实际成交)
             comm = cfg.DEFAULT_COMMISSION_BPS / 10000.0
             stamp = cfg.DEFAULT_STAMP_DUTY_BPS / 10000.0
             slip = cfg.DEFAULT_SLIPPAGE_BPS / 10000.0
 
-            # 买入开仓成本: 佣金 + 滑点
             entry_fee = long_turnover * (comm + slip)
-            # 卖出平仓成本: 佣金 + 印花税 + 滑点
             exit_fee = long_turnover * (comm + stamp + slip)
             total_long_cost = entry_fee + exit_fee
             long_net_ret = long_gross_ret - total_long_cost
             long_excess_ret = long_gross_ret - bench_ret
 
-            # 诊断用利差 (FACTOR_DIAGNOSTIC_SPREAD)
-            exec_bottom_syms = [s for s in req_bottom_syms if s in day_entry_df.index and s in day_exit_df.index]
+            # 诊断用利差
+            exec_bottom_syms = [s for s in req_bottom_syms if s in day_entry_df.index]
             if exec_bottom_syms:
-                bottom_rets = [(float(day_exit_df.loc[s, o_col]) / float(day_entry_df.loc[s, o_col])) - 1.0 for s in exec_bottom_syms]
-                diag_spread = long_gross_ret - float(np.mean(bottom_rets))
+                bottom_day_exit_df = df_by_date.get(d_earliest_exit, pd.DataFrame())
+                bottom_rets = []
+                for s in exec_bottom_syms:
+                    if not bottom_day_exit_df.empty and s in bottom_day_exit_df.index:
+                        b_ep = float(day_entry_df.loc[s, o_col])
+                        b_xp = float(bottom_day_exit_df.loc[s, o_col] if cfg.EXIT_PRICE_TYPE == "open" else bottom_day_exit_df.loc[s, c_col])
+                        bottom_rets.append((b_xp / b_ep) - 1.0)
+                diag_spread = long_gross_ret - (float(np.mean(bottom_rets)) if bottom_rets else 0.0)
                 short_turnover = 1.0
             else:
                 diag_spread = 0.0
                 short_turnover = 0.0
 
+            mean_delay = float(np.mean([p["exit_delay_days"] for p in exec_top_positions]))
+            mean_attempts = float(np.mean([p["exit_attempt_count"] for p in exec_top_positions]))
+            primary_status = exec_top_positions[0]["exit_status"]
+
             pnl_records.append({
                 "signal_date": str(d_signal.date()),
                 "entry_date": str(d_entry.date()),
                 "entry_price_type": cfg.ENTRY_PRICE_TYPE,
-                "earliest_exit_date": str(d_exit.date()),
-                "actual_exit_date": str(d_exit.date()),
+                "earliest_exit_date": str(d_earliest_exit.date()),
+                "actual_exit_date": str(max_act_exit_dt.date()),
+                "exit_delay_days": int(round(mean_delay)),
+                "exit_attempt_count": int(round(mean_attempts)),
+                "exit_status": primary_status,
                 "exit_price_type": cfg.EXIT_PRICE_TYPE,
                 "requested_long_count": len(req_top_syms),
                 "executed_long_count": len(exec_top_syms),
@@ -520,26 +602,22 @@ class FactorMetricsEngine:
         daily_std = float(net_s.std(ddof=1)) if len(net_s) > 1 else 1e-6
         exc_std = float(exc_s.std(ddof=1)) if len(exc_s) > 1 else 1e-6
 
-        # 安全复利年化
-        if net_d_mean > 5.0:
-            ann_return = 999.0
-        elif net_d_mean > -1.0:
-            try:
-                ann_return = (1.0 + net_d_mean) ** 252.0 - 1.0
-            except OverflowError:
-                ann_return = 999.0
+        # 严格几何 CAGR: (final_equity / initial_equity)**(252 / N) - 1 (P1-3)
+        n_periods = len(pnl_df)
+        final_eq = float(pnl_df["long_equity_curve"].iloc[-1])
+        if final_eq > 0 and n_periods > 0:
+            cagr = (final_eq ** (252.0 / n_periods)) - 1.0
         else:
-            ann_return = -1.0
+            cagr = -1.0
 
-        if exc_d_mean > 5.0:
-            exc_ann = 999.0
-        elif exc_d_mean > -1.0:
-            try:
-                exc_ann = (1.0 + exc_d_mean) ** 252.0 - 1.0
-            except OverflowError:
-                exc_ann = 999.0
+        # 基准几何收益
+        pnl_df["bench_equity_curve"] = (1.0 + pnl_df["benchmark_return"]).cumprod()
+        final_bench_eq = float(pnl_df["bench_equity_curve"].iloc[-1])
+        if final_bench_eq > 0 and n_periods > 0:
+            bench_cagr = (final_bench_eq ** (252.0 / n_periods)) - 1.0
         else:
-            exc_ann = -1.0
+            bench_cagr = -1.0
+        exc_cagr = cagr - bench_cagr
 
         sharpe = (net_d_mean / daily_std) * np.sqrt(252.0) if daily_std > 1e-8 else 0.0
         exc_sharpe = (exc_d_mean / exc_std) * np.sqrt(252.0) if exc_std > 1e-8 else 0.0
@@ -557,21 +635,15 @@ class FactorMetricsEngine:
         spread_ann = (1.0 + spread_mean) ** 252.0 - 1.0 if (spread_mean > -1.0 and spread_mean < 5.0) else 0.0
         spread_sharpe = (spread_mean / spread_std) * np.sqrt(252.0) if spread_std > 1e-8 else 0.0
 
-        # 通用费率敏感度 (GENERIC_COST_SENSITIVITY)
+        # 通用费率敏感度
         cost_sensitivity = {}
         for bps in cfg.COST_BPS_LIST:
             f_rate = bps / 10000.0
-            test_net_mean = gross_d_mean - (2.0 * mean_long_turnover * f_rate)
-            if test_net_mean > 5.0:
-                test_net_ann = 999.0
-            elif test_net_mean > -1.0:
-                try:
-                    test_net_ann = (1.0 + test_net_mean) ** 252.0 - 1.0
-                except OverflowError:
-                    test_net_ann = 999.0
-            else:
-                test_net_ann = -1.0
-            cost_sensitivity[f"{int(bps)}bps"] = round(float(test_net_ann), 6)
+            test_net_series = gross_s - (2.0 * mean_long_turnover * f_rate)
+            test_eq = (1.0 + test_net_series).cumprod()
+            test_final = float(test_eq.iloc[-1]) if not test_eq.empty else 0.0
+            test_cagr = (test_final ** (252.0 / n_periods)) - 1.0 if (test_final > 0 and n_periods > 0) else -1.0
+            cost_sensitivity[f"{int(bps)}bps"] = round(float(test_cagr), 6)
 
         return {
             "long_turnover": round(mean_long_turnover, 4),
@@ -579,11 +651,11 @@ class FactorMetricsEngine:
             "mean_turnover": round(mean_gross_turnover, 4),
             "long_only_gross_return": round(gross_d_mean, 6),
             "long_only_net_return": round(net_d_mean, 6),
-            "long_only_cagr": round(ann_return, 4),
+            "long_only_cagr": round(cagr, 4),
             "long_only_sharpe": round(sharpe, 4),
             "long_only_max_drawdown": round(max_dd, 4),
             "long_only_win_rate": round(win_rate, 4),
-            "long_only_excess_annual_return": round(exc_ann, 4),
+            "long_only_excess_annual_return": round(exc_cagr, 4),
             "long_only_excess_sharpe": round(exc_sharpe, 4),
             "diagnostic_spread_mean": round(spread_mean, 6),
             "diagnostic_spread_annual": round(spread_ann, 4),

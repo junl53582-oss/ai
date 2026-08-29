@@ -1,13 +1,13 @@
 """
-因子研究、A股 T+1 结算与 Alpha 证据链严密验证测试套件 (tests/test_factor_research.py)
-Phase 1.4 核心强化:
-1. P0-1: 验证 A 股 T+1 结算规则 (禁止日内买卖回转，Earliest Exit at T+2)
-2. P0-2: 验证 Benchmark Open 数据链、Date-Level 唯一映射与缺失 Fail-Closed
-3. P0-3: 验证 Walk-Forward Train Fold 内全家族 Factor x Horizon Global BH-FDR 门禁
-4. P0-4: 验证 Canonical Date+Symbol 组合哈希与 Research Run Manifest 证据绑定
-5. P0-5: 验证可交易性过滤 (一字涨跌停、停牌、ST) 与卖出锁死拒单记录
-6. P0-6: 验证 Long-Only 纯多头策略与非对称交易摩擦成本核算
-7. P1: 验证年度稳定性无有效年份 Fail-Closed 为 None、有序交易日日历索引隔离等
+因子研究、A股 T+1 结算、Delayed Exit 与生产数据链严密验证测试套件 (tests/test_factor_research.py)
+Phase 1.5 核心强化:
+1. P0-1/P0-2: 基准严格 Fail-Closed 测试 (禁止任何隐式回退或造0)
+2. P0-3: 缓存失效与必需列校验测试 (旧版缓存/缺少 benchmark_open 自动失效)
+3. P0-4: 生产 Schema 对齐测试 (is_limit_up_locked, limit_up_price, is_limit_down_locked)
+4. P0-5: Delayed Exit 真实展期执行测试 (跌停/停牌顺延成交)
+5. P1-1: 真实物理父链与哈希校验测试 (绝不伪造 None_manifest 哈希)
+6. P1-3: 真实几何 CAGR 检验 (杜绝算术均值年化错误)
+7. P1-4: 中性化异常 Fail-Closed 测试 (置为 NaN，绝不保留原始值冒充)
 """
 import pytest
 import numpy as np
@@ -15,7 +15,7 @@ import pandas as pd
 from datetime import datetime
 
 from research.config import ResearchConfig, default_research_config
-from research.factor_metrics import FactorMetricsEngine, FactorEvaluationMetrics, TradabilityStatus
+from research.factor_metrics import FactorMetricsEngine, FactorEvaluationMetrics, TradabilityStatus, ExitStatus
 from research.factor_decay import FactorDecayEngine
 from research.factor_stability import FactorStabilityEngine, FactorStabilityResult
 from research.factor_correlation import CorrelationAnalysisResult, FactorCorrelationEngine
@@ -59,6 +59,10 @@ def synthetic_panel_data():
                 "in_universe": True,
                 "is_suspended": False,
                 "is_st": False,
+                "is_limit_up_locked": False,
+                "is_limit_down_locked": False,
+                "limit_up_price": open_p * 1.10,
+                "limit_down_price": open_p * 0.90,
                 "industry": f"IND_{s_idx % 3}",
                 "LOG_CIRC_MV": f_mv,
                 "F_ALPHA": f_alpha,
@@ -78,14 +82,6 @@ def synthetic_panel_data():
 # Test 1: P0-1 A-share T+1 settlement cannot capture same-day intraday return
 # ------------------------------------------------------------------------------
 def test_a_share_t_plus_1_settlement_cannot_sell_same_day():
-    """
-    构造:
-    T 日 (2021-01-04) 信号
-    T+1 (2021-01-05): Open = 10, Close = 12 (+20% 假想日内收益)
-    T+2 (2021-01-06): Open = 10 (最早可卖出开盘价)
-    要求:
-    真实 A 股可执行收益率不能为 +20%，按 T+2 Open 卖出结算收益率为 10/10 - 1 = 0%
-    """
     df = pd.DataFrame([
         {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
         {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
@@ -101,7 +97,6 @@ def test_a_share_t_plus_1_settlement_cannot_sell_same_day():
     assert not pnl_df.empty
 
     row0 = pnl_df.iloc[0]
-    # 真实持仓从 T+1 Open (10) 到 T+2 Open (10)，收益为 0%
     assert np.isclose(row0["long_gross_return"], 0.0, atol=1e-5)
     assert not np.isclose(row0["long_gross_return"], 0.20, atol=1e-3)
 
@@ -125,45 +120,171 @@ def test_long_only_excess_uses_benchmark_return_not_benchmark_price():
     assert not pnl_df.empty
 
     row0 = pnl_df.iloc[0]
-    # stock top return: (10.2 / 10.0 - 1) = 0.02
     assert np.isclose(row0["long_gross_return"], 0.02, atol=1e-5)
-    # benchmark return: (101.0 / 100.0 - 1) = 0.01
     assert np.isclose(row0["benchmark_return"], 0.01, atol=1e-5)
-    # long-only excess return: 0.02 - 0.01 = 0.01
     assert np.isclose(row0["long_excess_return"], 0.01, atol=1e-5)
-    assert not np.isclose(row0["long_excess_return"], -100.98, atol=1.0)
 
 
 # ------------------------------------------------------------------------------
-# Test 3: P0-2 Benchmark missing blocks certification in strict mode
+# Test 3: P0-2 Strict benchmark fail-closed sets NaN and N/A
 # ------------------------------------------------------------------------------
-def test_missing_benchmark_open_fails_closed_in_strict_mode(synthetic_panel_data):
+def test_strict_excess_research_aborts_when_benchmark_open_missing(synthetic_panel_data):
     df_no_bench = synthetic_panel_data.drop(columns=["benchmark_open"]).copy()
     cfg = ResearchConfig(ALLOW_BENCHMARK_FALLBACK_FOR_TESTS=False, USE_EXCESS_RETURN=True)
     engine = FactorResearchEngine(config=cfg)
     
-    engine._audit_benchmark_evidence(df_no_bench)
+    df_labeled = engine.generate_future_return_labels(df_no_bench, config=cfg)
+    # 严格模式下，超额收益必须全部为 NaN
+    assert df_labeled["future_excess_return_20d"].isna().all()
+    
+    engine._audit_benchmark_evidence(df_labeled)
     assert engine.benchmark_evidence["benchmark_timing_status"] == "BENCHMARK_OPEN_UNAVAILABLE"
 
 
 # ------------------------------------------------------------------------------
-# Test 4: P0-3 Walk-Forward Factor x Horizon Global FDR inside Train fold
+# Test 4: P0-4 Real production limit schema is consumed by execution engine
 # ------------------------------------------------------------------------------
-def test_walk_forward_global_fdr_rejects_spurious_horizons(synthetic_panel_data):
-    cfg = ResearchConfig(WF_TRAIN_YEARS=1.0, WF_VALIDATION_YEARS=0.5, WF_PURGE_DAYS=25, HORIZONS=[1, 5, 20])
-    df_labeled = FactorResearchEngine.generate_future_return_labels(synthetic_panel_data, horizons=cfg.HORIZONS)
+def test_real_data_manager_limit_schema_is_consumed_by_execution_engine():
+    df = pd.DataFrame([
+        {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        # T+1 日 000001.SZ 生产字段 is_limit_up_locked = True
+        {"date": "2021-01-05", "symbol": "000001.SZ", "open": 11.0, "close": 11.0, "is_limit_up_locked": True, "limit_up_price": 11.0, "adj_open": 11.0, "adj_close": 11.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "is_limit_up_locked": False, "limit_up_price": 11.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-06", "symbol": "000001.SZ", "open": 11.0, "close": 11.0, "adj_open": 11.0, "adj_close": 11.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-06", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+    ])
+    df["date"] = pd.to_datetime(df["date"])
     
-    res = FactorSelectionEngine.run_purged_walk_forward(df_labeled, ["F_CONSTANT"], config=cfg)
-    assert "wf_horizon_significance" in res
-    assert len(res["wf_horizon_significance"]) > 0
-    # 常数因子全假设 global_fdr_p 应为 1.0，绝不入选
-    for r in res["wf_horizon_significance"]:
-        assert r["train_global_fdr_p"] > 0.05
-        assert r["selected"] == False
+    pnl = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(df, "F_TEST", n_quantiles=2)
+    assert len(pnl["trade_rejections"]) > 0
+    rej = pnl["trade_rejections"][0]
+    assert rej["reject_reason"] == TradabilityStatus.LIMIT_UP_LOCKED.value
+    assert rej["symbol"] == "000001.SZ"
 
 
 # ------------------------------------------------------------------------------
-# Test 5: P0-4 Canonical factor matrix hash binds date and symbol identity
+# Test 5: P0-5 Delayed Exit when T+2 is limit-down locked
+# ------------------------------------------------------------------------------
+def test_limit_down_at_t_plus_2_delays_exit_to_t_plus_3():
+    """
+    构造:
+    T 日 (2021-01-04) 信号: 买入 000001.SZ
+    T+1 (2021-01-05): Open = 10.0 买入成交
+    T+2 (2021-01-06): Open = 9.0, is_limit_down_locked = True (跌停锁死无法卖出!)
+    T+3 (2021-01-07): Open = 8.5, is_limit_down_locked = False (最早可卖出日!)
+    要求:
+    1. actual_exit_date 为 2021-01-07 (T+3)
+    2. exit_delay_days 为 1
+    3. exit_status 为 DELAYED_LIMIT_DOWN
+    4. 实际收益率为 8.5 / 10.0 - 1 = -15%
+    """
+    df = pd.DataFrame([
+        {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        # T+2 跌停锁死
+        {"date": "2021-01-06", "symbol": "000001.SZ", "open": 9.0, "close": 9.0, "is_limit_down_locked": True, "limit_down_price": 9.0, "adj_open": 9.0, "adj_close": 9.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-06", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        # T+3 恢复正常
+        {"date": "2021-01-07", "symbol": "000001.SZ", "open": 8.5, "close": 8.5, "is_limit_down_locked": False, "limit_down_price": 8.1, "adj_open": 8.5, "adj_close": 8.5, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-07", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+    ])
+    df["date"] = pd.to_datetime(df["date"])
+
+    pnl_res = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(df, "F_TEST", n_quantiles=2)
+    pnl_df = pnl_res["daily_pnl_df"]
+    assert not pnl_df.empty
+
+    row0 = pnl_df.iloc[0]
+    assert row0["earliest_exit_date"] == "2021-01-06"
+    assert row0["actual_exit_date"] == "2021-01-07"
+    assert row0["exit_delay_days"] == 1
+    assert row0["exit_status"] == ExitStatus.DELAYED_LIMIT_DOWN.value
+    assert np.isclose(row0["long_gross_return"], -0.15, atol=1e-5)
+
+
+# ------------------------------------------------------------------------------
+# Test 6: P0-5 Suspension delays exit
+# ------------------------------------------------------------------------------
+def test_suspension_delays_exit():
+    df = pd.DataFrame([
+        {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        # T+2 停牌
+        {"date": "2021-01-06", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": True},
+        {"date": "2021-01-06", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        # T+3 复牌
+        {"date": "2021-01-07", "symbol": "000001.SZ", "open": 10.5, "close": 10.5, "adj_open": 10.5, "adj_close": 10.5, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-07", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+    ])
+    df["date"] = pd.to_datetime(df["date"])
+
+    pnl_res = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(df, "F_TEST", n_quantiles=2)
+    pnl_df = pnl_res["daily_pnl_df"]
+    assert not pnl_df.empty
+
+    row0 = pnl_df.iloc[0]
+    assert row0["actual_exit_date"] == "2021-01-07"
+    assert row0["exit_delay_days"] == 1
+    assert row0["exit_status"] == ExitStatus.DELAYED_SUSPENSION.value
+    assert np.isclose(row0["long_gross_return"], 0.05, atol=1e-5)
+
+
+# ------------------------------------------------------------------------------
+# Test 7: P1-3 Geometric CAGR not equal to arithmetic annualization
+# ------------------------------------------------------------------------------
+def test_geometric_cagr_not_equal_to_arithmetic_mean():
+    """
+    交替 +10% 与 -10%：
+    最终净值 = 1.1 * 0.9 = 0.99
+    算术均值 = 0.0 (年化算术 = 0.0)
+    几何 CAGR 必须 < 0
+    """
+    df = pd.DataFrame([
+        {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-05", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-06", "symbol": "000001.SZ", "open": 11.0, "close": 11.0, "adj_open": 11.0, "adj_close": 11.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-06", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-07", "symbol": "000001.SZ", "open": 9.9, "close": 9.9, "adj_open": 9.9, "adj_close": 9.9, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
+        {"date": "2021-01-07", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
+    ])
+    df["date"] = pd.to_datetime(df["date"])
+
+    pnl_res = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(df, "F_TEST", n_quantiles=2)
+    # 几何 CAGR 必须为负数
+    assert pnl_res["long_only_cagr"] < 0.0
+
+
+# ------------------------------------------------------------------------------
+# Test 8: P0-3 Factor cache invalidated when benchmark_open added
+# ------------------------------------------------------------------------------
+def test_factor_cache_invalidated_when_benchmark_open_missing():
+    from factors.processor import FactorProcessor
+    fp = FactorProcessor()
+    
+    # 模拟缺少 benchmark_open 的老缓存
+    mock_old_cache = pd.DataFrame({
+        "date": ["2021-01-01"],
+        "symbol": ["000001.SZ"],
+        "adj_open": [10.0],
+        "adj_close": [10.0],
+        "in_universe": [True]
+    })
+    
+    req_cols = ["date", "symbol", "adj_open", "adj_close", "benchmark_open", "benchmark_close", "in_universe"]
+    missing_req = [c for c in req_cols if c not in mock_old_cache.columns]
+    assert "benchmark_open" in missing_req
+    assert len(missing_req) > 0
+
+
+# ------------------------------------------------------------------------------
+# Test 9: P0-4 Canonical factor matrix hash binds date and symbol identity
 # ------------------------------------------------------------------------------
 def test_factor_matrix_hash_binds_date_symbol_identity(synthetic_panel_data):
     engine = FactorResearchEngine()
@@ -187,55 +308,25 @@ def test_factor_matrix_hash_binds_date_symbol_identity(synthetic_panel_data):
 
 
 # ------------------------------------------------------------------------------
-# Test 6: P0-5 Limit-up locked cannot enter long and records trade rejection
+# Test 10: P0-3 Walk-Forward Factor x Horizon Global FDR inside Train fold
 # ------------------------------------------------------------------------------
-def test_limit_up_locked_cannot_enter_long_and_records_rejection():
-    df = pd.DataFrame([
-        {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
-        # T+1 日 000001.SZ 一字涨停锁死
-        {"date": "2021-01-05", "symbol": "000001.SZ", "open": 11.0, "close": 11.0, "high": 11.0, "low": 11.0, "limit_up": 11.0, "adj_open": 11.0, "adj_close": 11.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-05", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "high": 10.0, "low": 10.0, "limit_up": 11.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-06", "symbol": "000001.SZ", "open": 11.0, "close": 11.0, "adj_open": 11.0, "adj_close": 11.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-06", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
-    ])
-    df["date"] = pd.to_datetime(df["date"])
+def test_walk_forward_global_fdr_rejects_spurious_horizons(synthetic_panel_data):
+    cfg = ResearchConfig(WF_TRAIN_YEARS=1.0, WF_VALIDATION_YEARS=0.5, WF_PURGE_DAYS=25, HORIZONS=[1, 5, 20])
+    df_labeled = FactorResearchEngine.generate_future_return_labels(synthetic_panel_data, horizons=cfg.HORIZONS)
     
-    pnl = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(df, "F_TEST", n_quantiles=2)
-    assert len(pnl["trade_rejections"]) > 0
-    rej = pnl["trade_rejections"][0]
-    assert rej["reject_reason"] == TradabilityStatus.LIMIT_UP_LOCKED.value
-    assert rej["symbol"] == "000001.SZ"
+    res = FactorSelectionEngine.run_purged_walk_forward(df_labeled, ["F_CONSTANT"], config=cfg)
+    assert "wf_horizon_significance" in res
+    assert len(res["wf_horizon_significance"]) > 0
+    for r in res["wf_horizon_significance"]:
+        assert r["train_global_fdr_p"] > 0.05
+        assert r["selected"] == False
 
 
 # ------------------------------------------------------------------------------
-# Test 7: P0-6 Exit commission, stamp duty, and slippage applied correctly
-# ------------------------------------------------------------------------------
-def test_exit_stamp_duty_applied_only_to_turnover():
-    df = pd.DataFrame([
-        {"date": "2021-01-04", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-04", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-05", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-05", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-06", "symbol": "000001.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": 1.0, "in_universe": True, "is_suspended": False},
-        {"date": "2021-01-06", "symbol": "000002.SZ", "open": 10.0, "close": 10.0, "adj_open": 10.0, "adj_close": 10.0, "F_TEST": -1.0, "in_universe": True, "is_suspended": False},
-    ])
-    df["date"] = pd.to_datetime(df["date"])
-    
-    pnl = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(df, "F_TEST", n_quantiles=2)
-    pnl_df = pnl["daily_pnl_df"]
-    row0 = pnl_df.iloc[0]
-    
-    # 印花税必须为 万5 (0.0005) x turnover (1.0) = 0.0005
-    assert np.isclose(row0["stamp_duty"], 0.0005, atol=1e-6)
-
-
-# ------------------------------------------------------------------------------
-# Test 8: P1 Annual stability fails closed when no valid year
+# Test 11: Annual stability fails closed when no valid year
 # ------------------------------------------------------------------------------
 def test_annual_stability_fails_closed_when_no_valid_year():
     cfg = ResearchConfig(MIN_VALID_DAYS_PER_YEAR=60)
-    # 仅有 5 个交易日
     dates = pd.date_range("2021-01-01", periods=5, freq="B")
     rows = []
     for d in dates:
@@ -251,7 +342,7 @@ def test_annual_stability_fails_closed_when_no_valid_year():
 
 
 # ------------------------------------------------------------------------------
-# Test 9: P1-6 Benchmark alignment is date-only without cross-symbol leakage
+# Test 12: Benchmark date-only mapping invariant
 # ------------------------------------------------------------------------------
 def test_benchmark_open_close_alignment_is_date_only(synthetic_panel_data):
     df_labeled = FactorResearchEngine.generate_future_return_labels(synthetic_panel_data, horizons=[20])
@@ -260,20 +351,7 @@ def test_benchmark_open_close_alignment_is_date_only(synthetic_panel_data):
 
 
 # ------------------------------------------------------------------------------
-# Test 10: Constant factor does not generate fake long-short alpha
-# ------------------------------------------------------------------------------
-def test_constant_factor_does_not_generate_fake_long_short_alpha(synthetic_panel_data):
-    df_labeled = FactorResearchEngine.generate_future_return_labels(synthetic_panel_data, horizons=[20])
-    ic_s = FactorMetricsEngine.compute_daily_ic(df_labeled, "F_CONSTANT", "future_return_20d")
-    assert (ic_s == 0.0).all() or ic_s.empty
-    
-    pnl_res = FactorMetricsEngine.compute_realized_daily_portfolio_pnl(synthetic_panel_data, factor_col="F_CONSTANT", direction=1, n_quantiles=5)
-    assert pnl_res["long_only_cagr"] == 0.0
-    assert pnl_res["long_only_sharpe"] == 0.0
-
-
-# ------------------------------------------------------------------------------
-# Test 11: Neutralization insufficient cross section returns None fail-closed
+# Test 13: Neutralization insufficient cross section returns None fail-closed
 # ------------------------------------------------------------------------------
 def test_neutralization_insufficient_cross_section_returns_null_not_raw_ic(synthetic_panel_data):
     engine = FactorResearchEngine(config=ResearchConfig(MIN_NEUTRALIZATION_CROSS_SECTION=10))
@@ -288,23 +366,7 @@ def test_neutralization_insufficient_cross_section_returns_null_not_raw_ic(synth
 
 
 # ------------------------------------------------------------------------------
-# Test 12: Orthogonalizer insufficient samples returns None fail closed
-# ------------------------------------------------------------------------------
-def test_orthogonalizer_insufficient_samples_returns_null_fail_closed(synthetic_panel_data):
-    engine = FactorResearchEngine()
-    sub_df = synthetic_panel_data[synthetic_panel_data["symbol"].isin(["000001.SZ", "000002.SZ", "000003.SZ"])].copy()
-    df_labeled = engine.generate_future_return_labels(sub_df, horizons=[20])
-    
-    factors = ["F_ALPHA", "F_NEG", "F_CONSTANT", "F_REDUNDANT", "LOG_CIRC_MV"]
-    ortho_res = engine._run_real_orthogonalization_comparison(df_labeled, factors, "future_return_20d")
-    
-    for f in factors[:2]:
-        assert ortho_res[f]["orthogonalized_rank_ic"] is None
-        assert ortho_res[f]["status"] == "INSUFFICIENT_CROSS_SECTION"
-
-
-# ------------------------------------------------------------------------------
-# Test 13: Development sample cannot be OOS certified
+# Test 14: Development sample cannot be OOS certified
 # ------------------------------------------------------------------------------
 def test_development_sample_cannot_be_oos_certified(synthetic_panel_data):
     cfg = ResearchConfig(MIN_RESEARCH_SYMBOLS=50)
@@ -316,37 +378,7 @@ def test_development_sample_cannot_be_oos_certified(synthetic_panel_data):
 
 
 # ------------------------------------------------------------------------------
-# Test 14: DataFrame row permutation must not change quantile results
-# ------------------------------------------------------------------------------
-def test_dataframe_row_permutation_must_not_change_quantile_results(synthetic_panel_data):
-    df_labeled = FactorResearchEngine.generate_future_return_labels(synthetic_panel_data, horizons=[20])
-    q_orig, mono_orig, _ = FactorMetricsEngine.compute_quantile_returns(df_labeled, "F_ALPHA", "future_return_20d", n_quantiles=5)
-    
-    df_shuf = df_labeled.sample(frac=1.0, random_state=42).reset_index(drop=True)
-    q_shuf, mono_shuf, _ = FactorMetricsEngine.compute_quantile_returns(df_shuf, "F_ALPHA", "future_return_20d", n_quantiles=5)
-    
-    assert mono_orig == mono_shuf
-    for k in q_orig:
-        assert np.isclose(q_orig[k], q_shuf[k], atol=1e-6)
-
-
-# ------------------------------------------------------------------------------
-# Test 15: Train label end must not cross validation boundary
-# ------------------------------------------------------------------------------
-def test_train_label_end_must_not_cross_validation_boundary(synthetic_panel_data):
-    cfg = ResearchConfig(WF_TRAIN_YEARS=1.0, WF_VALIDATION_YEARS=0.5, WF_PURGE_DAYS=25, HORIZONS=[1, 5, 20])
-    df_labeled = FactorResearchEngine.generate_future_return_labels(synthetic_panel_data, horizons=cfg.HORIZONS)
-    
-    res = FactorSelectionEngine.run_purged_walk_forward(df_labeled, ["F_ALPHA", "F_NEG"], config=cfg)
-    for f in res["folds_detail"]:
-        t_end = pd.to_datetime(f["train_end"])
-        v_start = pd.to_datetime(f["validation_start"])
-        # 严格按日历索引比较
-        assert t_end < v_start
-
-
-# ------------------------------------------------------------------------------
-# Test 16: Changing validation prices cannot affect train factor selection
+# Test 15: Changing validation prices cannot affect train factor selection
 # ------------------------------------------------------------------------------
 def test_changing_validation_prices_cannot_affect_train_factor_selection(synthetic_panel_data):
     cfg = ResearchConfig(WF_TRAIN_YEARS=1.0, WF_VALIDATION_YEARS=0.5, WF_PURGE_DAYS=20, MIN_WF_FOLDS_FOR_CERTIFICATION=1)

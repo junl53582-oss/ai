@@ -385,7 +385,7 @@ class DataManager:
         self.synthetic_data_used = bool(self.data_source_breakdown.get("synthetic", 0) > 0)
 
         # 流式计算市场行情内容 SHA256 (P0-16)
-        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "volume", "amount", "benchmark_close", "in_universe", "is_st", "is_suspended"] if c in merged_df.columns]
+        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close", "volume", "amount", "benchmark_open", "benchmark_close", "in_universe", "is_st", "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "limit_up_price", "limit_down_price"] if c in merged_df.columns]
         h_series = pd.util.hash_pandas_object(merged_df[critical_cols], index=False)
         market_content_sha256 = hashlib.sha256(h_series.values.tobytes()).hexdigest()
 
@@ -446,7 +446,7 @@ class DataManager:
 
         parent_config_hash = compute_canonical_runtime_config_hash(settings)
 
-        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "volume", "amount", "benchmark_close", "in_universe", "is_st", "is_suspended"] if c in merged_df.columns]
+        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close", "volume", "amount", "benchmark_open", "benchmark_close", "in_universe", "is_st", "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "limit_up_price", "limit_down_price"] if c in merged_df.columns]
         h_series = pd.util.hash_pandas_object(merged_df[critical_cols], index=False)
         market_content_sha256 = hashlib.sha256(h_series.values.tobytes()).hexdigest()
 

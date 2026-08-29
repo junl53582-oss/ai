@@ -138,6 +138,7 @@ def _neutralize_one_day(date_key, group, factor_cols, industry_col, actual_mv_co
                         group.loc[valid_mask_full, col] = residuals
                 except Exception as exc:
                     logger.debug(f"OLS 中性化拟合异常 ({col}, {date_key}): {exc}")
+                    group.loc[valid_mask_full, col] = np.nan
 
     return date_key, mode_str, daily_coverage_rounded, False, group
 
@@ -418,7 +419,7 @@ class FactorProcessor:
     @staticmethod
     def _compute_streaming_content_hash(df: pd.DataFrame) -> str:
         """使用 pd.util.hash_pandas_object 计算完整数据流式 SHA256 (P0-14 杜绝采样碰撞)"""
-        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close", "volume", "amount", "benchmark_close", "in_universe", "is_st", "is_suspended"] if c in df.columns]
+        critical_cols = [c for c in ["date", "symbol", "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close", "volume", "amount", "benchmark_open", "benchmark_close", "in_universe", "is_st", "is_suspended", "is_limit_up_locked", "is_limit_down_locked", "limit_up_price", "limit_down_price"] if c in df.columns]
         if not critical_cols or df.empty:
             return "empty"
         h_series = pd.util.hash_pandas_object(df[critical_cols], index=False)
@@ -458,7 +459,7 @@ class FactorProcessor:
             except Exception:
                 input_market_manifest_hash = hashlib.sha256(b"unknown_market_manifest").hexdigest()
         else:
-            input_market_manifest_hash = hashlib.sha256(b"none_market_manifest").hexdigest()
+            input_market_manifest_hash = None
 
         market_content_hash = self._compute_streaming_content_hash(market_df)
         in_universe_mask_hash = self._compute_in_universe_hash(market_df)
@@ -471,8 +472,8 @@ class FactorProcessor:
         factor_cols_hash = hashlib.sha256(",".join(sorted(all_factor_cols)).encode("utf-8")).hexdigest()[:16]
         fundamentals_hash = hashlib.sha256(",".join(sorted(fundamental_present)).encode("utf-8")).hexdigest()[:16]
         current_fingerprint = {
-            "cache_schema_version": "3.0",
-            "factor_code_version": "3.0",
+            "cache_schema_version": "3.2",
+            "factor_code_version": "3.2",
             "factor_columns_hash": factor_cols_hash,
             "factor_count": len(all_factor_cols),
             "fundamentals_hash": fundamentals_hash,
@@ -502,13 +503,19 @@ class FactorProcessor:
                 if match:
                     logger.info(f"发现已有且链式指纹完全匹配的因子矩阵缓存: {factor_file}，正在加载...")
                     df_cached = pd.read_parquet(factor_file)
-                    # 防御性完整性校验 1: 缓存必须包含全部声明的因子列, 否则视为残次缓存强制重建
+                    # 防御性完整性校验 1: 缓存必须包含全部声明的因子列
                     missing_cols = [c for c in all_factor_cols if c not in df_cached.columns]
                     if missing_cols:
                         logger.warning(
                             f"缓存因子矩阵缺少 {len(missing_cols)} 列 ({missing_cols[:5]}...)，"
                             f"判定为残次缓存，触发重新计算..."
                         )
+                        match = False
+                    # 防御性完整性校验 1.1: 缓存必须包含必须的基准与交易状态列 (Phase 1.5 P0-3)
+                    req_market_cols = ["date", "symbol", "adj_open", "adj_close", "benchmark_open", "benchmark_close", "in_universe"]
+                    missing_req = [c for c in req_market_cols if c not in df_cached.columns]
+                    if missing_req:
+                        logger.warning(f"缓存因子矩阵缺少必要行情/基准字段 {missing_req}，触发重新构建...")
                         match = False
                     # 防御性完整性校验 2: 行数必须与上游行情一致。
                     elif len(df_cached) != len(market_df):
@@ -585,7 +592,7 @@ class FactorProcessor:
             except Exception:
                 parent_u_hash = hashlib.sha256(b"unknown_universe_manifest").hexdigest()
         else:
-            parent_u_hash = hashlib.sha256(b"none_universe_manifest").hexdigest()
+            parent_u_hash = None
 
         manifest_data = dict(current_fingerprint)
         manifest_data.update({

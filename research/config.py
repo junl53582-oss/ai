@@ -1,6 +1,6 @@
 """
 因子研究与 Alpha 验证全局配置 (research/config.py)
-Phase 1.4: A股 T+1 结算规则、基准数据链与全家族 FDR 严密时序定义
+Phase 1.5: 严密缓存失效、生产交易状态对齐与延迟卖出 (Delayed Exit) 规则
 """
 from dataclasses import dataclass, field
 from typing import List, Dict, Any, Optional
@@ -8,13 +8,14 @@ from typing import List, Dict, Any, Optional
 
 @dataclass
 class ResearchConfig:
-    # ---------------- 交易与结算规则定义 (Phase 1.4 P0-1) ----------------
+    # ---------------- 交易与结算规则定义 (Phase 1.4/1.5 P0-1/P0-5) ----------------
     SETTLEMENT_RULE: str = "A_SHARE_T_PLUS_1_NO_SAME_DAY_SELL"
     SIGNAL_TIMESTAMP: str = "T_close"            # 信号生成时间: T 日收盘后
     ENTRY_OFFSET: int = 1                        # 买入时点: T+1 交易日
     ENTRY_PRICE_TYPE: str = "open"               # 买入价格类型: 开盘价 open
     EARLIEST_EXIT_OFFSET: int = 2                # 最早卖出时点: T+2 交易日 (A股 T+1 禁止日内回转)
     EXIT_PRICE_TYPE: str = "open"                # 卖出价格类型: 开盘价 open (或 close)
+    MAX_UNEXECUTED_EXIT_DAYS: int = 10           # 跌停/停牌导致无法卖出时，最长展期等待交易日数 (Delayed Exit)
     
     # ---------------- 预测视界与收益定义 ----------------
     HORIZONS: List[int] = field(default_factory=lambda: [1, 3, 5, 10, 20])
@@ -24,19 +25,18 @@ class ResearchConfig:
     BENCHMARK_OPEN_COL: str = "benchmark_open"   # 基准开盘价列名
     ALLOW_BENCHMARK_FALLBACK_FOR_TESTS: bool = False # 生产环境严格禁用基准缺省回退 (Fail-Closed)
     
-    # ---------------- 交易权限与可交易性过滤 (Phase 1.4 P0-5) ----------------
+    # ---------------- 交易权限与可交易性过滤 (Phase 1.5 P0-4 / P0-5) ----------------
     ALLOW_ST_TRADING: bool = False               # 是否允许交易 ST / *ST 股票
-    MAX_UNEXECUTED_EXIT_DAYS: int = 10           # 跌停/停牌导致无法卖出时，最长等待成交交易日数
     
     # ---------------- 分层与组合回测 ----------------
     NUM_QUANTILES: int = 5                       # 主分层组数 (Q1..Q5)
     DETAILED_QUANTILES: int = 10                 # 细分层组数 (Q1..Q10)
     
-    # ---------------- 样本与截面最小门禁 (Phase 1.4 P1-2 / P1-7) ----------------
-    MIN_RESEARCH_SYMBOLS: int = 50               # 实证标的数最低门限
-    MIN_PRODUCTION_SYMBOLS: int = 300            # 生产级研究推荐标的数门限
+    # ---------------- 样本与截面生产硬门槛 (Phase 1.5 P1-2) ----------------
+    MIN_RESEARCH_SYMBOLS: int = 50               # 实证研究最低标的数门限
+    MIN_PRODUCTION_SYMBOLS: int = 300            # 生产级实盘推荐标的数门限 (如 CSI300)
     MIN_DAILY_CROSS_SECTION: int = 4             # 每日最小截面有效样本数
-    MIN_DAILY_CROSS_SECTION_PRODUCTION: int = 10 # 生产级每日最小截面样本数
+    MIN_DAILY_CROSS_SECTION_PRODUCTION: int = 150 # 生产级每日最小截面中位数样本数 (CSI300 核心)
     MIN_NEUTRALIZATION_CROSS_SECTION: int = 10   # 截面多元 OLS 中性化最小有效样本数
     MIN_VALID_DAYS_PER_YEAR: int = 60            # 年度稳定性评估最小有效交易日数
     
