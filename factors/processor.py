@@ -574,6 +574,20 @@ class FactorProcessor:
             )
             df_standardized = self.cross_sectional_standardize(df_standardized, all_factor_cols)
 
+        # 保证行情/基准与可交易性核心字段完整保留在因子矩阵中 (Fail-Closed)
+        core_market_cols = [
+            "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close",
+            "volume", "amount", "benchmark_open", "benchmark_close", "in_universe",
+            "is_st", "is_suspended", "is_limit_up_locked", "is_limit_down_locked",
+            "limit_up_price", "limit_down_price"
+        ]
+        cols_to_add = [c for c in core_market_cols if c in market_df.columns and c not in df_standardized.columns]
+        if cols_to_add:
+            df_standardized = df_standardized.merge(
+                market_df[["symbol", "date"] + cols_to_add],
+                on=["symbol", "date"], how="left"
+            )
+
         logger.info(f"正在保存最终因子矩阵到 {factor_file} (总行数: {len(df_standardized)})...")
         df_standardized.to_parquet(factor_file, index=False, engine="pyarrow", compression="snappy")
 
