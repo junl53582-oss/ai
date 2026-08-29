@@ -14,6 +14,7 @@ from dataclasses import dataclass, asdict, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Tuple, Union
+import pandas as pd
 
 from data.crypto_anchor import (
     TRUSTED_KEY_REGISTRY,
@@ -607,7 +608,7 @@ class CSVCorporateActionParser:
             has_sym = any(c in cols_lower for c in ["symbol", "code", "sec_code", "ticker", "wind_code"])
             has_date = any(c in cols_lower for c in ["ex_date", "date", "exdate", "record_date"])
             has_type = any(c in cols_lower for c in ["action_type", "type", "event_type", "cash", "cash_dividend_per_share", "share_ratio"])
-            if not (has_sym or has_date or has_type):
+            if not (has_sym and has_date and has_type):
                 res.failed_checks.append("corporate_action_csv_schema_invalid")
                 return res
             res.events = df.to_dict(orient="records") if not df.empty else []
@@ -815,23 +816,60 @@ class CorporateActionCoverageEvidence:
                     if receipt.source_id.strip().upper() != self.source_id.strip().upper():
                         errors.append(f"receipt_source_id_mismatch_{receipt.source_id}_vs_{self.source_id}")
 
-                    # 5. Query Context 强绑定校验 (防重放与篡改)
-                    if receipt.query_context:
-                        qc = receipt.query_context
-                        qc_sym = str(qc.get("symbol", "")).strip().upper()
-                        if qc_sym and qc_sym != self.symbol.strip().upper():
-                            errors.append(f"corporate_action_query_context_symbol_mismatch_{qc_sym}_vs_{self.symbol}")
-                        qc_start = str(qc.get("query_start", "")).strip()
-                        if qc_start and qc_start > self.query_start:
-                            errors.append(f"corporate_action_query_context_start_mismatch_{qc_start}_after_{self.query_start}")
-                        qc_end = str(qc.get("query_end", "")).strip()
-                        if qc_end and qc_end < self.query_end:
-                            errors.append(f"corporate_action_query_context_end_mismatch_{qc_end}_before_{self.query_end}")
-                        req_fp = qc.get("request_params_sha256") or qc.get("request_fingerprint_sha256")
-                        if req_fp and not HEX_64_PATTERN.match(str(req_fp)):
-                            errors.append(f"corporate_action_invalid_request_params_hash_{req_fp}")
+                    # 5. Query Context 强绑定校验 (P0-1 Mandatory 防重放与篡改)
+                    qc_errs = self._validate_signed_query_context(receipt)
+                    if qc_errs:
+                        errors.extend(qc_errs)
 
         return len(errors) == 0, errors
+
+    def _validate_signed_query_context(self, receipt: AcquisitionReceipt) -> List[str]:
+        """严格校验采集回执中的可信 Query Context (P0-1 Mandatory)"""
+        qc_errors = []
+        if not receipt.query_context or not isinstance(receipt.query_context, dict):
+            qc_errors.append("corporate_action_signed_query_context_required")
+            return qc_errors
+
+        qc = receipt.query_context
+        # 1. 必填字段存在性校验
+        req_fields = ["resource_type", "symbol", "query_start", "query_end"]
+        missing = [f for f in req_fields if f not in qc or qc[f] is None or str(qc[f]).strip() == ""]
+        fp = qc.get("request_params_sha256") or qc.get("request_fingerprint_sha256")
+        if not fp or str(fp).strip() == "":
+            missing.append("request_params_sha256")
+
+        if missing:
+            qc_errors.append(f"corporate_action_query_context_missing_fields_{missing}")
+            return qc_errors
+
+        # 2. resource_type 校验
+        if str(qc.get("resource_type", "")).strip().upper() != "CORPORATE_ACTION":
+            qc_errors.append(f"corporate_action_query_context_invalid_resource_type_{qc.get('resource_type')}")
+
+        # 3. 标的精确匹配校验
+        qc_sym = str(qc.get("symbol", "")).strip().upper()
+        if qc_sym != self.symbol.strip().upper():
+            qc_errors.append(f"corporate_action_query_context_symbol_mismatch_{qc_sym}_vs_{self.symbol}")
+
+        # 4. 日期合法性与范围校验
+        try:
+            qc_start = pd.to_datetime(qc.get("query_start")).strftime("%Y-%m-%d")
+            qc_end = pd.to_datetime(qc.get("query_end")).strftime("%Y-%m-%d")
+            if qc_start > qc_end:
+                qc_errors.append(f"corporate_action_query_context_invalid_date_range_{qc_start}_gt_{qc_end}")
+            else:
+                if qc_start > self.query_start:
+                    qc_errors.append(f"corporate_action_query_context_start_mismatch_{qc_start}_after_{self.query_start}")
+                if qc_end < self.query_end:
+                    qc_errors.append(f"corporate_action_query_context_end_mismatch_{qc_end}_before_{self.query_end}")
+        except Exception as e:
+            qc_errors.append(f"corporate_action_query_context_unparseable_dates_{str(e)}")
+
+        # 5. 请求指纹 SHA256 格式校验
+        if fp and not HEX_64_PATTERN.match(str(fp)):
+            qc_errors.append(f"corporate_action_invalid_request_params_hash_{fp}")
+
+        return qc_errors
 
     def verify_dataset_evidence(
         self,
@@ -933,20 +971,9 @@ class CorporateActionCoverageEvidence:
                     if receipt.source_id.strip().upper() != self.source_id.strip().upper():
                         errors.append(f"receipt_source_id_mismatch_{receipt.source_id}_vs_{self.source_id}")
 
-                    # Query Context 强绑定校验
-                    if receipt.query_context:
-                        qc = receipt.query_context
-                        qc_sym = str(qc.get("symbol", "")).strip().upper()
-                        if qc_sym and qc_sym != self.symbol.strip().upper():
-                            errors.append(f"corporate_action_query_context_symbol_mismatch_{qc_sym}_vs_{self.symbol}")
-                        qc_start = str(qc.get("query_start", "")).strip()
-                        if qc_start and qc_start > self.query_start:
-                            errors.append(f"corporate_action_query_context_start_mismatch_{qc_start}_after_{self.query_start}")
-                        qc_end = str(qc.get("query_end", "")).strip()
-                        if qc_end and qc_end < self.query_end:
-                            errors.append(f"corporate_action_query_context_end_mismatch_{qc_end}_before_{self.query_end}")
-                        req_fp = qc.get("request_params_sha256") or qc.get("request_fingerprint_sha256")
-                        if req_fp and not HEX_64_PATTERN.match(str(req_fp)):
-                            errors.append(f"corporate_action_invalid_request_params_hash_{req_fp}")
+                    # Query Context 强绑定校验 (P0-1 Mandatory)
+                    qc_errs = self._validate_signed_query_context(receipt)
+                    if qc_errs:
+                        errors.extend(qc_errs)
 
         return len(errors) == 0, errors

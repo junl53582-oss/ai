@@ -257,7 +257,7 @@ def test_cached_synthetic_data_remains_marked_synthetic(tmp_path):
     df_loaded = manager.load_dataset()
     assert manager.synthetic_data_used is True
     assert manager.data_source == "synthetic"
-    assert manager.raw_data_provenance_preserved is True
+    assert manager.raw_data_provenance_preserved is False
 
 
 # ==========================================

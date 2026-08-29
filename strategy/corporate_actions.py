@@ -74,8 +74,13 @@ class CorporateActionVerificationResult:
 class CorporateActionProvider:
     """公司行为事件提供器与覆盖度验证中枢"""
 
-    def __init__(self, source: str = "custom_corporate_actions"):
+    def __init__(
+        self,
+        source: str = "custom_corporate_actions",
+        evidence_dir: Optional[Union[str, Path]] = None
+    ):
         self.source = source
+        self.evidence_dir: Optional[Path] = Path(evidence_dir) if evidence_dir else None
         self.actions_by_date_and_symbol: Dict[Tuple[str, str], List[CorporateAction]] = {}
         self.coverage_evidences: Dict[str, CorporateActionCoverageEvidence] = {}
         self.coverage_records: Dict[str, CorporateActionCoverageRecord] = {}
@@ -187,7 +192,7 @@ class CorporateActionProvider:
         all_provenance_ok = True
         failed_checks: List[str] = []
 
-        ev_dir_p = Path(evidence_dir) if evidence_dir else None
+        ev_dir_p = Path(evidence_dir) if evidence_dir else self.evidence_dir
 
         for sym in self.required_symbols:
             if sym in self.coverage_evidences:
@@ -370,8 +375,13 @@ def create_corporate_action_provider(config: Any) -> CorporateActionProvider:
     """工厂方法：根据配置加载真实公司行为与覆盖证明"""
     actions_file = getattr(config, "CORPORATE_ACTIONS_FILE", None)
     coverage_file = getattr(config, "CORPORATE_ACTIONS_COVERAGE_FILE", None)
-    
-    provider = CorporateActionProvider(source="csi_official_actions" if actions_file else "custom_corporate_actions")
+    default_ev_dir = getattr(config, "DATA_DIR", Path("data_storage")) / "corporate_actions" / "csi300" / "raw"
+    evidence_dir = getattr(config, "CORPORATE_ACTIONS_EVIDENCE_DIR", default_ev_dir)
+
+    provider = CorporateActionProvider(
+        source="csi_official_actions" if actions_file else "custom_corporate_actions",
+        evidence_dir=evidence_dir
+    )
 
     # 1. 加载覆盖记录 (Fail-Closed default)
     if coverage_file and Path(coverage_file).exists():

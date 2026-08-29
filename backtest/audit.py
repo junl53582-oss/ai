@@ -297,19 +297,33 @@ class ManifestVerifier:
                 if production_mode and m_type_enum:
                     res.failed_checks.append("manifest_parent_anchor_missing")
 
-            # 4. 物理 Raw Source 文件核验 (Physical Source Evidence Verification)
+            # 4. 物理 Raw Source 文件完整性与来源鉴权 (P0-2: Local Hash Integrity != Source Authenticity)
             raw_files_list = data.get("source_files", [])
             raw_hashes_dict = data.get("source_hashes", {})
+            meta_files_dict = data.get("source_metadata_files", {})
+            receipt_files_dict = data.get("receipt_files", {})
+
             if raw_files_list and raw_hashes_dict:
                 ev_dir = Path(raw_evidence_dir) if raw_evidence_dir else p.parent
                 all_raw_ok = True
+                all_auth_ok = True
+
+                # 若显式声明了 source_metadata_files 或 receipt_files，需集合对齐
+                if meta_files_dict and set(raw_files_list) != set(meta_files_dict.keys()):
+                    res.failed_checks.append("market_manifest_source_metadata_files_mismatch")
+                    all_auth_ok = False
+                if receipt_files_dict and set(raw_files_list) != set(receipt_files_dict.keys()):
+                    res.failed_checks.append("market_manifest_receipt_files_mismatch")
+                    all_auth_ok = False
+
                 for sf in raw_files_list:
-                    from data.crypto_anchor import safe_resolve_path
                     rf_path = safe_resolve_path(ev_dir, sf)
                     if not rf_path or not rf_path.exists():
                         res.failed_checks.append(f"market_source_file_missing_{sf}")
                         all_raw_ok = False
+                        all_auth_ok = False
                     else:
+                        # 4.1 本地物理哈希一致性 (Local Physical Hash Integrity)
                         h = hashlib.sha256()
                         with open(rf_path, "rb") as f:
                             while chunk := f.read(65536):
@@ -319,8 +333,50 @@ class ManifestVerifier:
                         if actual_rf_hash.lower() != str(exp_rf_hash).lower():
                             res.failed_checks.append(f"market_source_hash_mismatch_{sf}")
                             all_raw_ok = False
+                            all_auth_ok = False
+
+                        # 4.2 来源鉴权与信任锚点 (Source Authentication & Trust Anchor - 绝非仅凭物理文件存在)
+                        meta_fn = meta_files_dict.get(sf) if meta_files_dict else f"{sf}.source.json"
+                        meta_p = safe_resolve_path(ev_dir, meta_fn) if meta_fn else None
+
+                        s_meta = None
+                        if not meta_p or not meta_p.exists():
+                            res.failed_checks.append(f"market_source_metadata_missing_{sf}")
+                            all_auth_ok = False
+                        else:
+                            from data.provenance import SourceEvidenceMetadata
+                            s_meta, m_errs = SourceEvidenceMetadata.load_and_verify(meta_p, rf_path)
+                            if not s_meta:
+                                res.failed_checks.extend(m_errs)
+                                all_auth_ok = False
+
+                        receipt_fn = receipt_files_dict.get(sf) if receipt_files_dict else f"{sf}.receipt.json"
+                        rec_p = safe_resolve_path(ev_dir, receipt_fn) if receipt_fn else None
+                        if not rec_p or not rec_p.exists():
+                            res.failed_checks.append(f"market_receipt_missing_{sf}")
+                            all_auth_ok = False
+                        else:
+                            from data.source_registry import AcquisitionReceipt
+                            receipt, r_errs = AcquisitionReceipt.load_from_file(rec_p)
+                            if not receipt:
+                                res.failed_checks.extend(r_errs)
+                                all_auth_ok = False
+                            else:
+                                r_ok, v_errs = receipt.verify_against_file(rf_path)
+                                if not r_ok:
+                                    res.failed_checks.extend(v_errs)
+                                    all_auth_ok = False
+                                if s_meta:
+                                    b_ok, b_errs = receipt.verify_exact_binding(s_meta, rf_path)
+                                    if not b_ok:
+                                        res.failed_checks.extend(b_errs)
+                                        all_auth_ok = False
+                                if not receipt.trust_anchor_verified:
+                                    res.failed_checks.append(f"market_receipt_trust_anchor_unverified_{sf}")
+                                    all_auth_ok = False
+
                 res.raw_evidence_verified = all_raw_ok and len(raw_files_list) > 0
-                res.source_authentication_verified = all_raw_ok and len(raw_files_list) > 0
+                res.source_authentication_verified = all_auth_ok and len(raw_files_list) > 0
             else:
                 res.raw_evidence_verified = False
                 res.source_authentication_verified = False

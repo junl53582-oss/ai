@@ -224,6 +224,7 @@ def run_pipeline(
 
     # 5. A股实盘级走步回测 (T日信号 -> T+1日开盘撮合)
     print("\n[Step 5/5] 执行 A股实盘级走步回测 (T+1 / 历史税费 / 流动性容量 / FIFO净胜率 / 公司行为)...")
+    from strategy.corporate_actions import CorporateActionDatasetProvenanceVerifier
     corp_provider = create_corporate_action_provider(settings)
     if hasattr(corp_provider, "verify_corporate_action_manifest"):
         c_res = corp_provider.verify_corporate_action_manifest(
@@ -231,6 +232,36 @@ def run_pipeline(
             parent_runtime_config_hash=runtime_cfg_hash
         )
         print(f"   * 公司行为 Manifest: {c_res.actual_hash[:12] if c_res.actual_hash else 'None'}... (Verified={corp_provider.corporate_action_manifest_hash_verified})")
+
+    # 5.2 校验 Corporate Action Dataset 物理来源与血缘 (P0/P1-3)
+    actions_file = getattr(settings, "CORPORATE_ACTIONS_FILE", None)
+    manifest_file = getattr(settings, "CORPORATE_ACTIONS_MANIFEST_FILE", None)
+    if not manifest_file and actions_file:
+        manifest_file = Path(actions_file).with_suffix(".manifest.json")
+
+    corp_df = pd.DataFrame()
+    if actions_file and Path(actions_file).exists():
+        try:
+            corp_df = pd.read_parquet(actions_file)
+        except Exception as e:
+            logger.warning(f"读取公司行为数据集失败: {e}")
+
+    corp_manifest_data = {}
+    if manifest_file and Path(manifest_file).exists():
+        try:
+            with open(manifest_file, "r", encoding="utf-8") as f:
+                corp_manifest_data = json.load(f)
+        except Exception as e:
+            logger.warning(f"读取公司行为 Manifest 数据失败: {e}")
+
+    dataset_ver_res = CorporateActionDatasetProvenanceVerifier.verify_dataset(
+        df=corp_df,
+        manifest_data=corp_manifest_data,
+        raw_evidence_dir=getattr(corp_provider, "evidence_dir", None)
+    )
+    corp_provider.verification_result = dataset_ver_res
+    corp_provider.corporate_action_provenance_verified = dataset_ver_res.source_authentication_verified and dataset_ver_res.trust_anchor_verified
+    corp_provider.corporate_action_dataset_hash_verified = dataset_ver_res.dataset_hash_verified
 
     engine = BacktestEngine(
         initial_cash=settings.INITIAL_CASH,

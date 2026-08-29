@@ -513,7 +513,24 @@ class DataManager:
             self.data_source_breakdown = manifest.get("raw_data_source_breakdown", {"parquet_cache": len(df["symbol"].unique())})
             self.synthetic_data_used = bool(manifest.get("synthetic_data_used", False))
             self.cache_fingerprint_verified = True
-            self.raw_data_provenance_preserved = True
+
+            # P1-5: 物理 Raw 证据验证 (绝不自动将缓存推导为 Provenance Preserved)
+            source_files = manifest.get("source_files", [])
+            source_hashes = manifest.get("source_hashes", {})
+            raw_dir = settings.DATA_DIR / "raw" / "market"
+            has_raw = False
+            if source_files and source_hashes and raw_dir.exists():
+                all_exist = True
+                for sf in source_files:
+                    rf = raw_dir / sf
+                    if not rf.exists():
+                        all_exist = False
+                        break
+                has_raw = all_exist
+
+            self.raw_data_provenance_preserved = bool(has_raw and manifest.get("raw_data_provenance_preserved", False))
+            self.market_raw_evidence_verified = self.raw_data_provenance_preserved
+            self.market_data_provenance_verified = False  # 必须经 verify_market_manifest 独立核验
             return df
         except Exception as e:
             if strict:

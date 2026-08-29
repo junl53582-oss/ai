@@ -2109,7 +2109,8 @@ class TestAdversarialCertification:
             production_mode=False
         )
         assert v_res.raw_evidence_verified is True
-        assert v_res.source_authentication_verified is True
+        assert v_res.source_authentication_verified is False
+        assert v_res.provenance_verified is False
 
     def test_corporate_error_json_not_zero_event(self):
         """Fail-Closed 漏洞防御: API 错误 JSON (如 {'error': 'server busy'}) 绝不得被解析为 0 事件"""
@@ -2181,7 +2182,13 @@ class TestAdversarialCertification:
             content_length=len(raw_bytes),
             raw_sha256=raw_h,
             original_filename="sse_corp.json",
-            query_context={"symbol": "600519.SH", "query_start": "2020-01-01", "query_end": "2026-12-31"}
+            query_context={
+                "resource_type": "CORPORATE_ACTION",
+                "symbol": "600519.SH",
+                "query_start": "2020-01-01",
+                "query_end": "2026-12-31",
+                "request_params_sha256": "a" * 64
+            }
         )
         rec.receipt_integrity_digest = rec.compute_integrity_digest()
         rec.trust_anchor_verified = True
@@ -2237,7 +2244,13 @@ class TestAdversarialCertification:
             content_length=len(raw_bytes),
             raw_sha256=raw_h,
             original_filename="sse_corp2.json",
-            query_context={"symbol": "600519.SH", "query_start": "2022-01-01", "query_end": "2026-12-31"}
+            query_context={
+                "resource_type": "CORPORATE_ACTION",
+                "symbol": "600519.SH",
+                "query_start": "2022-01-01",
+                "query_end": "2026-12-31",
+                "request_params_sha256": "a" * 64
+            }
         )
         rec.receipt_integrity_digest = rec.compute_integrity_digest()
         rec.trust_anchor_verified = True
@@ -2322,3 +2335,635 @@ class TestAdversarialCertification:
 
         status, _ = CertificationPolicy.evaluate(meta)
         assert status == "HIGH_RISK"
+
+    def test_corporate_receipt_missing_query_context_rejected(self, tmp_path):
+        """P0-1: 采集回执缺少 query_context 时必须拒绝认证 (Fail-Closed)"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        raw_p = tmp_path / "raw.json"
+        raw_bytes = b'{"code": 0, "data": []}'
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "raw.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/raw.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_no_qc",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/raw.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="raw.json",
+            query_context=None
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "raw.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="raw.json",
+            raw_result_hash=raw_h,
+            response_file="raw.json",
+            response_hash=raw_h,
+            source_metadata_file="raw.json.source.json",
+            acquisition_receipt_file="raw.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_signed_query_context_required" in e for e in errs)
+
+    def test_corporate_receipt_partial_query_context_rejected(self, tmp_path):
+        """P0-1: query_context 缺失关键字段 (如缺 query_start/query_end) 必须拒绝"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        raw_p = tmp_path / "raw.json"
+        raw_bytes = b'{"code": 0, "data": []}'
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "raw.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/raw.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_part_qc",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/raw.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="raw.json",
+            query_context={"symbol": "600519.SH"}
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "raw.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="raw.json",
+            raw_result_hash=raw_h,
+            response_file="raw.json",
+            response_hash=raw_h,
+            source_metadata_file="raw.json.source.json",
+            acquisition_receipt_file="raw.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_query_context_missing_fields" in e for e in errs)
+
+    def test_corporate_receipt_wrong_resource_type_rejected(self, tmp_path):
+        """P0-1: resource_type 非 CORPORATE_ACTION 必须拒绝"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        raw_p = tmp_path / "raw.json"
+        raw_bytes = b'{"code": 0, "data": []}'
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "raw.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/raw.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_wrong_rt",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/raw.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="raw.json",
+            query_context={
+                "resource_type": "MARKET_DAILY",
+                "symbol": "600519.SH",
+                "query_start": "2020-01-01",
+                "query_end": "2026-12-31",
+                "request_params_sha256": "a" * 64
+            }
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "raw.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="raw.json",
+            raw_result_hash=raw_h,
+            response_file="raw.json",
+            response_hash=raw_h,
+            source_metadata_file="raw.json.source.json",
+            acquisition_receipt_file="raw.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_query_context_invalid_resource_type" in e for e in errs)
+
+    def test_corporate_receipt_query_symbol_mismatch_rejected(self, tmp_path):
+        """P0-1: 回执中标的代码与证据标的不一致必须拒绝"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        raw_p = tmp_path / "raw.json"
+        raw_bytes = b'{"code": 0, "data": []}'
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "raw.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/raw.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_sym_mismatch",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/raw.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="raw.json",
+            query_context={
+                "resource_type": "CORPORATE_ACTION",
+                "symbol": "000001.SZ",
+                "query_start": "2020-01-01",
+                "query_end": "2026-12-31",
+                "request_params_sha256": "a" * 64
+            }
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "raw.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="raw.json",
+            raw_result_hash=raw_h,
+            response_file="raw.json",
+            response_hash=raw_h,
+            source_metadata_file="raw.json.source.json",
+            acquisition_receipt_file="raw.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_query_context_symbol_mismatch" in e for e in errs)
+
+    def test_corporate_receipt_query_range_replay_rejected(self, tmp_path):
+        """P0-1: 回执查询起止区间不能覆盖证据起止区间必须拒绝"""
+        from data.source_registry import AcquisitionReceipt, CorporateActionCoverageEvidence
+        raw_p = tmp_path / "raw.json"
+        raw_bytes = b'{"code": 0, "data": []}'
+        raw_p.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        meta_p = tmp_path / "raw.json.source.json"
+        meta_p.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/disclosure/raw.json",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": len(raw_bytes),
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_range_mismatch",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/disclosure/raw.json",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=len(raw_bytes),
+            raw_sha256=raw_h,
+            original_filename="raw.json",
+            query_context={
+                "resource_type": "CORPORATE_ACTION",
+                "symbol": "600519.SH",
+                "query_start": "2023-01-01",
+                "query_end": "2025-12-31",
+                "request_params_sha256": "a" * 64
+            }
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_p = tmp_path / "raw.json.receipt.json"
+        rec_p.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="raw.json",
+            raw_result_hash=raw_h,
+            response_file="raw.json",
+            response_hash=raw_h,
+            source_metadata_file="raw.json.source.json",
+            acquisition_receipt_file="raw.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=tmp_path)
+        assert is_valid is False
+        assert any("corporate_action_query_context_start_mismatch" in e for e in errs)
+
+    def test_market_physical_hash_does_not_imply_authentication(self, tmp_path):
+        """P0-2: 本地物理哈希一致绝不等于来源已被认证 (Local Hash != Authenticated)"""
+        from backtest.audit import ManifestVerifier, ManifestType, compute_canonical_runtime_config_hash
+        raw_f = tmp_path / "600519.csv"
+        raw_bytes = b"date,open,close\n2021-01-04,100,103\n"
+        raw_f.write_bytes(raw_bytes)
+        raw_h = hashlib.sha256(raw_bytes).hexdigest()
+
+        parent_cfg = compute_canonical_runtime_config_hash(settings)
+        m_data = {
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": ["600519.csv"],
+            "source_hashes": {"600519.csv": raw_h},
+            "parent_runtime_config_hash": parent_cfg,
+            "raw_data_provenance_preserved": True
+        }
+        m_path = tmp_path / "market.manifest.json"
+        m_path.write_text(json.dumps(m_data), encoding="utf-8")
+        exp_h = hashlib.sha256(m_path.read_bytes()).hexdigest()
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=m_path,
+            expected_hash=exp_h,
+            expected_parents={"parent_runtime_config_hash": parent_cfg},
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=tmp_path,
+            production_mode=True
+        )
+        assert res.raw_evidence_verified is True
+        assert res.source_authentication_verified is False
+        assert res.provenance_verified is False
+
+    def test_market_missing_source_metadata_not_authenticated(self, tmp_path):
+        """P0-2: 缺少 Source Metadata 时不能通过 source_authentication_verified"""
+        from backtest.audit import ManifestVerifier, ManifestType, compute_canonical_runtime_config_hash
+        raw_f = tmp_path / "600519.csv"
+        raw_f.write_bytes(b"data")
+        raw_h = hashlib.sha256(b"data").hexdigest()
+
+        parent_cfg = compute_canonical_runtime_config_hash(settings)
+        m_data = {
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": ["600519.csv"],
+            "source_hashes": {"600519.csv": raw_h},
+            "source_metadata_files": {"600519.csv": "600519.csv.source.json"},
+            "receipt_files": {"600519.csv": "600519.csv.receipt.json"},
+            "parent_runtime_config_hash": parent_cfg
+        }
+        m_path = tmp_path / "market.manifest.json"
+        m_path.write_text(json.dumps(m_data), encoding="utf-8")
+        exp_h = hashlib.sha256(m_path.read_bytes()).hexdigest()
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=m_path,
+            expected_hash=exp_h,
+            expected_parents={"parent_runtime_config_hash": parent_cfg},
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=tmp_path,
+            production_mode=True
+        )
+        assert res.source_authentication_verified is False
+        assert any("market_source_metadata_missing" in e for e in res.failed_checks)
+
+    def test_market_missing_receipt_not_authenticated(self, tmp_path):
+        """P0-2: 存在 Metadata 但缺少 Receipt 文件时不能通过 source_authentication_verified"""
+        from backtest.audit import ManifestVerifier, ManifestType, compute_canonical_runtime_config_hash
+        raw_f = tmp_path / "600519.csv"
+        raw_f.write_bytes(b"data")
+        raw_h = hashlib.sha256(b"data").hexdigest()
+
+        meta_f = tmp_path / "600519.csv.source.json"
+        meta_f.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/data.csv",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": 4,
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        parent_cfg = compute_canonical_runtime_config_hash(settings)
+        m_data = {
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": ["600519.csv"],
+            "source_hashes": {"600519.csv": raw_h},
+            "source_metadata_files": {"600519.csv": "600519.csv.source.json"},
+            "receipt_files": {"600519.csv": "600519.csv.receipt.json"},
+            "parent_runtime_config_hash": parent_cfg
+        }
+        m_path = tmp_path / "market.manifest.json"
+        m_path.write_text(json.dumps(m_data), encoding="utf-8")
+        exp_h = hashlib.sha256(m_path.read_bytes()).hexdigest()
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=m_path,
+            expected_hash=exp_h,
+            expected_parents={"parent_runtime_config_hash": parent_cfg},
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=tmp_path,
+            production_mode=True
+        )
+        assert res.source_authentication_verified is False
+        assert any("market_receipt_missing" in e for e in res.failed_checks)
+
+    def test_market_invalid_receipt_signature_not_authenticated(self, tmp_path):
+        """P0-2: Receipt 签名无效时不能通过认证"""
+        from backtest.audit import ManifestVerifier, ManifestType, compute_canonical_runtime_config_hash
+        from data.source_registry import AcquisitionReceipt
+        raw_f = tmp_path / "600519.csv"
+        raw_f.write_bytes(b"data")
+        raw_h = hashlib.sha256(b"data").hexdigest()
+
+        meta_f = tmp_path / "600519.csv.source.json"
+        meta_f.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/data.csv",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": raw_h,
+            "byte_size": 4,
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_invalid_sig",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/data.csv",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=4,
+            raw_sha256=raw_h,
+            original_filename="600519.csv"
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = False  # 签名未通过
+
+        rec_f = tmp_path / "600519.csv.receipt.json"
+        rec_f.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        parent_cfg = compute_canonical_runtime_config_hash(settings)
+        m_data = {
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": ["600519.csv"],
+            "source_hashes": {"600519.csv": raw_h},
+            "source_metadata_files": {"600519.csv": "600519.csv.source.json"},
+            "receipt_files": {"600519.csv": "600519.csv.receipt.json"},
+            "parent_runtime_config_hash": parent_cfg
+        }
+        m_path = tmp_path / "market.manifest.json"
+        m_path.write_text(json.dumps(m_data), encoding="utf-8")
+        exp_h = hashlib.sha256(m_path.read_bytes()).hexdigest()
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=m_path,
+            expected_hash=exp_h,
+            expected_parents={"parent_runtime_config_hash": parent_cfg},
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=tmp_path,
+            production_mode=True
+        )
+        assert res.source_authentication_verified is False
+        assert any("market_receipt_trust_anchor_unverified" in e for e in res.failed_checks)
+
+    def test_market_authenticated_source_requires_exact_binding(self, tmp_path):
+        """P0-2: Metadata 与 Receipt 绑定的哈希不一致时必须拒绝认证"""
+        from backtest.audit import ManifestVerifier, ManifestType, compute_canonical_runtime_config_hash
+        from data.source_registry import AcquisitionReceipt
+        raw_f = tmp_path / "600519.csv"
+        raw_f.write_bytes(b"data")
+        raw_h = hashlib.sha256(b"data").hexdigest()
+
+        meta_f = tmp_path / "600519.csv.source.json"
+        meta_f.write_text(json.dumps({
+            "source_id": "SSE",
+            "source_url": "https://www.sse.com.cn/data.csv",
+            "retrieved_at_utc": "2026-01-01T00:00:00Z",
+            "raw_sha256": "f" * 64,  # 与实际哈希不一致
+            "byte_size": 4,
+            "downloader_version": "3.1"
+        }), encoding="utf-8")
+
+        rec = AcquisitionReceipt(
+            receipt_id="rec_binding_err",
+            source_id="SSE",
+            source_url="https://www.sse.com.cn/data.csv",
+            requested_at="2026-01-01T00:00:00Z",
+            downloaded_at="2026-01-01T00:00:01Z",
+            http_status=200,
+            content_length=4,
+            raw_sha256=raw_h,
+            original_filename="600519.csv"
+        )
+        rec.receipt_integrity_digest = rec.compute_integrity_digest()
+        rec.trust_anchor_verified = True
+        rec_f = tmp_path / "600519.csv.receipt.json"
+        rec_f.write_text(json.dumps(asdict(rec)), encoding="utf-8")
+
+        parent_cfg = compute_canonical_runtime_config_hash(settings)
+        m_data = {
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": ["600519.csv"],
+            "source_hashes": {"600519.csv": raw_h},
+            "source_metadata_files": {"600519.csv": "600519.csv.source.json"},
+            "receipt_files": {"600519.csv": "600519.csv.receipt.json"},
+            "parent_runtime_config_hash": parent_cfg
+        }
+        m_path = tmp_path / "market.manifest.json"
+        m_path.write_text(json.dumps(m_data), encoding="utf-8")
+        exp_h = hashlib.sha256(m_path.read_bytes()).hexdigest()
+
+        res = ManifestVerifier.verify_manifest_file(
+            manifest_path=m_path,
+            expected_hash=exp_h,
+            expected_parents={"parent_runtime_config_hash": parent_cfg},
+            manifest_type=ManifestType.MARKET,
+            raw_evidence_dir=tmp_path,
+            production_mode=True
+        )
+        assert res.source_authentication_verified is False
+
+    def test_pipeline_passes_corporate_evidence_dir(self):
+        """P0/P1-4: create_corporate_action_provider 正确配置 evidence_dir"""
+        from strategy.corporate_actions import create_corporate_action_provider
+        cp = create_corporate_action_provider(settings)
+        assert cp.evidence_dir is not None
+
+    def test_backtest_engine_corporate_validation_uses_evidence_dir(self, tmp_path):
+        """P0/P1-4: BacktestEngine.run 必须将 evidence_dir 传递给 validate_coverage"""
+        from backtest.engine import BacktestEngine
+        from strategy.corporate_actions import CorporateActionProvider
+        from strategy.portfolio import PortfolioBuilder
+
+        cp = CorporateActionProvider(evidence_dir=tmp_path)
+        builder = PortfolioBuilder()
+        engine = BacktestEngine(corporate_actions=cp, portfolio_builder=builder)
+
+        df = pd.DataFrame([
+            {"date": pd.Timestamp("2023-01-03"), "symbol": "600519.SH", "open": 100, "high": 102, "low": 99, "close": 101, "volume": 1000, "in_universe": True, "is_st": False, "is_suspended": False, "pred_score": 0.9, "target_weight": 1.0}
+        ])
+        engine.run(df)
+        assert engine.corporate_actions.evidence_dir == tmp_path
+        assert engine.corporate_action_provenance_verified is False  # 标的缺少覆盖证据时 Fail-Closed
+
+    def test_missing_corporate_evidence_dir_fails_closed(self):
+        """P0/P1-4: 当证据要求生产物理核验但 evidence_dir 缺失时，必须 Fail-Closed"""
+        from data.source_registry import CorporateActionCoverageEvidence
+        ev = CorporateActionCoverageEvidence(
+            symbol="600519.SH",
+            query_start="2020-01-01",
+            query_end="2026-12-31",
+            source_id="SSE",
+            query_success=True,
+            empty_result=True,
+            raw_result_file="sse.json",
+            raw_result_hash="a" * 64,
+            response_file="sse.json",
+            response_hash="a" * 64,
+            source_metadata_file="sse.json.source.json",
+            acquisition_receipt_file="sse.json.receipt.json"
+        )
+        is_valid, errs = ev.is_valid_zero_event_proof("600519.SH", "2020-01-01", "2026-12-31", evidence_dir=None)
+        assert is_valid is False
+        assert any("evidence_dir_missing_required" in e for e in errs)
+
+    def test_cached_parquet_does_not_imply_raw_provenance(self, tmp_path, monkeypatch):
+        """P1-5: 仅加载 Parquet 缓存不意味着 raw_data_provenance_preserved=True"""
+        from data.data_manager import DataManager
+        monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
+        dm = DataManager()
+        dm.parquet_dir.mkdir(parents=True, exist_ok=True)
+
+        df = pd.DataFrame([{"date": "2021-01-04", "symbol": "600519.SH", "close": 100}])
+        df.to_parquet(dm.parquet_dir / "market_daily.parquet")
+        
+        # Manifest 中无 raw source files
+        (dm.parquet_dir / "market_daily.manifest.json").write_text(json.dumps({
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": [],
+            "source_hashes": {},
+            "raw_data_provenance_preserved": False
+        }), encoding="utf-8")
+
+        loaded_df = dm.load_dataset()
+        assert not loaded_df.empty
+        assert dm.cache_fingerprint_verified is True
+        assert dm.raw_data_provenance_preserved is False
+        assert dm.market_data_provenance_verified is False
+
+    def test_cached_market_requires_manifest_verification_for_provenance(self, tmp_path, monkeypatch):
+        """P1-5: 加载缓存后必须经 verify_market_manifest 才能判定 provenance_verified"""
+        from data.data_manager import DataManager
+        monkeypatch.setattr(settings, "DATA_DIR", tmp_path)
+        dm = DataManager()
+        dm.parquet_dir.mkdir(parents=True, exist_ok=True)
+
+        df = pd.DataFrame([{"date": "2021-01-04", "symbol": "600519.SH", "close": 100}])
+        df.to_parquet(dm.parquet_dir / "market_daily.parquet")
+        (dm.parquet_dir / "market_daily.manifest.json").write_text(json.dumps({
+            "schema_version": "3.1",
+            "dataset_name": "market_daily",
+            "source_files": [],
+            "source_hashes": {},
+            "raw_data_provenance_preserved": False
+        }), encoding="utf-8")
+
+        dm.load_dataset()
+        assert dm.market_data_provenance_verified is False
+        dm.verify_market_manifest()  # 无 expected hash 校验
+        assert dm.market_data_provenance_verified is False
+
+    def test_corporate_csv_symbol_only_rejected(self):
+        """CSV Schema 收紧: 只有 symbol 列的 CSV 必须被拒绝"""
+        from data.source_registry import CSVCorporateActionParser
+        csv_bytes = b"symbol\n600519.SH\n"
+        res = CSVCorporateActionParser.parse(csv_bytes)
+        assert res.parse_success is False
+        assert any("corporate_action_csv_schema_invalid" in e for e in res.failed_checks)
+
+    def test_corporate_csv_date_only_rejected(self):
+        """CSV Schema 收紧: 只有 date 列的 CSV 必须被拒绝"""
+        from data.source_registry import CSVCorporateActionParser
+        csv_bytes = b"ex_date\n2021-01-04\n"
+        res = CSVCorporateActionParser.parse(csv_bytes)
+        assert res.parse_success is False
+        assert any("corporate_action_csv_schema_invalid" in e for e in res.failed_checks)
+
+    def test_corporate_csv_type_only_rejected(self):
+        """CSV Schema 收紧: 只有 action_type 列的 CSV 必须被拒绝"""
+        from data.source_registry import CSVCorporateActionParser
+        csv_bytes = b"action_type\nDIVIDEND\n"
+        res = CSVCorporateActionParser.parse(csv_bytes)
+        assert res.parse_success is False
+        assert any("corporate_action_csv_schema_invalid" in e for e in res.failed_checks)
+
+    def test_corporate_csv_full_required_schema_accepted(self):
+        """CSV Schema 收紧: 同时具有 symbol, date, type 规范列的 CSV 正常解析"""
+        from data.source_registry import CSVCorporateActionParser
+        csv_bytes = b"symbol,ex_date,action_type,cash_dividend_per_share\n600519.SH,2021-01-04,DIVIDEND,1.5\n"
+        res = CSVCorporateActionParser.parse(csv_bytes)
+        assert res.parse_success is True
+        assert res.event_count == 1
+        assert res.events[0]["symbol"] == "600519.SH"

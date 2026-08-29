@@ -195,11 +195,12 @@ class BacktestEngine:
         first_date_df = df[df["date"] == trading_dates[0]]
         initial_bench_price = first_date_df["benchmark_close"].iloc[0] if "benchmark_close" in first_date_df.columns else 1.0
 
-        # 验证公司行为覆盖范围
+        # 验证公司行为覆盖范围 (P0/P1-4: 传递真实 evidence_dir 进行物理证据核验)
         all_symbols = df["symbol"].unique().tolist()
         s_date_str = trading_dates[0].strftime("%Y-%m-%d")
         e_date_str = trading_dates[-1].strftime("%Y-%m-%d")
-        self.corporate_actions.validate_coverage(all_symbols, s_date_str, e_date_str)
+        ev_dir = getattr(self.corporate_actions, "evidence_dir", None)
+        self.corporate_actions.validate_coverage(all_symbols, s_date_str, e_date_str, evidence_dir=ev_dir)
         self.corporate_action_adjustment_available = self.corporate_actions.has_actions_data()
         self.backtest_total_return_reliability = "standard" if self.corporate_actions.coverage_complete else "limited"
 

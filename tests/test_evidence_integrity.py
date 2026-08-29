@@ -360,6 +360,13 @@ def test_corporate_action_coverage_with_zero_events(tmp_path, monkeypatch):
         downloaded_at="2026-01-01T00:00:00Z",
         raw_sha256=h_raw,
         original_filename="raw.json",
+        query_context={
+            "resource_type": "CORPORATE_ACTION",
+            "symbol": "600519.SH",
+            "query_start": "2021-01-01",
+            "query_end": "2023-12-31",
+            "request_params_sha256": "a" * 64
+        },
         trust_anchor_type="TRUSTED_KEY_ATTESTATION",
         signing_key_id="PROD_DOWNLOADER_KEY_TEST"
     )
