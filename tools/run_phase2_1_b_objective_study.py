@@ -448,7 +448,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     # Arm C 10档相关性等级构造 (严格同日截面，不跨日，0~9分位数等级)
     # relevance = clip(ceil(pct_rank * 10) - 1, 0, 9)
     pct_ranks = labeled.groupby("date")[EXEC_LABEL].rank(method="average", pct=True)
-    relevance_grades = np.clip(np.ceil(pct_ranks * 10.0) - 1.0, 0.0, 9.0).astype(int)
+    relevance_grades = np.clip(np.ceil(pct_ranks * 10.0) - 1.0, 0.0, 9.0)
     labeled["ab_label_lambdarank"] = relevance_grades.where(common_train)
 
     # 3. 共享基础结构超参数
