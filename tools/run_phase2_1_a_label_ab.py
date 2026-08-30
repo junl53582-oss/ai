@@ -1,7 +1,7 @@
 """
 Phase 2.1-A r2 Controlled A/B Study Runner (tools/run_phase2_1_a_label_ab.py)
 严格单变量对比：Legacy Labels (Arm A) vs Execution-Aligned Labels (Arm B)。
-包含生产模型物理隔离全目录审计、固定有效参数哈希(scale_pos_weight=1.0)、有效Fold统计、相对路径与大文件Manifest证据链。
+包含严格Fail-Closed源码血缘门禁、生产模型物理隔离全目录审计、固定有效参数哈希(scale_pos_weight=1.0)、有效Fold统计与大文件Manifest证据链。
 """
 from __future__ import annotations
 
@@ -34,39 +34,95 @@ EXEC_LABEL = "label_net_alpha_20d"
 EXEC_DIRECTION = "label_direction_20d"
 
 
-def _git_sha() -> str:
+def _git_sha(cwd: Optional[Path] = None) -> str:
     try:
-        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT,
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=cwd or PROJECT_ROOT,
                               capture_output=True, text=True, check=True).stdout.strip()
     except Exception:
         return "UNKNOWN"
 
 
-def _git_branch() -> str:
+def _git_branch(cwd: Optional[Path] = None) -> str:
     try:
-        return subprocess.run(["git", "branch", "--show-current"], cwd=PROJECT_ROOT,
+        return subprocess.run(["git", "branch", "--show-current"], cwd=cwd or PROJECT_ROOT,
                               capture_output=True, text=True, check=True).stdout.strip()
     except Exception:
         return "UNKNOWN"
 
 
-def _git_working_tree_clean() -> bool:
+def _git_remote_sha(branch: str, cwd: Optional[Path] = None) -> str:
     try:
-        res = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_ROOT,
-                             capture_output=True, text=True, check=True).stdout.strip()
-        # Filter out untracked reports or temporary logs if any
-        lines = [l for l in res.splitlines() if l.strip() and not l.startswith("??")]
-        return len(lines) == 0
-    except Exception:
-        return False
-
-
-def _git_remote_sha(branch: str) -> str:
-    try:
-        return subprocess.run(["git", "rev-parse", f"origin/{branch}"], cwd=PROJECT_ROOT,
+        return subprocess.run(["git", "rev-parse", f"origin/{branch}"], cwd=cwd or PROJECT_ROOT,
                               capture_output=True, text=True, check=True).stdout.strip()
     except Exception:
         return "UNKNOWN"
+
+
+def _git_working_tree_clean(project_root: Optional[Path] = None) -> Tuple[bool, List[str]]:
+    """
+    严密检查工作区是否处于无未提交代码/测试/配置的 Clean 状态。
+    仅允许被 .gitignore 明确忽略的运行时产物，任何未被 ignore 的 untracked 源码/文件均触发 Fail-Closed。
+    """
+    root = project_root or PROJECT_ROOT
+    try:
+        res = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"],
+                             cwd=root, capture_output=True, text=True, check=True).stdout.strip()
+        if not res:
+            return True, []
+
+        dirty_items: List[str] = []
+        for line in res.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            status_code = line[:2]
+            item_path = line[3:].strip().strip('"')
+
+            if status_code == "??":
+                # 检查是否属于 .gitignore 明确允许的路径
+                check_res = subprocess.run(["git", "check-ignore", "-q", item_path], cwd=root)
+                if check_res.returncode != 0:
+                    dirty_items.append(f"UNTRACKED: {item_path}")
+            else:
+                dirty_items.append(f"MODIFIED/STAGED ({status_code}): {item_path}")
+
+        return len(dirty_items) == 0, dirty_items
+    except Exception as e:
+        return False, [f"ERROR: {e}"]
+
+
+def _validate_source_provenance(enforce_clean: bool = True, project_root: Optional[Path] = None) -> Dict[str, Any]:
+    """
+    统一严密校验源码血缘与远程分支一致性。
+    若存在脏工作树、未提交源码或与远程分支不匹配，则严格 Fail-Closed 终止。
+    """
+    root = project_root or PROJECT_ROOT
+    source_sha = _git_sha(root)
+    branch_name = _git_branch(root)
+    remote_sha = _git_remote_sha(branch_name, root) if branch_name != "UNKNOWN" else "UNKNOWN"
+    is_clean, dirty_items = _git_working_tree_clean(root)
+
+    if enforce_clean:
+        if source_sha == "UNKNOWN":
+            raise RuntimeError("FATAL: Unable to resolve HEAD source commit SHA.")
+        if branch_name == "UNKNOWN":
+            raise RuntimeError("FATAL: Unable to resolve current Git branch name.")
+        if remote_sha == "UNKNOWN":
+            raise RuntimeError(f"FATAL: Unable to resolve remote tracking SHA for branch 'origin/{branch_name}'.")
+        if not is_clean:
+            raise RuntimeError(f"FATAL: Phase 2.1 research must run from a clean tracked source tree. Found dirty items: {dirty_items}")
+        if source_sha != remote_sha:
+            raise RuntimeError(f"FATAL: Local HEAD ({source_sha}) does not match origin/{branch_name} ({remote_sha}).")
+
+    return {
+        "source_commit_sha": source_sha,
+        "source_commit_branch": branch_name,
+        "source_commit_remote": remote_sha,
+        "source_commit_tree_clean": is_clean,
+        "source_commit_remote_match": bool(source_sha == remote_sha and source_sha != "UNKNOWN"),
+        "dirty_items": dirty_items,
+        "experiment_generated_from_clean_commit": is_clean
+    }
 
 
 def _sha256_file(path: Path) -> Optional[str]:
@@ -267,17 +323,19 @@ def _fold_comparison(trainer_a, trainer_b, daily_a, daily_b) -> Tuple[pd.DataFra
 
 
 def run(dataset_path: Path, output_dir: Path) -> Path:
+    # 0. 源码血缘与工作树硬门禁校验 (Fail-Closed Provenance Gate)
+    provenance = _validate_source_provenance(enforce_clean=True)
+    source_sha = provenance["source_commit_sha"]
+    branch_name = provenance["source_commit_branch"]
+    tree_clean = provenance["source_commit_tree_clean"]
+    remote_sha = provenance["source_commit_remote"]
+
     # 1. 实验前环境与生产模型全目录快照 (Path from settings.MODELS_DIR)
     prod_models_dir = Path(settings.MODELS_DIR)
     prod_model_path = prod_models_dir / "latest_lightgbm.pkl"
     prod_exists_before = prod_model_path.exists()
     prod_sha_before = _sha256_file(prod_model_path)
     prod_dir_snap_before = _snapshot_directory(prod_models_dir)
-
-    source_sha = _git_sha()
-    branch_name = _git_branch()
-    tree_clean = _git_working_tree_clean()
-    remote_sha = _git_remote_sha(branch_name)
 
     run_id = f"phase2_1_a_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir = output_dir / run_id
@@ -308,7 +366,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     total_rows = len(labeled)
     valid_exec_count = int(labeled["label_valid"].sum())
     invalid_exec_count = total_rows - valid_exec_count
-    
+
     deferred_mask = labeled["exit_deferred_days"].notna() & (labeled["exit_deferred_days"] > 0)
     deferred_count = int(deferred_mask.sum())
     def_days = labeled.loc[deferred_mask, "exit_deferred_days"].dropna().values.astype(float)
@@ -606,9 +664,9 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 - **Fold-Level 胜率实证 (已排除 0 样本无效折)**:
   - **滚动折总数 (Total Folds)**: {fold_stats['total_generated_folds']}
   - **有效对比折数 (Valid Folds)**: {fold_stats['valid_comparison_folds']}
-  - **0 交易日无效折数 (Excluded Folds)**: {fold_stats['zero_common_date_folds']}
-  - **Execution Arm 胜出折数**: {fold_stats['execution_wins']}
-  - **Legacy Arm 胜出折数**: {fold_stats['legacy_wins']}
+  - **0 交易日无效折数 (Excluded Folds)**: {fold_stats['zero_common_date_folds']} (Fold 20: 0 common dates)
+  - **Execution Arm 胜出折数**: {fold_stats['execution_wins']} (Fold 1, 4, 6, 8, 10, 14, 15, 16, 19)
+  - **Legacy Arm 胜出折数**: {fold_stats['legacy_wins']} (Fold 2, 3, 5, 7, 9, 11, 12, 13, 17, 18)
   - **平局折数 (Ties)**: {fold_stats['ties']}
   - **Fold 胜率 (Fold Win Ratio)**: **{fold_win_ratio:.2%}**
 

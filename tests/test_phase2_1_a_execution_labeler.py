@@ -1,11 +1,13 @@
 """
-Comprehensive Targeted Tests for Phase 2.1-A r2 (tests/test_phase2_1_a_execution_labeler.py)
-Covering all 17+ strict gates: T+1/T+21 mapping, suspension/volume/limit gates, deferred exits,
-cost models, fail-closed handling, pool parity, model parameter injection, and FULL Walk-Forward
-production model physical isolation tests.
+Comprehensive Targeted Tests for Phase 2.1-A r2 Final Guard Hotfix (tests/test_phase2_1_a_execution_labeler.py)
+Covering:
+1. T+1/T+21 exact mapping, suspension/volume/limit gates, deferred exits, cost models, fail-closed validation, pool parity.
+2. 100% tmp_path Production Model Physical Isolation testing (never touching real saved_models).
+3. Fail-Closed Git Source Provenance & Working Tree Clean testing (dirty tracked, untracked source, ignored runtime, remote mismatch).
 """
 import shutil
 import hashlib
+import subprocess
 import numpy as np
 import pandas as pd
 import pytest
@@ -15,6 +17,7 @@ from config.settings import settings
 from research_v2.labels.execution_labeler import ExecutionAlignedLabeler
 from models.walk_forward import WalkForwardTrainer
 from models.lightgbm_model import LightGBMQuantModel
+from tools.run_phase2_1_a_label_ab import _validate_source_provenance, _git_working_tree_clean
 
 
 def _frame(n_days=26, symbols=("AAA", "BBB", "CCC")):
@@ -207,7 +210,7 @@ def test_common_train_pool_keys_identical():
     df["label_up_down_20d"] = np.random.choice([0.0, 1.0, np.nan], size=len(df))
     df = ExecutionAlignedLabeler(threshold_mode="fixed").compute(df)
     labeled = _build_common_training_labels(df)
-    
+
     mask_a = labeled["ab_label_legacy"].notna()
     mask_b = labeled["ab_label_execution"].notna()
     assert (mask_a == mask_b).all()
@@ -219,32 +222,45 @@ def test_common_oos_pool_keys_identical():
     df, dates = _frame(n_days=30)
     df["label_net_alpha_20d"] = np.random.randn(len(df))
     df["label_valid"] = True
-    
+
     a_pred = df[["date", "symbol"]].copy()
     a_pred["pred_score_legacy"] = np.random.rand(len(a_pred))
-    
+
     b_pred = df[["date", "symbol"]].copy()
     b_pred["pred_score_execution"] = np.random.rand(len(b_pred))
-    
+
     common = a_pred.merge(b_pred, on=["date", "symbol"], how="inner", validate="one_to_one")
     assert len(common) == len(a_pred)
     assert len(common) == len(b_pred)
 
 
-# Gate 17: Full Walk-Forward Production Model Physical Isolation Test
-def test_phase2_1_a_does_not_mutate_production_model(tmp_path):
+# Gate 17: Production Model Physical Isolation in 100% tmp_path simulation (Never touches real saved_models)
+def test_phase2_1_a_does_not_mutate_production_model(tmp_path, monkeypatch):
     """
     严密验证完整 Walk-Forward 训练与 latest_model.save() 全过程下的生产模型物理隔离。
+    使用 monkeypatch 将生产模型目录完全重定向至 tmp_path，杜绝任何对真实 saved_models 的误触。
     """
-    prod_model_path = Path(settings.MODELS_DIR) / "latest_lightgbm.pkl"
-    prod_exists_before = prod_model_path.exists()
-    prod_sha_before = hashlib.sha256(prod_model_path.read_bytes()).hexdigest() if prod_exists_before else None
+    simulated_prod_dir = tmp_path / "simulated_saved_models"
+    simulated_prod_dir.mkdir(parents=True, exist_ok=True)
+    fake_prod_file = simulated_prod_dir / "latest_lightgbm.pkl"
+    sentinel_bytes = b"PRODUCTION_SENTINEL_HASH_TEST_BYTES_42"
+    fake_prod_file.write_bytes(sentinel_bytes)
+    sha_before = hashlib.sha256(sentinel_bytes).hexdigest()
+
+    # 动态 patch settings，使默认目录指向模拟生产路径
+    monkeypatch.setattr(settings, "MODELS_DIR", simulated_prod_dir)
+    monkeypatch.setattr(settings, "MODEL_DIR", simulated_prod_dir)
 
     # 创建隔离实验模型目录
     isolated_legacy_dir = tmp_path / "run_ab" / "models" / "legacy"
     isolated_exec_dir = tmp_path / "run_ab" / "models" / "execution"
     isolated_legacy_dir.mkdir(parents=True, exist_ok=True)
     isolated_exec_dir.mkdir(parents=True, exist_ok=True)
+
+    # 硬断言：所有路径必须在 tmp_path 内
+    assert isolated_legacy_dir.is_relative_to(tmp_path)
+    assert isolated_exec_dir.is_relative_to(tmp_path)
+    assert simulated_prod_dir.is_relative_to(tmp_path)
 
     # 构造能够走通最小 Walk-Forward 训练并触发 save() 的合成数据集 (1.5年训练 + 3月验证 + 2月测试)
     dates = pd.bdate_range("2022-01-01", "2024-06-01")
@@ -277,6 +293,9 @@ def test_phase2_1_a_does_not_mutate_production_model(tmp_path):
         model_params=custom_params
     )
 
+    assert trainer_legacy.model_dir.is_relative_to(tmp_path)
+    assert trainer_exec.model_dir.is_relative_to(tmp_path)
+
     # 实际执行 Walk-Forward，内部必将调用 latest_model.save()
     oos_leg, mod_leg = trainer_legacy.run_walk_forward(syn_df, feature_cols=["feat_1", "feat_2"])
     oos_exc, mod_exc = trainer_exec.run_walk_forward(syn_df, feature_cols=["feat_1", "feat_2"])
@@ -285,9 +304,56 @@ def test_phase2_1_a_does_not_mutate_production_model(tmp_path):
     assert (isolated_legacy_dir / "latest_lightgbm.pkl").exists()
     assert (isolated_exec_dir / "latest_lightgbm.pkl").exists()
 
-    # 2. 验证生产模型路径状态完全未受任何污染或修改
-    prod_exists_after = prod_model_path.exists()
-    prod_sha_after = hashlib.sha256(prod_model_path.read_bytes()).hexdigest() if prod_exists_after else None
+    # 2. 验证模拟生产模型文件内容与哈希完全未受任何修改
+    assert fake_prod_file.exists()
+    sha_after = hashlib.sha256(fake_prod_file.read_bytes()).hexdigest()
+    assert sha_before == sha_after
+    assert fake_prod_file.read_bytes() == sentinel_bytes
 
-    assert prod_exists_before == prod_exists_after
-    assert prod_sha_before == prod_sha_after
+    # 3. 验证模拟生产目录下除 latest_lightgbm.pkl 外没有被新建任何其他文件
+    created_prod_files = list(simulated_prod_dir.iterdir())
+    assert len(created_prod_files) == 1
+    assert created_prod_files[0].name == "latest_lightgbm.pkl"
+
+
+# Gate 18: Git Provenance Guard Unit Tests
+def test_phase2_1_a_source_provenance_clean_matches_remote_passes(monkeypatch):
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "abcdef1234567890")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "abcdef1234567890")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (True, []))
+
+    prov = _validate_source_provenance(enforce_clean=True)
+    assert prov["source_commit_sha"] == "abcdef1234567890"
+    assert prov["source_commit_tree_clean"] is True
+    assert prov["source_commit_remote_match"] is True
+
+
+def test_phase2_1_a_source_provenance_fails_on_dirty_tracked_tree(monkeypatch):
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "abcdef1234567890")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "abcdef1234567890")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (False, ["MODIFIED (M ): models/walk_forward.py"]))
+
+    with pytest.raises(RuntimeError, match="clean tracked source tree"):
+        _validate_source_provenance(enforce_clean=True)
+
+
+def test_phase2_1_a_source_provenance_fails_on_untracked_source(monkeypatch):
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "abcdef1234567890")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "abcdef1234567890")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (False, ["UNTRACKED: research_v2/labels/new_algo.py"]))
+
+    with pytest.raises(RuntimeError, match="clean tracked source tree"):
+        _validate_source_provenance(enforce_clean=True)
+
+
+def test_phase2_1_a_source_provenance_fails_on_remote_mismatch(monkeypatch):
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "local_sha_111111")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "remote_sha_222222")
+    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (True, []))
+
+    with pytest.raises(RuntimeError, match="does not match origin"):
+        _validate_source_provenance(enforce_clean=True)
