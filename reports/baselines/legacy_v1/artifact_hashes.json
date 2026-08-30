@@ -1,11 +1,18 @@
 {
-  "model_comparison.csv": "4f8260baf3095dc31381f9ef6e99be5ca0f4f2720a699034761efcec68e2da9b",
-  "trading_fold_stability.csv": "622f7c66b71dbe58363a6421acdaf2d2ddfafbfbdfc7ab486c156623b83c5ebe",
-  "seed_robustness.csv": "057622950237af403748f928c16f53bb9f86eb9ae2fc5f3a33f2d61260bf0a3d",
-  "legacy_model_semantics.json": "8c02feb1814a49dfd8a7d6aeb759ecbb40c4c163b2829b095e2219876849c0d7",
-  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
-  "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
-  "phase_2_0_2_reported_protocol_config_hash": "62fa73390fe72a939a847f9ac84120634df07bf12f04a867eeb062b15300c608",
-  "phase_2_0_2_reported_model_full_config_hash": "d72b74dd2353dbb623444cc8bf72cf5eb4154d11604839b844b781913e5e9f53",
-  "legacy_effective_model_config_hash": "787c15f6b516f52df769061150042a56a6005e6a70885432927477b301b34191"
+  "schema_version": 1,
+  "baseline_id": "LEGACY_BASELINE_V1",
+  "artifacts": {
+    "model_comparison.csv": "4f8260baf3095dc31381f9ef6e99be5ca0f4f2720a699034761efcec68e2da9b",
+    "trading_fold_stability.csv": "622f7c66b71dbe58363a6421acdaf2d2ddfafbfbdfc7ab486c156623b83c5ebe",
+    "seed_robustness.csv": "057622950237af403748f928c16f53bb9f86eb9ae2fc5f3a33f2d61260bf0a3d",
+    "legacy_model_semantics.json": "cba69bdfb6bca6565a288da742cae07735db54f8fbf745e7f5e7ef81b9981a60",
+    "freeze_evidence.json": "54b91fc1a440dad0eb927ccbfb3ba55bf023b3645de241653a1fe3c4443c7e0c"
+  },
+  "source_hashes": {
+    "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+    "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
+    "phase_2_0_2_reported_protocol_config_hash": "62fa73390fe72a939a847f9ac84120634df07bf12f04a867eeb062b15300c608",
+    "phase_2_0_2_reported_model_full_config_hash": "d72b74dd2353dbb623444cc8bf72cf5eb4154d11604839b844b781913e5e9f53",
+    "legacy_effective_model_config_hash": "7d8eaad86ec95f39a5b68a12c0a7f9691b7bba98ac576445ed044108319c972e"
+  }
 }

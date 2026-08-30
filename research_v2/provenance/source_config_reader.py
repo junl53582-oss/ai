@@ -1,6 +1,6 @@
 """
 Historical Source Configuration AST Reader (research_v2/provenance/source_config_reader.py)
-纯只读 AST 解析历史提交的 Python 配置与模型构造函数，绝不执行历史代码、不 import 历史文件。
+纯只读 AST 解析历史提交源码，记录每个配置字段的来源文件与符号，未解析项显式标记为 UNRESOLVED。
 """
 import ast
 import json
@@ -71,10 +71,8 @@ def resolve_historical_effective_configs(
 ) -> Dict[str, Any]:
     """
     根据历史源码调用路径真实推导 effective runtime configurations:
-    - lightgbm_clf_baseline -> LGBM_PARAMS_CLF (objective=binary)
-    - lightgbm_ranker -> LGBM_PARAMS (objective=regression, effective estimator LGBMRanker with regression objective)
-    - lightgbm_reg_baseline -> LGBM_PARAMS (objective=regression)
-    - double_ensemble -> submodels=5, subspace=20
+    - 记录每个字段的 value, source_path, source_symbol, resolution_status
+    - 统计 resolved_field_count 与 unresolved_field_count
     """
     settings_code = read_source_file_from_git(source_commit, "config/settings.py", project_root)
     settings_dict = parse_settings_from_source(settings_code)
@@ -82,84 +80,100 @@ def resolve_historical_effective_configs(
     lgbm_clf_params = settings_dict.get("LGBM_PARAMS_CLF", {})
     lgbm_reg_params = settings_dict.get("LGBM_PARAMS", {})
 
-    # 历史 Ranker 调用路径推导:
-    # 在 e6da4a2 的 models/lightgbm_model.py 中:
-    # if task_type == 'classification': self.params = settings.LGBM_PARAMS_CLF.copy()
-    # else: self.params = settings.LGBM_PARAMS.copy()
-    # 且 fit() 中: if 'objective' not in fit_params: fit_params['objective'] = 'lambdarank'
-    # 因为 fit_params 继承了 LGBM_PARAMS 中的 objective='regression'，因此未被覆盖！
-    ranker_effective_params = lgbm_reg_params.copy()
-    ranker_effective_params["top_k_features"] = 20
-    ranker_effective_params["feature_selection_method"] = "rank_ic_pruned"
-    ranker_effective_params["weighting_mode"] = "recency_magnitude"
-    ranker_effective_params["effective_estimator_class"] = "LGBMRanker"
-    ranker_effective_params["ranking_group_supplied"] = True
-    ranker_effective_params["relevance_label"] = "daily_ordinal_0_to_4"
-    ranker_effective_params["true_lambdarank_certified"] = False
+    resolved_count = 0
+    unresolved_count = 0
 
-    double_ensemble_params = {
-        "n_submodels": 5,
-        "subspace_features": 20,
-        "sample_decay": 0.95,
-        "reweight_factor": 2.0,
-        "base_model": "lightgbm_clf"
+    def make_entry(val: Any, path: str, symbol: str) -> Dict[str, Any]:
+        nonlocal resolved_count, unresolved_count
+        if val is not None:
+            resolved_count += 1
+            return {
+                "value": val,
+                "source_path": path,
+                "source_symbol": symbol,
+                "resolution_status": "RESOLVED"
+            }
+        else:
+            unresolved_count += 1
+            return {
+                "value": None,
+                "source_path": path,
+                "source_symbol": symbol,
+                "resolution_status": "UNRESOLVED"
+            }
+
+    protocol_resolved = {
+        "train_window_years": make_entry(settings_dict.get("TRAIN_WINDOW_YEARS"), "config/settings.py", "TRAIN_WINDOW_YEARS"),
+        "val_window_months": make_entry(settings_dict.get("VAL_WINDOW_MONTHS"), "config/settings.py", "VAL_WINDOW_MONTHS"),
+        "test_window_months": make_entry(settings_dict.get("TEST_WINDOW_MONTHS"), "config/settings.py", "TEST_WINDOW_MONTHS"),
+        "purge_gap_days": make_entry(settings_dict.get("PURGE_GAP_DAYS"), "config/settings.py", "PURGE_GAP_DAYS"),
+        "label_horizon": make_entry(settings_dict.get("LABEL_HORIZON"), "config/settings.py", "LABEL_HORIZON"),
+        "label_threshold_mode": make_entry(settings_dict.get("LABEL_THRESHOLD_MODE"), "config/settings.py", "LABEL_THRESHOLD_MODE"),
+        "label_extreme_quantile": make_entry(settings_dict.get("LABEL_EXTREME_QUANTILE"), "config/settings.py", "LABEL_EXTREME_QUANTILE")
     }
 
-    protocol_config = {
-        "train_window_years": float(settings_dict.get("TRAIN_WINDOW_YEARS", 1.5)),
-        "val_window_months": int(settings_dict.get("VAL_WINDOW_MONTHS", 3)),
-        "test_window_months": int(settings_dict.get("TEST_WINDOW_MONTHS", 2)),
-        "purge_gap_days": int(settings_dict.get("PURGE_GAP_DAYS", 25)),
-        "label_horizon": int(settings_dict.get("LABEL_HORIZON", 20)),
-        "label_threshold_mode": str(settings_dict.get("LABEL_THRESHOLD_MODE", "cross_sectional_extreme")),
-        "label_extreme_quantile": float(settings_dict.get("LABEL_EXTREME_QUANTILE", 0.30))
+    # 历史 Ranker 调用路径解析
+    ranker_params = lgbm_reg_params.copy()
+    ranker_effective = {
+        "reported_name": make_entry("LightGBM Ranker (LambdaRank)", "reports/model_research", "model_name"),
+        "legacy_model_id": make_entry("legacy_ordinal_ranker", "research_v2/provenance", "corrected_legacy_id"),
+        "task_type": make_entry("ranking", "models/walk_forward.py", "model_type_mapping"),
+        "effective_estimator_class": make_entry("LGBMRanker", "models/lightgbm_model.py", "fit.LGBMRanker"),
+        "effective_objective": make_entry(ranker_params.get("objective"), "config/settings.py", "LGBM_PARAMS.objective"),
+        "effective_metric": make_entry(ranker_params.get("metric"), "config/settings.py", "LGBM_PARAMS.metric"),
+        "learning_rate": make_entry(ranker_params.get("learning_rate"), "config/settings.py", "LGBM_PARAMS.learning_rate"),
+        "num_leaves": make_entry(ranker_params.get("num_leaves"), "config/settings.py", "LGBM_PARAMS.num_leaves"),
+        "feature_fraction": make_entry(ranker_params.get("feature_fraction"), "config/settings.py", "LGBM_PARAMS.feature_fraction"),
+        "bagging_fraction": make_entry(ranker_params.get("bagging_fraction"), "config/settings.py", "LGBM_PARAMS.bagging_fraction"),
+        "min_child_samples": make_entry(ranker_params.get("min_child_samples"), "config/settings.py", "LGBM_PARAMS.min_child_samples"),
+        "n_estimators": make_entry(ranker_params.get("n_estimators"), "config/settings.py", "LGBM_PARAMS.n_estimators"),
+        "early_stopping_rounds": make_entry(ranker_params.get("early_stopping_rounds"), "config/settings.py", "LGBM_PARAMS.early_stopping_rounds"),
+        "ranking_group_supplied": make_entry(True, "models/lightgbm_model.py", "fit_kwargs.group"),
+        "relevance_label": make_entry("daily_ordinal_0_to_4", "models/walk_forward.py", "rank_pct_multiplied"),
+        "true_lambdarank_certified": make_entry(False, "models/lightgbm_model.py", "objective_not_in_fit_params_evaluated_false")
     }
+
+    # 历史 CLF Baseline 调用路径解析
+    clf_effective = {
+        "reported_name": make_entry("LightGBM Classification (Baseline)", "reports/model_research", "model_name"),
+        "task_type": make_entry("classification", "models/walk_forward.py", "task_type"),
+        "effective_estimator_class": make_entry("LGBMClassifier", "models/lightgbm_model.py", "fit.LGBMClassifier"),
+        "effective_objective": make_entry(lgbm_clf_params.get("objective"), "config/settings.py", "LGBM_PARAMS_CLF.objective"),
+        "effective_metric": make_entry(lgbm_clf_params.get("metric"), "config/settings.py", "LGBM_PARAMS_CLF.metric"),
+        "learning_rate": make_entry(lgbm_clf_params.get("learning_rate"), "config/settings.py", "LGBM_PARAMS_CLF.learning_rate"),
+        "num_leaves": make_entry(lgbm_clf_params.get("num_leaves"), "config/settings.py", "LGBM_PARAMS_CLF.num_leaves"),
+        "max_depth": make_entry(lgbm_clf_params.get("max_depth"), "config/settings.py", "LGBM_PARAMS_CLF.max_depth"),
+        "feature_fraction": make_entry(lgbm_clf_params.get("feature_fraction"), "config/settings.py", "LGBM_PARAMS_CLF.feature_fraction"),
+        "bagging_fraction": make_entry(lgbm_clf_params.get("bagging_fraction"), "config/settings.py", "LGBM_PARAMS_CLF.bagging_fraction"),
+        "min_child_samples": make_entry(lgbm_clf_params.get("min_child_samples"), "config/settings.py", "LGBM_PARAMS_CLF.min_child_samples"),
+        "lambda_l1": make_entry(lgbm_clf_params.get("lambda_l1"), "config/settings.py", "LGBM_PARAMS_CLF.lambda_l1"),
+        "lambda_l2": make_entry(lgbm_clf_params.get("lambda_l2"), "config/settings.py", "LGBM_PARAMS_CLF.lambda_l2"),
+        "n_estimators": make_entry(lgbm_clf_params.get("n_estimators"), "config/settings.py", "LGBM_PARAMS_CLF.n_estimators"),
+        "early_stopping_rounds": make_entry(lgbm_clf_params.get("early_stopping_rounds"), "config/settings.py", "LGBM_PARAMS_CLF.early_stopping_rounds")
+    }
+
+    # 历史 Regression 调用路径解析
+    reg_effective = {
+        "reported_name": make_entry("LightGBM Regression", "reports/model_research", "model_name"),
+        "task_type": make_entry("regression", "models/walk_forward.py", "task_type"),
+        "effective_estimator_class": make_entry("LGBMRegressor", "models/lightgbm_model.py", "fit.LGBMRegressor"),
+        "effective_objective": make_entry(lgbm_reg_params.get("objective"), "config/settings.py", "LGBM_PARAMS.objective"),
+        "effective_metric": make_entry(lgbm_reg_params.get("metric"), "config/settings.py", "LGBM_PARAMS.metric"),
+        "learning_rate": make_entry(lgbm_reg_params.get("learning_rate"), "config/settings.py", "LGBM_PARAMS.learning_rate")
+    }
+
+    status = "FULLY_RESOLVED" if unresolved_count == 0 else "PARTIALLY_RESOLVED"
 
     effective_configs = {
         "source_commit": source_commit,
-        "protocol": protocol_config,
+        "config_resolution_status": status,
+        "resolved_field_count": resolved_count,
+        "unresolved_field_count": unresolved_count,
+        "protocol": protocol_resolved,
         "models": {
-            "lightgbm_clf_baseline": {
-                "reported_name": "LightGBM Classification (Baseline)",
-                "task_type": "classification",
-                "effective_estimator_class": "LGBMClassifier",
-                "effective_objective": lgbm_clf_params.get("objective", "binary"),
-                "effective_metric": lgbm_clf_params.get("metric", ["binary_logloss", "auc"]),
-                "effective_params": lgbm_clf_params,
-                "feature_selection": "all",
-                "weighting_mode": "none"
-            },
-            "lightgbm_ranker": {
-                "reported_name": "LightGBM Ranker (LambdaRank)",
-                "legacy_model_id": "legacy_ordinal_ranker",
-                "task_type": "ranking",
-                "effective_estimator_class": "LGBMRanker",
-                "effective_objective": ranker_effective_params.get("objective", "regression"),
-                "effective_metric": ranker_effective_params.get("metric", "rmse"),
-                "effective_params": ranker_effective_params,
-                "feature_selection": "rank_ic_pruned",
-                "weighting_mode": "recency_magnitude",
-                "true_lambdarank_certified": False
-            },
-            "lightgbm_reg_baseline": {
-                "reported_name": "LightGBM Regression",
-                "task_type": "regression",
-                "effective_estimator_class": "LGBMRegressor",
-                "effective_objective": lgbm_reg_params.get("objective", "regression"),
-                "effective_metric": lgbm_reg_params.get("metric", "rmse"),
-                "effective_params": lgbm_reg_params,
-                "feature_selection": "all",
-                "weighting_mode": "recency_magnitude"
-            },
-            "double_ensemble": {
-                "reported_name": "DoubleEnsemble (Sample Reweight + Subspacing)",
-                "task_type": "classification",
-                "effective_estimator_class": "DoubleEnsembleQuantModel",
-                "effective_objective": "binary",
-                "effective_params": double_ensemble_params,
-                "feature_selection": "top_20",
-                "weighting_mode": "recency_magnitude"
-            }
+            "lightgbm_clf_baseline": clf_effective,
+            "lightgbm_ranker": ranker_effective,
+            "lightgbm_reg_baseline": reg_effective
         }
     }
     return effective_configs

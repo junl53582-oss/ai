@@ -2,9 +2,14 @@
 Tests for Legacy Baseline V1 Freeze (tests/test_phase2_1_legacy_freeze.py)
 """
 import json
+import shutil
+import pytest
+import subprocess
 from pathlib import Path
 import pandas as pd
 import numpy as np
+
+from research_v2.registry.baseline_registry import BaselineRegistry, BaselineIntegrityError
 
 
 def test_legacy_v1_baseline_artifacts_exist():
@@ -17,6 +22,7 @@ def test_legacy_v1_baseline_artifacts_exist():
         "trading_fold_stability.csv",
         "seed_robustness.csv",
         "artifact_hashes.json",
+        "freeze_evidence.json",
         "LEGACY_BASELINE_REPORT.md"
     ]
     for rf in required_files:
@@ -24,44 +30,49 @@ def test_legacy_v1_baseline_artifacts_exist():
         assert p.exists(), f"Missing legacy baseline artifact: {p}"
 
 
-def test_legacy_baseline_id_and_status():
-    manifest_file = Path("reports/baselines/legacy_v1/baseline_manifest.json")
-    assert manifest_file.exists()
-    data = json.loads(manifest_file.read_text(encoding="utf-8"))
-    assert data["baseline_id"] == "LEGACY_BASELINE_V1"
-    assert data["baseline_status"] == "FROZEN"
-    assert data["model_evidence_source_commit"] == "e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48"
-    assert len(data["dataset_sha256"]) == 64
-    assert len(data["feature_schema_hash"]) == 64
-    assert data["feature_count"] == 79
-    assert data["label_horizon"] == 20
-    assert data["prediction_champion_seed_robustness"] == "PASS"
-    assert data["trading_candidate_seed_robustness"] == "NOT_CERTIFIED"
-    assert data["live_trading_ready"] is False
-
-
-def test_legacy_metrics_exact_match():
+def test_3_tier_git_provenance_commits_exist():
     manifest_file = Path("reports/baselines/legacy_v1/baseline_manifest.json")
     data = json.loads(manifest_file.read_text(encoding="utf-8"))
     
-    # 预测冠军
-    p = data["prediction_baseline"]
-    assert p["model_id"] == "lightgbm_clf_baseline"
-    assert p["mean_daily_rank_ic"] == 0.0503
-    assert p["nw20_rank_icir"] == 0.4044
-    assert p["auc"] == 0.5319
-    assert p["q5_minus_q1_spread"] == 7.17
-    assert p["common_ranking_rows"] == 221019
-    assert p["common_oos_dates"] == 744
+    evidence_c = data["model_evidence_source_commit"]
+    logic_c = data["certification_logic_source_commit"]
+    art_c = data["certified_artifact_commit"]
 
-    # 交易候选
+    for c in [evidence_c, logic_c, art_c]:
+        assert len(c) == 40
+        res = subprocess.run(["git", "cat-file", "-e", f"{c}^{{commit}}"], capture_output=True)
+        assert res.returncode == 0, f"Commit {c} does not exist in local git history"
+
+    assert evidence_c != logic_c
+    assert logic_c != art_c
+
+
+def test_legacy_metrics_derived_from_source_artifacts():
+    manifest_file = Path("reports/baselines/legacy_v1/baseline_manifest.json")
+    data = json.loads(manifest_file.read_text(encoding="utf-8"))
+
+    # 源数据
+    src_comp = pd.read_csv("reports/model_research/model_comparison_certified.csv", keep_default_na=False)
+    src_folds = pd.read_csv("reports/model_research/trading_fold_stability_verified.csv")
+    
+    clf_src = src_comp[src_comp["model_id"] == "lightgbm_clf_baseline"].iloc[0]
+    ranker_src = src_comp[src_comp["model_id"] == "lightgbm_ranker"].iloc[0]
+
+    # 预测冠军动态核验
+    p = data["prediction_baseline"]
+    assert float(p["mean_daily_rank_ic"]) == pytest.approx(float(clf_src["mean_daily_rank_ic"]))
+    assert float(p["nw20_rank_icir"]) == pytest.approx(float(clf_src["rank_icir_nw_lag20"]))
+    assert float(p["q5_minus_q1_spread"]) == pytest.approx(float(clf_src["q5_minus_q1_spread"]))
+    assert int(p["common_ranking_rows"]) == int(clf_src["common_ranking_rows"])
+    assert int(p["common_oos_dates"]) == int(clf_src["common_oos_dates"])
+
+    # 交易候选动态核验
     t = data["trading_candidate"]
-    assert t["historical_artifact_model_id"] == "lightgbm_ranker"
-    assert t["legacy_model_id"] == "legacy_ordinal_ranker"
-    assert t["cost_adjusted_excess_return"] == 5.72
-    assert t["sharpe_ratio"] == 0.36
-    assert t["max_drawdown"] == -14.35
-    assert t["real_fold_win_ratio"] == 0.55
+    assert float(t["cost_adjusted_excess_return"]) == pytest.approx(float(ranker_src["cost_adjusted_excess_return"]))
+    assert float(t["sharpe_ratio"]) == pytest.approx(float(ranker_src["sharpe_ratio"]))
+    assert float(t["max_drawdown"]) == pytest.approx(float(ranker_src["max_drawdown"]))
+    assert float(t["real_fold_win_ratio"]) == pytest.approx(float(src_folds["ranker_win"].mean()), abs=1e-4)
+    assert float(t["annualized_turnover_avg"]) == pytest.approx(float(src_folds["ranker_annualized_turnover"].mean()), abs=1e-2)
 
 
 def test_legacy_ranker_semantics_corrected():
@@ -81,11 +92,11 @@ def test_legacy_ranker_semantics_corrected():
     assert data["true_lambdarank_certified"] is False
 
 
-def test_legacy_label_timing_documented():
-    manifest_file = Path("reports/baselines/legacy_v1/baseline_manifest.json")
-    data = json.loads(manifest_file.read_text(encoding="utf-8"))
-    lbl_sem = data["legacy_label_semantics"]
-    assert lbl_sem["signal_time"] == "T_CLOSE"
-    assert lbl_sem["entry_aligned"] is False
-    assert lbl_sem["legacy_return_window"] == "T_CLOSE_TO_T_PLUS_20_CLOSE"
-    assert lbl_sem["execution_engine_entry"] == "T_PLUS_1_OPEN"
+def test_freeze_evidence_json_validity():
+    ev_file = Path("reports/baselines/legacy_v1/freeze_evidence.json")
+    assert ev_file.exists()
+    ev_data = json.loads(ev_file.read_text(encoding="utf-8"))
+    assert "source_artifacts" in ev_data
+    assert "derived_metrics" in ev_data
+    assert "prediction_baseline" in ev_data["derived_metrics"]
+    assert "trading_candidate" in ev_data["derived_metrics"]

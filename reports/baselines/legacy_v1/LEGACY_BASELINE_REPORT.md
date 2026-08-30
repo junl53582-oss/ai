@@ -10,11 +10,12 @@
 - **BASELINE_ID**: `LEGACY_BASELINE_V1`
 - **STATUS**: `FROZEN`
 - **MODEL_EVIDENCE_SOURCE_COMMIT**: `e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48`
+- **CERTIFICATION_LOGIC_SOURCE_COMMIT**: `c8ce24a8bd275153934169a8d1e989cf78d1c5e5`
+- **CERTIFIED_ARTIFACT_COMMIT**: `8bfa0e49395290266e923b2c15053f594a7e7dd2`
 - **DATASET_SHA256**: `9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42`
 - **FEATURE_SCHEMA_HASH**: `eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa` (79 因子)
-- **PHASE_2_0_2_REPORTED_PROTOCOL_CONFIG_HASH**: `62fa73390fe72a939a847f9ac84120634df07bf12f04a867eeb062b15300c608`
-- **PHASE_2_0_2_REPORTED_MODEL_FULL_CONFIG_HASH**: `d72b74dd2353dbb623444cc8bf72cf5eb4154d11604839b844b781913e5e9f53`
-- **LEGACY_EFFECTIVE_MODEL_CONFIG_HASH**: `787c15f6b516f52df769061150042a56a6005e6a70885432927477b301b34191`
+- **ARTIFACT_HASH_MANIFEST_SHA256**: `c4537008588e6cbbe606c0dab4bc45ed4175f67526137c760bfe49b44c9607a3`
+- **LEGACY_EFFECTIVE_MODEL_CONFIG_HASH**: `7d8eaad86ec95f39a5b68a12c0a7f9691b7bba98ac576445ed044108319c972e`
 
 ---
 
@@ -41,13 +42,16 @@
 - **Q5-Q1 算术超额差**: **+7.17%**
 - **Common Ranking Rows**: `221,019`
 - **Common OOS Dates**: `744`
-- **3-Seed 稳健性**: 42 (0.0503), 2026 (0.0455), 3407 (0.0459) $	o$ **`VERIFIED_STABLE`**
+- **3-Seed 稳健性**: `VERIFIED_STABLE`
 
 ### 3.2 交易候选基准 (Trading Candidate Baseline) — `legacy_ordinal_ranker`
 - **Cost-adjusted Excess Return**: **+5.72%**
 - **Sharpe Ratio**: **+0.36**
 - **Max Drawdown**: **-14.35%**
-- **Real 20-Fold Win Ratio**: **55.0%** (11 / 20 胜出)
+- **Real 20-Fold Win Ratio**: **55.0%**
+- **Annualized Turnover Avg**: **9.11x**
+- **Total Filled Trades**: `579` 笔
+- **Total Costs**: `86,006.69` 元
 - **Seed Robustness**: **`NOT_CERTIFIED`** (待 Phase 2.1 实测)
 
 ---

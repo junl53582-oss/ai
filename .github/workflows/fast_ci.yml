@@ -76,6 +76,10 @@ jobs:
         run: |
           python -u tools/validate_certification_artifacts.py
 
+      - name: Legacy Baseline Validator
+        run: |
+          python -u tools/validate_legacy_baseline.py
+
       - name: Upload Fast CI Artifacts
         if: always()
         uses: actions/upload-artifact@v4

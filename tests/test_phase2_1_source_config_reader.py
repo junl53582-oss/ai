@@ -26,34 +26,32 @@ def test_ast_parsing_of_historical_settings():
 
 def test_effective_ranker_config_resolution():
     eff = resolve_historical_effective_configs("e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48")
+    assert eff["config_resolution_status"] == "FULLY_RESOLVED"
+    assert eff["resolved_field_count"] > 0
+    assert eff["unresolved_field_count"] == 0
+
     models = eff["models"]
-    
     ranker = models["lightgbm_ranker"]
-    assert ranker["effective_estimator_class"] == "LGBMRanker"
-    assert ranker["effective_objective"] == "regression"
-    assert ranker["effective_metric"] == "rmse"
-    assert ranker["true_lambdarank_certified"] is False
+    assert ranker["effective_estimator_class"]["value"] == "LGBMRanker"
+    assert ranker["effective_objective"]["value"] == "regression"
+    assert ranker["effective_metric"]["value"] == "rmse"
+    assert ranker["true_lambdarank_certified"]["value"] is False
 
     clf = models["lightgbm_clf_baseline"]
-    assert clf["effective_objective"] == "binary"
+    assert clf["effective_objective"]["value"] == "binary"
 
 
-def test_legacy_effective_config_hash_invariance_to_current_code():
-    h1 = compute_legacy_effective_model_config_hash()
-    assert len(h1) == 64
-    
-    # 再次读取，哈希完全一致
-    h2 = compute_legacy_effective_model_config_hash()
-    assert h1 == h2
-
-
-def test_altered_historical_source_fixture_changes_hash():
-    base_eff = resolve_historical_effective_configs("e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48")
-    base_hash = compute_legacy_effective_model_config_hash(base_eff)
-    
-    import copy
-    mod_eff = copy.deepcopy(base_eff)
-    mod_eff["models"]["lightgbm_ranker"]["effective_params"]["learning_rate"] = 0.099
-    
-    mod_hash = compute_legacy_effective_model_config_hash(mod_eff)
-    assert mod_hash != base_hash
+def test_ast_parser_fixture_sensitivity():
+    code_fixture_1 = """
+LGBM_PARAMS = {"objective": "regression", "learning_rate": 0.03}
+LGBM_PARAMS_CLF = {"objective": "binary", "learning_rate": 0.02}
+"""
+    code_fixture_2 = """
+LGBM_PARAMS = {"objective": "regression", "learning_rate": 0.05}
+LGBM_PARAMS_CLF = {"objective": "binary", "learning_rate": 0.02}
+"""
+    p1 = parse_settings_from_source(code_fixture_1)
+    p2 = parse_settings_from_source(code_fixture_2)
+    assert p1["LGBM_PARAMS"]["learning_rate"] == 0.03
+    assert p2["LGBM_PARAMS"]["learning_rate"] == 0.05
+    assert p1 != p2

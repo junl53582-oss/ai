@@ -32,7 +32,11 @@
       "cost_adjusted_excess_return": 5.72,
       "sharpe_ratio": 0.36,
       "max_drawdown": -14.35,
-      "fold_win_ratio": 0.55
+      "fold_win_ratio": 0.55,
+      "annualized_turnover_avg": 9.11,
+      "total_filled_trades": 579,
+      "total_costs": 86006.69,
+      "worst_fold_return": -8.71
     }
   },
   "true_lambdarank_certified": false,
