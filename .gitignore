@@ -15,6 +15,7 @@ env/
 data_storage/raw/
 data_storage/oos_predictions.parquet
 data_storage/fundamentals/
+data_storage/research/*.parquet
 saved_models/*.pkl
 saved_models/*.txt
 

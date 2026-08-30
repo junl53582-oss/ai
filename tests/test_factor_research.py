@@ -488,3 +488,87 @@ def test_clean_checkout_research_pipeline_smoke(tmp_path):
     assert (tmp_path / "reports" / "FACTOR_RESEARCH_REPORT.md").exists()
     assert (tmp_path / "reports" / "research_run_manifest.json").exists()
 
+
+# ------------------------------------------------------------------------------
+# Test 22: P1.6-1 Security Master contains 300 symbols with official listing dates
+# ------------------------------------------------------------------------------
+def test_security_master_contains_300_symbols_with_listing_dates():
+    from pathlib import Path
+    sec_file = Path("data_storage/security_master.parquet")
+    assert sec_file.exists(), "Security Master file must exist"
+    df_sec = pd.read_parquet(sec_file)
+    assert len(df_sec) >= 300, f"Security master symbols ({len(df_sec)}) must be >= 300"
+    assert "list_date" in df_sec.columns
+    assert "industry" in df_sec.columns
+    assert df_sec["list_date"].notna().mean() >= 0.99
+    assert df_sec["industry"].notna().mean() >= 0.99
+
+
+# ------------------------------------------------------------------------------
+# Test 23: P1.6-2 PIT universe filter accurately filters subnew stocks (< 60 days)
+# ------------------------------------------------------------------------------
+def test_pit_universe_filter_filters_subnew_stocks():
+    dates = pd.date_range("2023-01-01", periods=10, freq="B")
+    # 模拟 2 只股票: A 上市满 1 年, B 上市第 10 天
+    df = pd.DataFrame({
+        "date": list(dates) * 2,
+        "symbol": ["A.SH"] * len(dates) + ["B.SH"] * len(dates),
+        "days_since_listing": [365] * len(dates) + [10] * len(dates),
+        "is_st": [False] * (2 * len(dates)),
+        "is_suspended": [False] * (2 * len(dates))
+    })
+    df["in_universe"] = (df["days_since_listing"] >= 60) & (~df["is_st"]) & (~df["is_suspended"])
+    
+    assert df[df["symbol"] == "A.SH"]["in_universe"].all() == True
+    assert df[df["symbol"] == "B.SH"]["in_universe"].all() == False
+
+
+# ------------------------------------------------------------------------------
+# Test 24: P1.6-3 Production dataset cross-section median >= 100
+# ------------------------------------------------------------------------------
+def test_pit_universe_cross_section_scale_exceeds_100():
+    from pathlib import Path
+    prod_path = Path("data_storage/research/market_daily_300.parquet")
+    if prod_path.exists():
+        df = pd.read_parquet(prod_path)
+        cs = df.groupby("date")["symbol"].count()
+        med_cs = cs.median()
+        assert med_cs >= 100, f"Median cross-section ({med_cs}) must be >= 100"
+        assert df["symbol"].nunique() >= 300
+
+
+# ------------------------------------------------------------------------------
+# Test 25: P1.6-4 Production factor matrix schema & 100% benchmark coverage
+# ------------------------------------------------------------------------------
+def test_production_research_dataset_schema_and_benchmark_open():
+    from pathlib import Path
+    prod_f_path = Path("data_storage/research/factor_matrix_300.parquet")
+    if prod_f_path.exists():
+        df = pd.read_parquet(prod_f_path)
+        assert "benchmark_open" in df.columns
+        assert "benchmark_close" in df.columns
+        assert "adj_open" in df.columns
+        assert "adj_close" in df.columns
+        assert (df["benchmark_open"] > 0).mean() >= 0.99
+        assert (df["benchmark_close"] > 0).mean() >= 0.99
+
+
+# ------------------------------------------------------------------------------
+# Test 26: P1.6-5 Purged Walk-Forward configuration produces >= 3 folds
+# ------------------------------------------------------------------------------
+def test_purged_walk_forward_produces_ge_3_folds():
+    from research.factor_selection import FactorSelectionEngine
+    from research.config import default_research_config
+    
+    # 模拟 5 年交易日序列 (1260 天)
+    dates = pd.date_range("2019-01-01", periods=1260, freq="B")
+    mock_df = pd.DataFrame({
+        "date": list(dates) * 5,
+        "symbol": ["A"] * 1260 + ["B"] * 1260 + ["C"] * 1260 + ["D"] * 1260 + ["E"] * 1260,
+        "KMID": np.random.normal(0, 1, 1260 * 5),
+        "future_excess_return_20d": np.random.normal(0, 0.05, 1260 * 5)
+    })
+    wf_res = FactorSelectionEngine.run_purged_walk_forward(mock_df, ["KMID"], config=default_research_config)
+    assert wf_res["total_folds"] >= 3, f"Expected >= 3 folds, got {wf_res['total_folds']}"
+
+

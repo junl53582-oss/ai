@@ -1,0 +1,16 @@
+{
+  "dataset_name": "A_SHARE_PIT_RESEARCH_MARKET_DAILY_300",
+  "dataset_version": "1.6",
+  "is_ci_fixture": false,
+  "production_ready": true,
+  "symbol_count": 300,
+  "row_count": 349379,
+  "date_range": [
+    "2021-09-29",
+    "2026-08-24"
+  ],
+  "daily_cross_section_median": 297.0,
+  "benchmark_open_coverage": 1.0,
+  "benchmark_close_coverage": 1.0,
+  "file_sha256": "47dc1429f20acfbd254c3c23f172c80f5d87852fa04bb4d6f60579af310033be"
+}

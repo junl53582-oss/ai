@@ -39,7 +39,8 @@ REQUIRED_FILES = [
     "daily_portfolio_pnl.csv",
     "neutralization_evidence.csv",
     "orthogonalization_evidence.csv",
-    "research_run_manifest.json"
+    "research_run_manifest.json",
+    "universe_trace.json"
 ]
 
 

@@ -106,7 +106,17 @@ def main():
     m_ok = check_market_dataset(market_path)
     f_ok = check_factor_matrix(factor_path)
 
-    if m_ok and f_ok:
+    # 检查 Phase 1.6 生产级 300 标的数据集 (若存在)
+    prod_m_path = root / "data_storage" / "research" / "market_daily_300.parquet"
+    prod_f_path = root / "data_storage" / "research" / "factor_matrix_300.parquet"
+    prod_ok = True
+    if prod_m_path.exists():
+        logger.info("📦 发现 Phase 1.6 生产级 300 标的数据集，执行生产级 Schema 门禁检查...")
+        prod_m_ok = check_market_dataset(prod_m_path)
+        prod_f_ok = check_factor_matrix(prod_f_path) if prod_f_path.exists() else True
+        prod_ok = prod_m_ok and prod_f_ok
+
+    if m_ok and f_ok and prod_ok:
         logger.info("🏆 全量数据集 Schema 门禁校验 100% 通过！(DATASET_SCHEMA_VALID = TRUE)")
         sys.exit(0)
     else:

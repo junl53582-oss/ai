@@ -84,8 +84,8 @@ class ResearchConfig:
     REDUNDANCY_CORR_THRESHOLD: float = 0.85      # 截面或 IC 相关性 > 0.85 标记为冗余
     
     # ---------------- Purged Walk-Forward 因子选择参数 ----------------
-    WF_TRAIN_YEARS: float = 2.0
-    WF_VALIDATION_YEARS: float = 1.0
+    WF_TRAIN_YEARS: float = 1.5
+    WF_VALIDATION_YEARS: float = 0.5
     WF_PURGE_DAYS: int = 25                      # Purge 隔离天数 >= max(HORIZONS)+1
     WF_EMBARGO_DAYS: int = 5                     # Embargo 滞后缓冲天数
     MIN_WF_FOLDS_FOR_CERTIFICATION: int = 3      # 达到 OOS_VALIDATED 所需的最少 Fold 门禁

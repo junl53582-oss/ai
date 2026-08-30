@@ -32,9 +32,9 @@ jobs:
         run: |
           python -u tools/check_committed_dataset_schema.py
 
-      - name: Run Factor Research Pipeline
+      - name: Run Factor Research Pipeline (CI Smoke)
         run: |
-          python -u tools/run_factor_research.py
+          python -u tools/run_factor_research.py --dataset data_storage/factors/factor_matrix.parquet --limit-factors 3
 
       - name: Validate Research Artifacts & Lineage Evidence
         run: |

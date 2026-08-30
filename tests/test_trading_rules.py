@@ -607,9 +607,9 @@ def test_api_cli_dashboard_share_same_audit_source():
 # ==========================================
 # 9. P0-8: Date-Indexed 历史 ST 状态
 # ==========================================
-def test_st_status_changes_over_time():
+def test_st_status_changes_over_time(tmp_path):
     """测试 P0-8: 历史 ST 状态支持按日期变更与查询"""
-    sec = SecurityMaster()
+    sec = SecurityMaster(cache_file=tmp_path / "sec.parquet")
     sec.load_or_fetch(["600519.SH"])
     sec.register_historical_st_timeline("600519.SH", {
         "2023-01-03": False,
@@ -622,9 +622,9 @@ def test_st_status_changes_over_time():
     assert sec.get_st_status("600519.SH", "2023-12-31") is False
 
 
-def test_future_st_status_not_visible_in_past():
+def test_future_st_status_not_visible_in_past(tmp_path):
     """测试 P0-8: 未来发生的 ST 戴帽在历史日期查询中不可见"""
-    sec = SecurityMaster()
+    sec = SecurityMaster(cache_file=tmp_path / "sec.parquet")
     sec.load_or_fetch(["600519.SH"])
     sec.register_historical_st_timeline("600519.SH", {
         "2024-05-01": True
@@ -632,9 +632,9 @@ def test_future_st_status_not_visible_in_past():
     assert sec.get_st_status("600519.SH", "2023-05-01") in [False, None]
 
 
-def test_current_st_never_backfills_history():
+def test_current_st_never_backfills_history(tmp_path):
     """测试 P0-8: 历史 ST 数据缺失时，严禁使用 current_is_st 反填历史"""
-    sec = SecurityMaster()
+    sec = SecurityMaster(cache_file=tmp_path / "sec.parquet")
     meta = StockMetadata(symbol="600519.SH", current_is_st=True, historical_st_available=False)
     sec._metadata_map["600519.SH"] = meta
     
