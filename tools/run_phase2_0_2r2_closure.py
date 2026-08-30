@@ -63,7 +63,7 @@ def check_git_commit_exists(sha: str) -> bool:
 
 def check_worktree_clean() -> bool:
     try:
-        res = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True)
+        res = subprocess.run(["git", "status", "--porcelain", "--", ":!reports", ":!artifacts"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True)
         return len(res.stdout.strip()) == 0
     except Exception:
         return False
