@@ -1,0 +1,71 @@
+{
+  "source_artifacts": {
+    "model_comparison_certified.csv": {
+      "sha256": "4f8260baf3095dc31381f9ef6e99be5ca0f4f2720a699034761efcec68e2da9b",
+      "source_commit": "8bfa0e49395290266e923b2c15053f594a7e7dd2"
+    },
+    "trading_fold_stability_verified.csv": {
+      "sha256": "622f7c66b71dbe58363a6421acdaf2d2ddfafbfbdfc7ab486c156623b83c5ebe",
+      "source_commit": "8bfa0e49395290266e923b2c15053f594a7e7dd2"
+    },
+    "seed_robustness_verified.csv": {
+      "sha256": "057622950237af403748f928c16f53bb9f86eb9ae2fc5f3a33f2d61260bf0a3d",
+      "source_commit": "8bfa0e49395290266e923b2c15053f594a7e7dd2"
+    },
+    "source_state.json": {
+      "sha256": "e19a0fc219e095dfecdccf1d91733333984ad9a13470b5622f2aabfe961dd276",
+      "source_commit": "8bfa0e49395290266e923b2c15053f594a7e7dd2"
+    }
+  },
+  "derived_metrics": {
+    "prediction_baseline": {
+      "mean_daily_rank_ic": {
+        "value": 0.0503,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_clf_baseline"
+      },
+      "nw20_rank_icir": {
+        "value": 0.4044,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_clf_baseline"
+      },
+      "auc": {
+        "value": 0.5319,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_clf_baseline"
+      },
+      "q5_minus_q1_spread": {
+        "value": 7.17,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_clf_baseline"
+      }
+    },
+    "trading_candidate": {
+      "cost_adjusted_excess_return": {
+        "value": 5.72,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_ranker"
+      },
+      "sharpe_ratio": {
+        "value": 0.36,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_ranker"
+      },
+      "max_drawdown": {
+        "value": -14.35,
+        "source": "model_comparison_certified.csv",
+        "selector": "model_id=lightgbm_ranker"
+      },
+      "fold_win_ratio": {
+        "value": 0.55,
+        "source": "trading_fold_stability_verified.csv",
+        "derivation": "mean(ranker_win)"
+      },
+      "annualized_turnover_avg": {
+        "value": 9.11,
+        "source": "trading_fold_stability_verified.csv",
+        "derivation": "mean(ranker_annualized_turnover)"
+      }
+    }
+  }
+}

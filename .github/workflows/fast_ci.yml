@@ -54,6 +54,10 @@ jobs:
             tests/test_model_research_integrity.py \
             tests/test_model_decision_certification.py \
             tests/test_model_seed_propagation.py \
+            tests/test_phase2_1_legacy_freeze.py \
+            tests/test_phase2_1_source_config_reader.py \
+            tests/test_phase2_1_experiment_registry.py \
+            tests/test_phase2_1_label_schema.py \
             -m "not slow and not integration and not production"
 
       - name: Dataset Schema Gate
@@ -71,6 +75,10 @@ jobs:
       - name: Certification Artifacts Validator
         run: |
           python -u tools/validate_certification_artifacts.py
+
+      - name: Legacy Baseline Validator
+        run: |
+          python -u tools/validate_legacy_baseline.py
 
       - name: Upload Fast CI Artifacts
         if: always()

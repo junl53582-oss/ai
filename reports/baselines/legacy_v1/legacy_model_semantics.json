@@ -1,0 +1,50 @@
+{
+  "baseline_id": "LEGACY_BASELINE_V1",
+  "historical_source_commit": "e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48",
+  "models": {
+    "prediction_champion": {
+      "historical_artifact_model_id": "lightgbm_clf_baseline",
+      "reported_name": "LightGBM Classification (Baseline)",
+      "effective_estimator_class": "LGBMClassifier",
+      "effective_objective": "binary",
+      "effective_metric": [
+        "binary_logloss",
+        "auc"
+      ],
+      "role": "PREDICTION_CHAMPION",
+      "mean_daily_rank_ic": 0.0503,
+      "nw20_rank_icir": 0.4044,
+      "auc": 0.5319,
+      "q5_minus_q1_spread": 7.17
+    },
+    "trading_candidate": {
+      "historical_artifact_model_id": "lightgbm_ranker",
+      "reported_name": "LightGBM Ranker (LambdaRank)",
+      "legacy_model_id": "legacy_ordinal_ranker",
+      "effective_estimator_class": "LGBMRanker",
+      "effective_objective": "regression",
+      "effective_metric": "rmse",
+      "effective_parameters_source": "settings.LGBM_PARAMS",
+      "ranking_group_supplied": true,
+      "relevance_label": "daily_ordinal_0_to_4",
+      "true_lambdarank_certified": false,
+      "role": "LEGACY_TRADING_CANDIDATE",
+      "cost_adjusted_excess_return": 5.72,
+      "sharpe_ratio": 0.36,
+      "max_drawdown": -14.35,
+      "fold_win_ratio": 0.55,
+      "annualized_turnover_avg": 9.11,
+      "total_filled_trades": 579,
+      "total_costs": 86006.69,
+      "worst_fold_return": -8.71
+    }
+  },
+  "true_lambdarank_certified": false,
+  "legacy_label_semantics": {
+    "signal_time": "T_CLOSE",
+    "entry_aligned": false,
+    "legacy_return_window": "T_CLOSE_TO_T_PLUS_20_CLOSE",
+    "execution_engine_entry": "T_PLUS_1_OPEN",
+    "execution_alignment_gap": "Label evaluates return from T Close, while execution enters at T+1 Open."
+  }
+}

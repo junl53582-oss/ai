@@ -1,0 +1,51 @@
+{
+  "baseline_id": "LEGACY_BASELINE_V1",
+  "baseline_status": "FROZEN",
+  "created_at": "2026-08-31T00:00:00Z",
+  "model_evidence_source_commit": "e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48",
+  "certification_logic_source_commit": "c8ce24a8bd275153934169a8d1e989cf78d1c5e5",
+  "certified_artifact_commit": "8bfa0e49395290266e923b2c15053f594a7e7dd2",
+  "dataset_path": "data_storage\\research\\factor_matrix_300.parquet",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
+  "feature_count": 79,
+  "label_horizon": 20,
+  "phase_2_0_2_reported_protocol_config_hash": "62fa73390fe72a939a847f9ac84120634df07bf12f04a867eeb062b15300c608",
+  "phase_2_0_2_reported_model_full_config_hash": "d72b74dd2353dbb623444cc8bf72cf5eb4154d11604839b844b781913e5e9f53",
+  "legacy_effective_model_config_hash": "7d8eaad86ec95f39a5b68a12c0a7f9691b7bba98ac576445ed044108319c972e",
+  "artifact_hash_manifest_sha256": "c4537008588e6cbbe606c0dab4bc45ed4175f67526137c760bfe49b44c9607a3",
+  "legacy_label_semantics": {
+    "signal_time": "T_CLOSE",
+    "entry_aligned": false,
+    "legacy_return_window": "T_CLOSE_TO_T_PLUS_20_CLOSE",
+    "execution_engine_entry": "T_PLUS_1_OPEN",
+    "execution_alignment_gap": "Label evaluates return from T Close, while execution enters at T+1 Open."
+  },
+  "prediction_baseline": {
+    "model_id": "lightgbm_clf_baseline",
+    "model_name": "LightGBM Classification (Baseline)",
+    "mean_daily_rank_ic": 0.0503,
+    "nw20_rank_icir": 0.4044,
+    "auc": 0.5319,
+    "q5_minus_q1_spread": 7.17,
+    "common_ranking_rows": 221019,
+    "common_oos_dates": 744
+  },
+  "trading_candidate": {
+    "historical_artifact_model_id": "lightgbm_ranker",
+    "reported_name": "LightGBM Ranker (LambdaRank)",
+    "legacy_model_id": "legacy_ordinal_ranker",
+    "effective_objective": "regression",
+    "cost_adjusted_excess_return": 5.72,
+    "sharpe_ratio": 0.36,
+    "max_drawdown": -14.35,
+    "real_fold_win_ratio": 0.55,
+    "annualized_turnover_avg": 9.11,
+    "total_filled_trades": 579,
+    "total_costs": 86006.69,
+    "worst_fold_return": -8.71
+  },
+  "prediction_champion_seed_robustness": "PASS",
+  "trading_candidate_seed_robustness": "NOT_CERTIFIED",
+  "live_trading_ready": false
+}
