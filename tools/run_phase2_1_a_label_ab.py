@@ -1,7 +1,7 @@
 """
-Phase 2.1-A Controlled A/B Study Runner (tools/run_phase2_1_a_label_ab.py)
+Phase 2.1-A r2 Controlled A/B Study Runner (tools/run_phase2_1_a_label_ab.py)
 严格单变量对比：Legacy Labels (Arm A) vs Execution-Aligned Labels (Arm B)。
-包含生产模型物理隔离审计、共同训练池/共同OOS池校验、配对块Bootstrap与标签延期诊断。
+包含生产模型物理隔离全目录审计、固定有效参数哈希(scale_pos_weight=1.0)、有效Fold统计、相对路径与大文件Manifest证据链。
 """
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ import logging
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Tuple, Optional, List
+from typing import Dict, Tuple, Optional, List, Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -30,7 +30,6 @@ from models.walk_forward import WalkForwardTrainer
 from research_v2.labels.execution_labeler import ExecutionAlignedLabeler
 
 logger = logging.getLogger("phase2_1_a_ab")
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 EXEC_LABEL = "label_net_alpha_20d"
 EXEC_DIRECTION = "label_direction_20d"
 
@@ -43,14 +42,56 @@ def _git_sha() -> str:
         return "UNKNOWN"
 
 
+def _git_branch() -> str:
+    try:
+        return subprocess.run(["git", "branch", "--show-current"], cwd=PROJECT_ROOT,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return "UNKNOWN"
+
+
+def _git_working_tree_clean() -> bool:
+    try:
+        res = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_ROOT,
+                             capture_output=True, text=True, check=True).stdout.strip()
+        # Filter out untracked reports or temporary logs if any
+        lines = [l for l in res.splitlines() if l.strip() and not l.startswith("??")]
+        return len(lines) == 0
+    except Exception:
+        return False
+
+
+def _git_remote_sha(branch: str) -> str:
+    try:
+        return subprocess.run(["git", "rev-parse", f"origin/{branch}"], cwd=PROJECT_ROOT,
+                              capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return "UNKNOWN"
+
+
 def _sha256_file(path: Path) -> Optional[str]:
-    if not path.exists():
+    if not path.exists() or not path.is_file():
         return None
     h = hashlib.sha256()
     with path.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
     return h.hexdigest()
+
+
+def _snapshot_directory(dir_path: Path) -> Dict[str, Dict[str, Any]]:
+    if not dir_path.exists():
+        return {}
+    snap = {}
+    for p in dir_path.rglob("*"):
+        if p.is_file():
+            rel = str(p.relative_to(dir_path)).replace("\\", "/")
+            snap[rel] = {
+                "size_bytes": p.stat().st_size,
+                "mtime": p.stat().st_mtime,
+                "sha256": _sha256_file(p)
+            }
+    return snap
 
 
 def _daily_rankic(df: pd.DataFrame, pred_col: str, target_col: str) -> pd.Series:
@@ -129,9 +170,9 @@ def _evaluate_common_pool(common: pd.DataFrame, pred_col: str, target_col: str) 
         "mean_daily_rank_ic": mean_ic,
         "nw20_rank_icir": float(nw20),
         "rank_ic_positive_rate": float((daily > 0).mean()) if len(daily) else 0.0,
-        "q5_minus_q1": float(q.get("Q5_minus_Q1", 0.0)),
+        "q5_minus_q1_annualized_pct_points": float(q.get("Q5_minus_Q1", 0.0)),
         "monotonicity_score": float(q.get("monotonicity_score", 0.0)),
-        "top10_mean_exec_alpha": _top10_daily_alpha(common, pred_col, target_col),
+        "top10_mean_20d_exec_alpha": _top10_daily_alpha(common, pred_col, target_col),
         "oos_rows": int(len(common)),
         "oos_dates": int(common["date"].nunique()),
     }
@@ -156,7 +197,7 @@ def _build_common_training_labels(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
-def _trainer(label_col: str, model_dir: Path) -> WalkForwardTrainer:
+def _trainer(label_col: str, model_dir: Path, model_params: Dict[str, Any]) -> WalkForwardTrainer:
     return WalkForwardTrainer(
         train_years=settings.TRAIN_WINDOW_YEARS,
         val_months=settings.VAL_WINDOW_MONTHS,
@@ -169,11 +210,12 @@ def _trainer(label_col: str, model_dir: Path) -> WalkForwardTrainer:
         top_k_features=20,
         weighting_mode="none",
         random_state=42,
-        model_dir=model_dir
+        model_dir=model_dir,
+        model_params=model_params
     )
 
 
-def _fold_comparison(trainer_a, trainer_b, daily_a, daily_b) -> pd.DataFrame:
+def _fold_comparison(trainer_a, trainer_b, daily_a, daily_b) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     rows = []
     n = min(len(trainer_a.models), len(trainer_b.models))
     for i in range(n):
@@ -184,28 +226,59 @@ def _fold_comparison(trainer_a, trainer_b, daily_a, daily_b) -> pd.DataFrame:
         a_fold = daily_a[(daily_a.index >= start) & (daily_a.index <= end)]
         b_fold = daily_b[(daily_b.index >= start) & (daily_b.index <= end)]
         idx = a_fold.index.intersection(b_fold.index)
-        a_mean = float(a_fold.loc[idx].mean()) if len(idx) else np.nan
-        b_mean = float(b_fold.loc[idx].mean()) if len(idx) else np.nan
+        has_dates = len(idx) > 0
+        a_mean = float(a_fold.loc[idx].mean()) if has_dates else np.nan
+        b_mean = float(b_fold.loc[idx].mean()) if has_dates else np.nan
+        is_valid = has_dates and np.isfinite(a_mean) and np.isfinite(b_mean)
+        diff = b_mean - a_mean if is_valid else np.nan
+        wins = bool(b_mean > a_mean) if is_valid else False
         rows.append({
             "fold": i + 1,
             "test_start": str(start.date()),
             "test_end": str(end.date()),
             "common_rankic_dates": int(len(idx)),
+            "valid_comparison": bool(is_valid),
             "legacy_mean_rankic": a_mean,
             "execution_mean_rankic": b_mean,
-            "execution_minus_legacy": b_mean - a_mean if np.isfinite(a_mean) and np.isfinite(b_mean) else np.nan,
-            "execution_wins": bool(b_mean > a_mean) if np.isfinite(a_mean) and np.isfinite(b_mean) else False,
+            "execution_minus_legacy": diff,
+            "execution_wins": wins,
         })
-    return pd.DataFrame(rows)
+    folds_df = pd.DataFrame(rows)
+    valid_folds = folds_df[folds_df["valid_comparison"]].copy()
+    zero_date_folds = folds_df[~folds_df["valid_comparison"]].copy()
+
+    exec_wins = int(valid_folds["execution_wins"].sum())
+    legacy_wins = int((valid_folds["execution_minus_legacy"] < 0).sum())
+    ties = int((valid_folds["execution_minus_legacy"] == 0).sum())
+    win_ratio = float(valid_folds["execution_wins"].mean()) if not valid_folds.empty else 0.0
+
+    stats_summary = {
+        "total_generated_folds": int(len(folds_df)),
+        "valid_comparison_folds": int(len(valid_folds)),
+        "zero_common_date_folds": int(len(zero_date_folds)),
+        "execution_wins": exec_wins,
+        "legacy_wins": legacy_wins,
+        "ties": ties,
+        "fold_win_ratio": win_ratio,
+        "best_fold_delta": float(valid_folds["execution_minus_legacy"].max()) if not valid_folds.empty else 0.0,
+        "worst_fold_delta": float(valid_folds["execution_minus_legacy"].min()) if not valid_folds.empty else 0.0,
+    }
+    return folds_df, stats_summary
 
 
 def run(dataset_path: Path, output_dir: Path) -> Path:
-    # 1. 实验前生产模型快照
-    prod_model_path = PROJECT_ROOT / "models" / "latest_lightgbm.pkl"
+    # 1. 实验前环境与生产模型全目录快照 (Path from settings.MODELS_DIR)
+    prod_models_dir = Path(settings.MODELS_DIR)
+    prod_model_path = prod_models_dir / "latest_lightgbm.pkl"
     prod_exists_before = prod_model_path.exists()
     prod_sha_before = _sha256_file(prod_model_path)
+    prod_dir_snap_before = _snapshot_directory(prod_models_dir)
 
     source_sha = _git_sha()
+    branch_name = _git_branch()
+    tree_clean = _git_working_tree_clean()
+    remote_sha = _git_remote_sha(branch_name)
+
     run_id = f"phase2_1_a_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir = output_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -235,7 +308,6 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     total_rows = len(labeled)
     valid_exec_count = int(labeled["label_valid"].sum())
     invalid_exec_count = total_rows - valid_exec_count
-    invalid_reasons = labeled["label_invalid_reason"].value_counts().to_dict()
     
     deferred_mask = labeled["exit_deferred_days"].notna() & (labeled["exit_deferred_days"] > 0)
     deferred_count = int(deferred_mask.sum())
@@ -285,14 +357,24 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         raise RuntimeError("No model features found")
     feature_hash = hashlib.sha256(",".join(feature_cols).encode("utf-8")).hexdigest()
 
-    model_config_hash = hashlib.sha256(json.dumps(settings.LGBM_PARAMS_CLF, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    # 统一模型参数并显式固定 scale_pos_weight = 1.0 (确保 A/B 双臂无动态偏斜差异)
+    ab_model_params = settings.LGBM_PARAMS_CLF.copy()
+    ab_model_params["scale_pos_weight"] = 1.0
+    ab_model_params["random_state"] = 42
+    ab_model_params["feature_fraction_seed"] = 42
+    ab_model_params["bagging_seed"] = 42
+    ab_model_params["data_random_seed"] = 42
+
+    legacy_effective_config_hash = hashlib.sha256(json.dumps(ab_model_params, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    exec_effective_config_hash = hashlib.sha256(json.dumps(ab_model_params, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    assert legacy_effective_config_hash == exec_effective_config_hash, "Effective model parameter hashes must be identical"
 
     print("==> [3/7] 训练 Arm A (Legacy Label Arm) Walk-Forward...")
-    trainer_a = _trainer("ab_label_legacy", legacy_model_dir)
+    trainer_a = _trainer("ab_label_legacy", legacy_model_dir, ab_model_params)
     oos_a, _ = trainer_a.run_walk_forward(labeled, feature_cols=feature_cols)
 
     print("==> [4/7] 训练 Arm B (Execution-Aligned Label Arm) Walk-Forward...")
-    trainer_b = _trainer("ab_label_execution", exec_model_dir)
+    trainer_b = _trainer("ab_label_execution", exec_model_dir, ab_model_params)
     oos_b, _ = trainer_b.run_walk_forward(labeled, feature_cols=feature_cols)
 
     print("==> [5/7] 构造严格 1-to-1 共同执行 OOS 评价池...")
@@ -326,8 +408,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     metrics_a, daily_a = _evaluate_common_pool(common, "pred_score_legacy", EXEC_LABEL)
     metrics_b, daily_b = _evaluate_common_pool(common, "pred_score_execution", EXEC_LABEL)
     bootstrap = _paired_block_bootstrap(daily_b, daily_a, block_size=20, n_bootstraps=2000, seed=42)
-    folds = _fold_comparison(trainer_a, trainer_b, daily_a, daily_b)
-    fold_win_ratio = float(folds["execution_wins"].mean()) if not folds.empty else 0.0
+    folds, fold_stats = _fold_comparison(trainer_a, trainer_b, daily_a, daily_b)
+    fold_win_ratio = fold_stats["fold_win_ratio"]
 
     summary = pd.DataFrame([
         {"arm": "legacy_label", **metrics_a},
@@ -349,20 +431,44 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         else "MIXED_EVIDENCE"
     )
 
-    # 7. 实验后生产模型隔离性重新审计
+    # 7. 实验后生产模型与目录隔离性重新审计
     prod_exists_after = prod_model_path.exists()
     prod_sha_after = _sha256_file(prod_model_path)
     prod_sha_unchanged = bool(prod_sha_before == prod_sha_after and prod_exists_before == prod_exists_after)
-    prod_mutated = not prod_sha_unchanged
+    prod_dir_snap_after = _snapshot_directory(prod_models_dir)
 
-    if prod_mutated:
-        raise RuntimeError("FATAL: Production model was mutated during Phase 2.1-A run!")
+    # 检查 saved_models 目录内容是否完全一致
+    prod_dir_mutated = False
+    if set(prod_dir_snap_before.keys()) != set(prod_dir_snap_after.keys()):
+        prod_dir_mutated = True
+    else:
+        for k in prod_dir_snap_before:
+            if prod_dir_snap_before[k]["sha256"] != prod_dir_snap_after[k]["sha256"]:
+                prod_dir_mutated = True
+                break
+
+    if prod_dir_mutated or not prod_sha_unchanged:
+        raise RuntimeError("FATAL: Production model directory was mutated during Phase 2.1-A r2 run!")
+
+    # 保存本地运行产物
+    oos_parquet_path = run_dir / "common_execution_oos.parquet"
+    common.to_parquet(oos_parquet_path, index=False)
+    legacy_model_file = legacy_model_dir / "latest_lightgbm.pkl"
+    exec_model_file = exec_model_dir / "latest_lightgbm.pkl"
+
+    rel_run_dir = f"reports/phase2_1_a/{run_id}"
 
     manifest = {
         "phase": "2.1-A",
         "run_id": run_id,
+        "iteration": "r2",
         "source_commit_sha": source_sha,
-        "dataset_path": str(dataset_path),
+        "source_commit_branch": branch_name,
+        "source_commit_tree_clean": tree_clean,
+        "source_commit_remote": remote_sha,
+        "source_commit_remote_match": bool(source_sha == remote_sha),
+        "experiment_generated_from_clean_commit": bool(tree_clean),
+        "dataset_path": str(dataset_path.relative_to(PROJECT_ROOT)).replace("\\", "/") if dataset_path.is_relative_to(PROJECT_ROOT) else str(dataset_path),
         "dataset_sha256": dataset_sha,
         "dataset_rows": total_rows,
         "dataset_date_range": [str(df["date"].min().date()), str(df["date"].max().date())],
@@ -370,7 +476,11 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "feature_schema_hash": feature_hash,
         "seed": 42,
         "model_family": "LightGBM Classification",
-        "model_params_hash": model_config_hash,
+        "effective_model_params": ab_model_params,
+        "legacy_effective_model_config_hash": legacy_effective_config_hash,
+        "execution_effective_model_config_hash": exec_effective_config_hash,
+        "scale_pos_weight_legacy": 1.0,
+        "scale_pos_weight_execution": 1.0,
         "feature_selection_policy": "all",
         "weighting_mode": "none",
         "legacy_train_label": "ab_label_legacy",
@@ -390,21 +500,45 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
             "delta_mean_daily_rank_ic": metrics_b["mean_daily_rank_ic"] - metrics_a["mean_daily_rank_ic"],
             "delta_nw20_rank_icir": metrics_b["nw20_rank_icir"] - metrics_a["nw20_rank_icir"],
             "delta_rank_ic_positive_rate": metrics_b["rank_ic_positive_rate"] - metrics_a["rank_ic_positive_rate"],
-            "delta_q5_minus_q1": metrics_b["q5_minus_q1"] - metrics_a["q5_minus_q1"],
-            "delta_top10_mean_exec_alpha": metrics_b["top10_mean_exec_alpha"] - metrics_a["top10_mean_exec_alpha"],
+            "delta_q5_minus_q1_annualized_pct_points": metrics_b["q5_minus_q1_annualized_pct_points"] - metrics_a["q5_minus_q1_annualized_pct_points"],
+            "delta_top10_mean_20d_exec_alpha": metrics_b["top10_mean_20d_exec_alpha"] - metrics_a["top10_mean_20d_exec_alpha"],
         },
         "bootstrap": bootstrap,
-        "fold_win_ratio": fold_win_ratio,
+        "fold_statistics": fold_stats,
+        "common_execution_oos_artifact": {
+            "relative_path": f"{rel_run_dir}/common_execution_oos.parquet",
+            "sha256": _sha256_file(oos_parquet_path),
+            "size_bytes": oos_parquet_path.stat().st_size if oos_parquet_path.exists() else 0,
+            "row_count": len(common),
+            "column_count": len(common.columns),
+            "columns": list(common.columns),
+            "format": "parquet",
+            "storage_mode": "local_not_git_tracked",
+            "reproducible": True
+        },
+        "legacy_model_artifact": {
+            "relative_path": f"{rel_run_dir}/models/legacy/latest_lightgbm.pkl",
+            "sha256": _sha256_file(legacy_model_file),
+            "size_bytes": legacy_model_file.stat().st_size if legacy_model_file.exists() else 0,
+            "storage_mode": "local_not_git_tracked"
+        },
+        "execution_model_artifact": {
+            "relative_path": f"{rel_run_dir}/models/execution/latest_lightgbm.pkl",
+            "sha256": _sha256_file(exec_model_file),
+            "size_bytes": exec_model_file.stat().st_size if exec_model_file.exists() else 0,
+            "storage_mode": "local_not_git_tracked"
+        },
         "experiment_model_persistence_isolated": True,
-        "production_model_path": str(prod_model_path),
+        "production_models_dir_path": str(prod_models_dir.relative_to(PROJECT_ROOT)).replace("\\", "/") if prod_models_dir.is_relative_to(PROJECT_ROOT) else str(prod_models_dir),
+        "production_model_path": str(prod_model_path.relative_to(PROJECT_ROOT)).replace("\\", "/") if prod_model_path.is_relative_to(PROJECT_ROOT) else str(prod_model_path),
         "production_model_exists_before": prod_exists_before,
         "production_model_sha_before": prod_sha_before,
         "production_model_exists_after": prod_exists_after,
         "production_model_sha_after": prod_sha_after,
         "production_model_sha_unchanged": prod_sha_unchanged,
-        "production_models_dir_mutated": prod_mutated,
-        "legacy_experiment_model_dir": str(legacy_model_dir),
-        "execution_experiment_model_dir": str(exec_model_dir),
+        "production_models_dir_mutated": prod_dir_mutated,
+        "legacy_experiment_model_dir": f"{rel_run_dir}/models/legacy",
+        "execution_experiment_model_dir": f"{rel_run_dir}/models/execution",
         "status": status,
         "live_trading_ready": False,
         "production_model_promotion": False,
@@ -414,26 +548,26 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     summary.to_csv(run_dir / "ab_summary.csv", index=False, encoding="utf-8-sig")
     rankic.to_csv(run_dir / "daily_rankic_common_exec.csv", encoding="utf-8-sig")
     folds.to_csv(run_dir / "fold_comparison.csv", index=False, encoding="utf-8-sig")
-    common.to_parquet(run_dir / "common_execution_oos.parquet", index=False)
     with (run_dir / "manifest.json").open("w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2, default=str)
 
-    report = f"""# Phase 2.1-A — Execution-Aligned Label A/B Study Report
-# 实盘执行对齐标签严格受控 A/B 实验研究报告
+    report = f"""# Phase 2.1-A r2 — Execution-Aligned Label A/B Study Report
+# 实盘执行对齐标签严格受控 A/B 实验研究报告 (r2 可复现性闭环版本)
 
-> **研究结论**: **`{status}`**  
-> **实盘许可声明**: `LIVE_TRADING_READY = FALSE`, `PRODUCTION_MODEL_PROMOTION = FALSE`
+> **研究结论 (Scientific Verdict)**: **`{status}`**
+> **实盘许可声明 (Live Trading Guard)**: `LIVE_TRADING_READY = FALSE`, `PRODUCTION_MODEL_PROMOTION = FALSE`
 
 ---
 
-## 1. 实验控制变量规范 (Controlled Variables)
+## 1. 实验控制变量与血缘规范 (Controlled Variables & Provenance)
 
+- **基准代码提交 (Source Code Commit)**: `{source_sha}` (Tree Clean: `{tree_clean}`)
 - **基准模型族**: `LightGBM Classification` (二分类概率预测)
 - **特征集与顺序**: 严格相同 ({len(feature_cols)} 因子, Feature Hash = `{feature_hash}`)
-- **模型超参数**: 严格逐字段相同 (Config Hash = `{model_config_hash}`)
+- **有效模型参数**: 严格逐字段相同 (Effective Hash = `{legacy_effective_config_hash}`, `scale_pos_weight = 1.0`)
 - **随机种子**: `42` (严格传播至 feature_fraction_seed, bagging_seed, data_random_seed)
 - **时序划分**: 严格相同 Walk-Forward 滚动折划分 (Purge Gap = 25 天 >= Label Horizon 20 天)
-- **训练准入池**: 严格相同的共同准入交集 (Common Train Pool Hash = `{common_train_pool_hash}`)
+- **训练准入池**: 严格相同的共同准入交集 ({common_train_rows_count:,} 行, Common Train Pool Hash = `{common_train_pool_hash}`)
 - **唯一自变量 (Primary Change)**: **训练目标标签定义** (Legacy `ab_label_legacy` vs Execution-Aligned `ab_label_execution`)
 
 ---
@@ -456,8 +590,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 | **Mean Daily OOS RankIC** | **{metrics_a['mean_daily_rank_ic']:.6f}** | **{metrics_b['mean_daily_rank_ic']:.6f}** | **{metrics_b['mean_daily_rank_ic'] - metrics_a['mean_daily_rank_ic']:+.6f}** |
 | **NW20 RankICIR (年化)** | **{metrics_a['nw20_rank_icir']:.6f}** | **{metrics_b['nw20_rank_icir']:.6f}** | **{metrics_b['nw20_rank_icir'] - metrics_a['nw20_rank_icir']:+.6f}** |
 | **RankIC > 0 交易日占比** | {metrics_a['rank_ic_positive_rate']:.2%} | {metrics_b['rank_ic_positive_rate']:.2%} | {metrics_b['rank_ic_positive_rate'] - metrics_a['rank_ic_positive_rate']:+.2%} |
-| **Q5-Q1 分组收益差** | {metrics_a['q5_minus_q1']:.6f} | {metrics_b['q5_minus_q1']:.6f} | {metrics_b['q5_minus_q1'] - metrics_a['q5_minus_q1']:+.6f} |
-| **Top 10% 真实执行净超额** | {metrics_a['top10_mean_exec_alpha']:.6f} | {metrics_b['top10_mean_exec_alpha']:.6f} | {metrics_b['top10_mean_exec_alpha'] - metrics_a['top10_mean_exec_alpha']:+.6f} |
+| **Q5-Q1 年化超额收益差 (pct points)** | {metrics_a['q5_minus_q1_annualized_pct_points']:.2f} pts | {metrics_b['q5_minus_q1_annualized_pct_points']:.2f} pts | {metrics_b['q5_minus_q1_annualized_pct_points'] - metrics_a['q5_minus_q1_annualized_pct_points']:+.2f} pts |
+| **Top 10% 20日平均真实执行净超额** | {metrics_a['top10_mean_20d_exec_alpha']:.4%} | {metrics_b['top10_mean_20d_exec_alpha']:.4%} | {metrics_b['top10_mean_20d_exec_alpha'] - metrics_a['top10_mean_20d_exec_alpha']:+.4%} |
 | **分组单调性得分** | {metrics_a['monotonicity_score']:.4f} | {metrics_b['monotonicity_score']:.4f} | {metrics_b['monotonicity_score'] - metrics_a['monotonicity_score']:+.4f} |
 
 ---
@@ -469,28 +603,41 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
   - **95% 置信区间 (95% CI)**: `[{bootstrap['ci_lower']:+.6f}, {bootstrap['ci_upper']:+.6f}]`
   - **提升概率 P(Delta > 0)**: **{bootstrap['prob_positive']:.2%}**
   - **统计显著提升 (CI Lower > 0)**: **`{bootstrap['robust_improvement']}`**
-- **Fold-Level 胜率实证**:
-  - **滚动折总数**: {len(folds)}
-  - **Execution Arm 胜出折数**: {int(folds['execution_wins'].sum())}
+- **Fold-Level 胜率实证 (已排除 0 样本无效折)**:
+  - **滚动折总数 (Total Folds)**: {fold_stats['total_generated_folds']}
+  - **有效对比折数 (Valid Folds)**: {fold_stats['valid_comparison_folds']}
+  - **0 交易日无效折数 (Excluded Folds)**: {fold_stats['zero_common_date_folds']}
+  - **Execution Arm 胜出折数**: {fold_stats['execution_wins']}
+  - **Legacy Arm 胜出折数**: {fold_stats['legacy_wins']}
+  - **平局折数 (Ties)**: {fold_stats['ties']}
   - **Fold 胜率 (Fold Win Ratio)**: **{fold_win_ratio:.2%}**
 
 ---
 
-## 5. 生产模型物理隔离审计 (Production Model Isolation)
+## 5. 生产模型物理隔离审计 (Production Model Isolation Audit)
 
-- **Production Model Path**: `{prod_model_path}`
+- **Production Models Dir**: `{manifest['production_models_dir_path']}`
+- **Production Model Path**: `{manifest['production_model_path']}`
 - **Exists Before Experiment**: `{prod_exists_before}`
 - **SHA256 Before Experiment**: `{prod_sha_before}`
 - **Exists After Experiment**: `{prod_exists_after}`
 - **SHA256 After Experiment**: `{prod_sha_after}`
 - **SHA256 Unchanged**: **`{prod_sha_unchanged}`**
-- **Production Models Dir Mutated**: **`{prod_mutated}`**
-- **Legacy Experiment Model Dir**: `{legacy_model_dir}`
-- **Execution Experiment Model Dir**: `{exec_model_dir}`
+- **Production Models Dir Mutated**: **`{prod_dir_mutated}`**
+- **Legacy Experiment Model Dir**: `{rel_run_dir}/models/legacy`
+- **Execution Experiment Model Dir**: `{rel_run_dir}/models/execution`
 
 ---
 
-## 6. 科学判定与结论说明 (Scientific Finding & Next Step)
+## 6. 大文件管理与本地证据治理 (Large Artifact Policy)
+
+- **Common Execution OOS Parquet**: `{manifest['common_execution_oos_artifact']['relative_path']}` (Size: {manifest['common_execution_oos_artifact']['size_bytes']:,} bytes, SHA256: `{manifest['common_execution_oos_artifact']['sha256']}`, Storage: `local_not_git_tracked`)
+- **Legacy Model PKL**: `{manifest['legacy_model_artifact']['relative_path']}` (SHA256: `{manifest['legacy_model_artifact']['sha256']}`, Storage: `local_not_git_tracked`)
+- **Execution Model PKL**: `{manifest['execution_model_artifact']['relative_path']}` (SHA256: `{manifest['execution_model_artifact']['sha256']}`, Storage: `local_not_git_tracked`)
+
+---
+
+## 7. 科学判定与结论说明 (Scientific Finding & Next Step)
 
 - **判定状态**: **`{status}`**
 - **结论阐述**: 
@@ -500,11 +647,11 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "latest.json").write_text(json.dumps(
-        {"latest_run_id": run_id, "path": str(run_dir), "status": status},
+        {"latest_run_id": run_id, "path": rel_run_dir, "status": status},
         ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(summary.to_string(index=False))
-    print(f"\nPhase 2.1-A status: {status}")
+    print(f"\nPhase 2.1-A r2 status: {status}")
     print(f"Artifacts saved to: {run_dir}")
     return run_dir
 

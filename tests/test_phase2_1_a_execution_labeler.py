@@ -1,7 +1,8 @@
 """
-Comprehensive Targeted Tests for Phase 2.1-A (tests/test_phase2_1_a_execution_labeler.py)
-Covering all 17 strict gates: T+1/T+21 mapping, suspension/volume/limit gates, deferred exits,
-cost models, fail-closed handling, pool parity, and production model physical isolation.
+Comprehensive Targeted Tests for Phase 2.1-A r2 (tests/test_phase2_1_a_execution_labeler.py)
+Covering all 17+ strict gates: T+1/T+21 mapping, suspension/volume/limit gates, deferred exits,
+cost models, fail-closed handling, pool parity, model parameter injection, and FULL Walk-Forward
+production model physical isolation tests.
 """
 import shutil
 import hashlib
@@ -230,31 +231,61 @@ def test_common_oos_pool_keys_identical():
     assert len(common) == len(b_pred)
 
 
-# Gate 17: Production model physical isolation (models/latest_lightgbm.pkl NEVER touched)
+# Gate 17: Full Walk-Forward Production Model Physical Isolation Test
 def test_phase2_1_a_does_not_mutate_production_model(tmp_path):
-    prod_model_path = Path("models/latest_lightgbm.pkl")
+    """
+    严密验证完整 Walk-Forward 训练与 latest_model.save() 全过程下的生产模型物理隔离。
+    """
+    prod_model_path = Path(settings.MODELS_DIR) / "latest_lightgbm.pkl"
     prod_exists_before = prod_model_path.exists()
     prod_sha_before = hashlib.sha256(prod_model_path.read_bytes()).hexdigest() if prod_exists_before else None
 
-    # Run minimal WalkForward with custom isolated model_dir
-    isolated_legacy_dir = tmp_path / "models" / "legacy"
-    isolated_exec_dir = tmp_path / "models" / "execution"
+    # 创建隔离实验模型目录
+    isolated_legacy_dir = tmp_path / "run_ab" / "models" / "legacy"
+    isolated_exec_dir = tmp_path / "run_ab" / "models" / "execution"
     isolated_legacy_dir.mkdir(parents=True, exist_ok=True)
     isolated_exec_dir.mkdir(parents=True, exist_ok=True)
 
+    # 构造能够走通最小 Walk-Forward 训练并触发 save() 的合成数据集 (1.5年训练 + 3月验证 + 2月测试)
+    dates = pd.bdate_range("2022-01-01", "2024-06-01")
+    syn_rows = []
+    for sym in ["000001.SZ", "600000.SH", "600519.SH"]:
+        for dt in dates:
+            syn_rows.append({
+                "date": dt,
+                "symbol": sym,
+                "feat_1": np.random.randn(),
+                "feat_2": np.random.randn(),
+                "ab_label_legacy": np.random.choice([0.0, 1.0]),
+                "ab_label_execution": np.random.choice([0.0, 1.0]),
+            })
+    syn_df = pd.DataFrame(syn_rows)
+
+    custom_params = settings.LGBM_PARAMS_CLF.copy()
+    custom_params["n_estimators"] = 5
+    custom_params["min_child_samples"] = 2
+    custom_params["scale_pos_weight"] = 1.0
+
     trainer_legacy = WalkForwardTrainer(
-        train_years=0.1, val_months=1, test_months=1, purge_gap_days=2,
-        task_type="classification", model_dir=isolated_legacy_dir
+        train_years=1.0, val_months=2, test_months=1, purge_gap_days=20,
+        task_type="classification", model_dir=isolated_legacy_dir,
+        model_params=custom_params
     )
     trainer_exec = WalkForwardTrainer(
-        train_years=0.1, val_months=1, test_months=1, purge_gap_days=2,
-        task_type="classification", model_dir=isolated_exec_dir
+        train_years=1.0, val_months=2, test_months=1, purge_gap_days=20,
+        task_type="classification", model_dir=isolated_exec_dir,
+        model_params=custom_params
     )
 
-    assert trainer_legacy.model_dir == isolated_legacy_dir
-    assert trainer_exec.model_dir == isolated_exec_dir
+    # 实际执行 Walk-Forward，内部必将调用 latest_model.save()
+    oos_leg, mod_leg = trainer_legacy.run_walk_forward(syn_df, feature_cols=["feat_1", "feat_2"])
+    oos_exc, mod_exc = trainer_exec.run_walk_forward(syn_df, feature_cols=["feat_1", "feat_2"])
 
-    # Check production model path state after constructing trainers
+    # 1. 验证实验模型文件确实生成在各自独立的隔离路径中
+    assert (isolated_legacy_dir / "latest_lightgbm.pkl").exists()
+    assert (isolated_exec_dir / "latest_lightgbm.pkl").exists()
+
+    # 2. 验证生产模型路径状态完全未受任何污染或修改
     prod_exists_after = prod_model_path.exists()
     prod_sha_after = hashlib.sha256(prod_model_path.read_bytes()).hexdigest() if prod_exists_after else None
 

@@ -32,7 +32,8 @@ class WalkForwardTrainer:
         top_k_features: int = 20,
         weighting_mode: str = "recency_magnitude",
         random_state: int = 42,
-        model_dir: Optional[Path] = None
+        model_dir: Optional[Path] = None,
+        model_params: Optional[Dict[str, Any]] = None
     ):
         self.train_years = float(train_years)
         self.val_months = int(val_months)
@@ -45,6 +46,7 @@ class WalkForwardTrainer:
         self.weighting_mode = weighting_mode
         self.random_state = int(random_state)
         self.model_dir = Path(model_dir) if model_dir is not None else None
+        self.model_params = model_params.copy() if model_params is not None else None
         # 默认使用当前任务类型对应的标签列
         self.label_col = label_col or (settings.LABEL_COLUMN_CLF if task_type == "classification" else settings.LABEL_COLUMN)
         self.models: List[Dict[str, Any]] = []
@@ -280,11 +282,11 @@ class WalkForwardTrainer:
                 from .deep_tabular import TabularMLPQuantModel
                 model = TabularMLPQuantModel(task_type=self.task_type)
             elif self.model_type in ("lightgbm_ranker", "ranking"):
-                model = LightGBMQuantModel(task_type="ranking", random_state=self.random_state, model_dir=self.model_dir)
+                model = LightGBMQuantModel(params=self.model_params, task_type="ranking", random_state=self.random_state, model_dir=self.model_dir)
             elif self.model_type in ("lightgbm_reg", "regression"):
-                model = LightGBMQuantModel(task_type="regression", random_state=self.random_state, model_dir=self.model_dir)
+                model = LightGBMQuantModel(params=self.model_params, task_type="regression", random_state=self.random_state, model_dir=self.model_dir)
             else:
-                model = LightGBMQuantModel(task_type=self.task_type, random_state=self.random_state, model_dir=self.model_dir)
+                model = LightGBMQuantModel(params=self.model_params, task_type=self.task_type, random_state=self.random_state, model_dir=self.model_dir)
 
             # 准备训练特征矩阵 (确保包含 date 供 ranker 截面分组)
             X_tr = train_df[fold_feats].copy()

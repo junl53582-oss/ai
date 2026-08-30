@@ -29,3 +29,7 @@ scratch/
 .vscode/
 .idea/
 *.swp
+
+# Reproducible large research runtime artifacts
+reports/**/common_execution_oos.parquet
+reports/**/models/**/*.pkl
