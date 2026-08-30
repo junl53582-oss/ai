@@ -1,7 +1,7 @@
 """
 Phase 2.1-A r2 Controlled A/B Study Runner (tools/run_phase2_1_a_label_ab.py)
 严格单变量对比：Legacy Labels (Arm A) vs Execution-Aligned Labels (Arm B)。
-包含严格Fail-Closed源码血缘门禁、生产模型物理隔离全目录审计、固定有效参数哈希(scale_pos_weight=1.0)、有效Fold统计与大文件Manifest证据链。
+包含严格True Remote SHA Fail-Closed源码血缘门禁、生产模型物理隔离全目录审计、固定有效参数哈希(scale_pos_weight=1.0)、有效Fold统计与大文件Manifest证据链。
 """
 from __future__ import annotations
 
@@ -51,9 +51,35 @@ def _git_branch(cwd: Optional[Path] = None) -> str:
 
 
 def _git_remote_sha(branch: str, cwd: Optional[Path] = None) -> str:
+    """读取本地 remote-tracking branch ref (origin/<branch>)"""
     try:
         return subprocess.run(["git", "rev-parse", f"origin/{branch}"], cwd=cwd or PROJECT_ROOT,
                               capture_output=True, text=True, check=True).stdout.strip()
+    except Exception:
+        return "UNKNOWN"
+
+
+def _git_true_remote_sha(branch: str, cwd: Optional[Path] = None) -> str:
+    """
+    通过 git ls-remote --heads origin <branch> 查询远程仓库中该分支真实的 Commit SHA。
+    若网络不可达、命令失败、无匹配或返回非 40 位十六进制 SHA，则返回 'UNKNOWN'。
+    """
+    try:
+        res = subprocess.run(
+            ["git", "ls-remote", "--heads", "origin", branch],
+            cwd=cwd or PROJECT_ROOT, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        if not res:
+            return "UNKNOWN"
+        lines = [l.strip() for l in res.splitlines() if l.strip()]
+        for line in lines:
+            parts = line.split()
+            if len(parts) >= 2:
+                sha = parts[0].strip()
+                ref = parts[1].strip()
+                if ref in (f"refs/heads/{branch}", branch) and len(sha) == 40 and all(c in "0123456789abcdefABCDEF" for c in sha):
+                    return sha.lower()
+        return "UNKNOWN"
     except Exception:
         return "UNKNOWN"
 
@@ -62,19 +88,24 @@ def _git_working_tree_clean(project_root: Optional[Path] = None) -> Tuple[bool, 
     """
     严密检查工作区是否处于无未提交代码/测试/配置的 Clean 状态。
     仅允许被 .gitignore 明确忽略的运行时产物，任何未被 ignore 的 untracked 源码/文件均触发 Fail-Closed。
+    保留行首两字符以准确提取 porcelain 状态码（例如 ' M' 或 'M '），不丢失首字符。
     """
     root = project_root or PROJECT_ROOT
     try:
         res = subprocess.run(["git", "status", "--porcelain", "--untracked-files=all"],
-                             cwd=root, capture_output=True, text=True, check=True).stdout.strip()
-        if not res:
+                             cwd=root, capture_output=True, text=True, check=True).stdout
+        if not res or not res.strip():
             return True, []
 
         dirty_items: List[str] = []
-        for line in res.splitlines():
-            line = line.strip()
-            if not line:
+        for raw_line in res.splitlines():
+            line = raw_line.rstrip("\r\n")
+            if not line.strip():
                 continue
+            if len(line) < 3:
+                dirty_items.append(f"MALFORMED_STATUS_LINE: {line}")
+                continue
+
             status_code = line[:2]
             item_path = line[3:].strip().strip('"')
 
@@ -93,13 +124,14 @@ def _git_working_tree_clean(project_root: Optional[Path] = None) -> Tuple[bool, 
 
 def _validate_source_provenance(enforce_clean: bool = True, project_root: Optional[Path] = None) -> Dict[str, Any]:
     """
-    统一严密校验源码血缘与远程分支一致性。
-    若存在脏工作树、未提交源码或与远程分支不匹配，则严格 Fail-Closed 终止。
+    统一严密校验源码血缘、工作区干净度与真实远程分支一致性。
+    若存在脏工作树、未提交源码或与真实远程分支不匹配，则严格 Fail-Closed 终止。
     """
     root = project_root or PROJECT_ROOT
     source_sha = _git_sha(root)
     branch_name = _git_branch(root)
-    remote_sha = _git_remote_sha(branch_name, root) if branch_name != "UNKNOWN" else "UNKNOWN"
+    local_remote_tracking_sha = _git_remote_sha(branch_name, root) if branch_name != "UNKNOWN" else "UNKNOWN"
+    true_remote_sha = _git_true_remote_sha(branch_name, root) if branch_name != "UNKNOWN" else "UNKNOWN"
     is_clean, dirty_items = _git_working_tree_clean(root)
 
     if enforce_clean:
@@ -107,19 +139,20 @@ def _validate_source_provenance(enforce_clean: bool = True, project_root: Option
             raise RuntimeError("FATAL: Unable to resolve HEAD source commit SHA.")
         if branch_name == "UNKNOWN":
             raise RuntimeError("FATAL: Unable to resolve current Git branch name.")
-        if remote_sha == "UNKNOWN":
-            raise RuntimeError(f"FATAL: Unable to resolve remote tracking SHA for branch 'origin/{branch_name}'.")
+        if true_remote_sha == "UNKNOWN":
+            raise RuntimeError(f"FATAL: Unable to resolve true remote branch SHA for 'refs/heads/{branch_name}' via git ls-remote.")
         if not is_clean:
             raise RuntimeError(f"FATAL: Phase 2.1 research must run from a clean tracked source tree. Found dirty items: {dirty_items}")
-        if source_sha != remote_sha:
-            raise RuntimeError(f"FATAL: Local HEAD ({source_sha}) does not match origin/{branch_name} ({remote_sha}).")
+        if source_sha != true_remote_sha:
+            raise RuntimeError(f"FATAL: Local HEAD ({source_sha}) does not match true remote origin/{branch_name} ({true_remote_sha}).")
 
     return {
         "source_commit_sha": source_sha,
         "source_commit_branch": branch_name,
-        "source_commit_remote": remote_sha,
+        "local_remote_tracking_sha": local_remote_tracking_sha,
+        "true_remote_sha": true_remote_sha,
         "source_commit_tree_clean": is_clean,
-        "source_commit_remote_match": bool(source_sha == remote_sha and source_sha != "UNKNOWN"),
+        "source_commit_remote_match": bool(source_sha == true_remote_sha and source_sha != "UNKNOWN"),
         "dirty_items": dirty_items,
         "experiment_generated_from_clean_commit": is_clean
     }
@@ -323,12 +356,13 @@ def _fold_comparison(trainer_a, trainer_b, daily_a, daily_b) -> Tuple[pd.DataFra
 
 
 def run(dataset_path: Path, output_dir: Path) -> Path:
-    # 0. 源码血缘与工作树硬门禁校验 (Fail-Closed Provenance Gate)
+    # 0. 源码血缘与工作树硬门禁校验 (Fail-Closed True Remote Provenance Gate)
     provenance = _validate_source_provenance(enforce_clean=True)
     source_sha = provenance["source_commit_sha"]
     branch_name = provenance["source_commit_branch"]
     tree_clean = provenance["source_commit_tree_clean"]
-    remote_sha = provenance["source_commit_remote"]
+    true_remote_sha = provenance["true_remote_sha"]
+    local_remote_tracking_sha = provenance["local_remote_tracking_sha"]
 
     # 1. 实验前环境与生产模型全目录快照 (Path from settings.MODELS_DIR)
     prod_models_dir = Path(settings.MODELS_DIR)
@@ -523,8 +557,10 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "source_commit_sha": source_sha,
         "source_commit_branch": branch_name,
         "source_commit_tree_clean": tree_clean,
-        "source_commit_remote": remote_sha,
-        "source_commit_remote_match": bool(source_sha == remote_sha),
+        "local_remote_tracking_sha": local_remote_tracking_sha,
+        "true_remote_sha": true_remote_sha,
+        "source_commit_remote": true_remote_sha,
+        "source_commit_remote_match": bool(source_sha == true_remote_sha and source_sha != "UNKNOWN"),
         "experiment_generated_from_clean_commit": bool(tree_clean),
         "dataset_path": str(dataset_path.relative_to(PROJECT_ROOT)).replace("\\", "/") if dataset_path.is_relative_to(PROJECT_ROOT) else str(dataset_path),
         "dataset_sha256": dataset_sha,
@@ -620,6 +656,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 ## 1. 实验控制变量与血缘规范 (Controlled Variables & Provenance)
 
 - **基准代码提交 (Source Code Commit)**: `{source_sha}` (Tree Clean: `{tree_clean}`)
+- **真实远程跟踪 SHA (True Remote SHA)**: `{true_remote_sha}`
 - **基准模型族**: `LightGBM Classification` (二分类概率预测)
 - **特征集与顺序**: 严格相同 ({len(feature_cols)} 因子, Feature Hash = `{feature_hash}`)
 - **有效模型参数**: 严格逐字段相同 (Effective Hash = `{legacy_effective_config_hash}`, `scale_pos_weight = 1.0`)

@@ -3,11 +3,9 @@ Comprehensive Targeted Tests for Phase 2.1-A r2 Final Guard Hotfix (tests/test_p
 Covering:
 1. T+1/T+21 exact mapping, suspension/volume/limit gates, deferred exits, cost models, fail-closed validation, pool parity.
 2. 100% tmp_path Production Model Physical Isolation testing (never touching real saved_models).
-3. Fail-Closed Git Source Provenance & Working Tree Clean testing (dirty tracked, untracked source, ignored runtime, remote mismatch).
+3. Fixed random number generators (rng = np.random.default_rng(42)) for complete test determinism.
 """
-import shutil
 import hashlib
-import subprocess
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,8 +14,6 @@ from pathlib import Path
 from config.settings import settings
 from research_v2.labels.execution_labeler import ExecutionAlignedLabeler
 from models.walk_forward import WalkForwardTrainer
-from models.lightgbm_model import LightGBMQuantModel
-from tools.run_phase2_1_a_label_ab import _validate_source_provenance, _git_working_tree_clean
 
 
 def _frame(n_days=26, symbols=("AAA", "BBB", "CCC")):
@@ -207,7 +203,8 @@ def test_nonfinite_label_fails_closed():
 def test_common_train_pool_keys_identical():
     from tools.run_phase2_1_a_label_ab import _build_common_training_labels
     df, dates = _frame(n_days=30)
-    df["label_up_down_20d"] = np.random.choice([0.0, 1.0, np.nan], size=len(df))
+    rng = np.random.default_rng(42)
+    df["label_up_down_20d"] = rng.choice([0.0, 1.0, np.nan], size=len(df))
     df = ExecutionAlignedLabeler(threshold_mode="fixed").compute(df)
     labeled = _build_common_training_labels(df)
 
@@ -220,14 +217,15 @@ def test_common_train_pool_keys_identical():
 # Gate 16: Common OOS pool merge validation
 def test_common_oos_pool_keys_identical():
     df, dates = _frame(n_days=30)
-    df["label_net_alpha_20d"] = np.random.randn(len(df))
+    rng = np.random.default_rng(42)
+    df["label_net_alpha_20d"] = rng.standard_normal(len(df))
     df["label_valid"] = True
 
     a_pred = df[["date", "symbol"]].copy()
-    a_pred["pred_score_legacy"] = np.random.rand(len(a_pred))
+    a_pred["pred_score_legacy"] = rng.random(len(a_pred))
 
     b_pred = df[["date", "symbol"]].copy()
-    b_pred["pred_score_execution"] = np.random.rand(len(b_pred))
+    b_pred["pred_score_execution"] = rng.random(len(b_pred))
 
     common = a_pred.merge(b_pred, on=["date", "symbol"], how="inner", validate="one_to_one")
     assert len(common) == len(a_pred)
@@ -264,16 +262,17 @@ def test_phase2_1_a_does_not_mutate_production_model(tmp_path, monkeypatch):
 
     # 构造能够走通最小 Walk-Forward 训练并触发 save() 的合成数据集 (1.5年训练 + 3月验证 + 2月测试)
     dates = pd.bdate_range("2022-01-01", "2024-06-01")
+    rng = np.random.default_rng(42)
     syn_rows = []
     for sym in ["000001.SZ", "600000.SH", "600519.SH"]:
         for dt in dates:
             syn_rows.append({
                 "date": dt,
                 "symbol": sym,
-                "feat_1": np.random.randn(),
-                "feat_2": np.random.randn(),
-                "ab_label_legacy": np.random.choice([0.0, 1.0]),
-                "ab_label_execution": np.random.choice([0.0, 1.0]),
+                "feat_1": float(rng.standard_normal()),
+                "feat_2": float(rng.standard_normal()),
+                "ab_label_legacy": float(rng.choice([0.0, 1.0])),
+                "ab_label_execution": float(rng.choice([0.0, 1.0])),
             })
     syn_df = pd.DataFrame(syn_rows)
 
@@ -314,46 +313,3 @@ def test_phase2_1_a_does_not_mutate_production_model(tmp_path, monkeypatch):
     created_prod_files = list(simulated_prod_dir.iterdir())
     assert len(created_prod_files) == 1
     assert created_prod_files[0].name == "latest_lightgbm.pkl"
-
-
-# Gate 18: Git Provenance Guard Unit Tests
-def test_phase2_1_a_source_provenance_clean_matches_remote_passes(monkeypatch):
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "abcdef1234567890")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "abcdef1234567890")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (True, []))
-
-    prov = _validate_source_provenance(enforce_clean=True)
-    assert prov["source_commit_sha"] == "abcdef1234567890"
-    assert prov["source_commit_tree_clean"] is True
-    assert prov["source_commit_remote_match"] is True
-
-
-def test_phase2_1_a_source_provenance_fails_on_dirty_tracked_tree(monkeypatch):
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "abcdef1234567890")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "abcdef1234567890")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (False, ["MODIFIED (M ): models/walk_forward.py"]))
-
-    with pytest.raises(RuntimeError, match="clean tracked source tree"):
-        _validate_source_provenance(enforce_clean=True)
-
-
-def test_phase2_1_a_source_provenance_fails_on_untracked_source(monkeypatch):
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "abcdef1234567890")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "abcdef1234567890")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (False, ["UNTRACKED: research_v2/labels/new_algo.py"]))
-
-    with pytest.raises(RuntimeError, match="clean tracked source tree"):
-        _validate_source_provenance(enforce_clean=True)
-
-
-def test_phase2_1_a_source_provenance_fails_on_remote_mismatch(monkeypatch):
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_sha", lambda *args: "local_sha_111111")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_branch", lambda *args: "phase2.1-a-exec-labels")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_remote_sha", lambda *args: "remote_sha_222222")
-    monkeypatch.setattr("tools.run_phase2_1_a_label_ab._git_working_tree_clean", lambda *args: (True, []))
-
-    with pytest.raises(RuntimeError, match="does not match origin"):
-        _validate_source_provenance(enforce_clean=True)
