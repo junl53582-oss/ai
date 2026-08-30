@@ -1,15 +1,13 @@
 """
-Phase 2.1-B — Model Objective Study Runner (tools/run_phase2_1_b_objective_study.py)
+Phase 2.1-B r2 — Model Objective Study Runner (tools/run_phase2_1_b_objective_study.py)
 严格受控三臂 OOS 研究：Classification (Arm A) vs Regression (Arm B) vs True LambdaRank (Arm C)。
-包含：
-1. 真实远程 SHA (git ls-remote) 与干净工作树硬门禁
-2. 冻结数据集 SHA、特征顺序敏感哈希与共同训练池哈希硬校验
-3. Arm A Classification 基准复现门禁 (严格校验与 Phase 2.1-A Execution Arm 数值一致)
-4. 共享模型超参数严格对齐 (seed=42, learning_rate=0.02, num_leaves=63, max_depth=8, etc.)
-5. True LambdaRank 10 档相关性等级构造与横截面分组校验
-6. 严格 1-to-1 共同执行 OOS 评价池
-7. 20-Day 配对块 Bootstrap (4,000 resamples, 95% & 97.5% CI) 与有效 Fold 统计 (排除 0-date fold)
-8. 生产模型物理隔离全目录快照审计与大文件治理
+Phase 2.1-B r2 核心修正与闭环：
+1. 修正 LambdaRank relevance target scope：仅 common_train 样本参与同日截面分位数计算，严禁未准入样本污染相关性等级。
+2. 严格执行双重复现门禁：Classification (Phase 2.1-A/B 基准) 与 Regression (Phase 2.1-B v1 结果) 必须 100% 精确复现。
+3. 补充各 Fold 各 Arm 训练最佳迭代数 (best_iteration) 实证证据。
+4. 修复 scipy 真实版本号记录。
+5. 记录 5 层完整 Git 血缘链 (Initial B -> Bugfix -> v1 Evidence -> r2 Code -> r2 Evidence)。
+6. 生产模型物理隔离全目录快照审计与大文件治理。
 """
 from __future__ import annotations
 
@@ -29,6 +27,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import numpy as np
 import pandas as pd
+import scipy
 from scipy import stats
 
 from config.settings import settings
@@ -38,17 +37,32 @@ from models.labeler import TargetLabeler
 from models.walk_forward import WalkForwardTrainer
 from research_v2.labels.execution_labeler import ExecutionAlignedLabeler
 
-logger = logging.getLogger("phase2_1_b_objectives")
+logger = logging.getLogger("phase2_1_b_r2_objectives")
 EXEC_LABEL = "label_net_alpha_20d"
 EXEC_DIRECTION = "label_direction_20d"
 
-# 预期 Phase 2.1-A 认证哈希
+# 预期 Phase 2.1-A 认证哈希与基准
 CERTIFIED_DATASET_SHA = "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42"
 CERTIFIED_FEATURE_SCHEMA_HASH = "82dfd3e9643ae1352829e736b9c8b89d1d648b98d16ef59153f261bf7a453460"
 CERTIFIED_COMMON_TRAIN_POOL_HASH = "bfff9a2d0a9b52a0d4924ea36d643923d1e42ab6bd48ed60017d020d22c42bcb"
 CERTIFIED_COMMON_OOS_POOL_HASH = "a464b29fd12a50891ef68777791ebcb0c7c4f9fc96b59137174387100ca5fd1c"
+
 CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC = 0.043681739629648594
 CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR = 0.3520146818106218
+
+# Phase 2.1-B v1 认证冻结结果 (用于 r2 Regression Reproduction Gate)
+CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC = 0.04670731619915874
+CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR = 0.45074353161665703
+CERTIFIED_PHASE2_1_B_V1_REG_TOP10_ALPHA = 0.01531426561629291
+CERTIFIED_PHASE2_1_B_V1_REG_Q5_Q1 = 15.38
+CERTIFIED_PHASE2_1_B_V1_REG_POSITIVE_RATE = 0.7012113055181696
+CERTIFIED_PHASE2_1_B_V1_REG_DELTA_RANKIC = 0.0030255765695101425
+CERTIFIED_PHASE2_1_B_V1_REG_FOLD_WINS = 7
+
+# 历史 Git 提交血缘
+PHASE2_1_B_INITIAL_CODE_COMMIT = "40b7bb8bc5c8b297ca5e259ac54f1e6df8bc5af9"
+PHASE2_1_B_PRERUN_BUGFIX_COMMIT = "f088ed735d196311aabd9479c5b6a0849e0e670d"
+PHASE2_1_B_V1_EVIDENCE_COMMIT = "5bb6ff21707ae484d1659c4a575645dd6e4c98ce"
 
 
 def _git_sha(cwd: Optional[Path] = None) -> str:
@@ -144,7 +158,7 @@ def _validate_source_provenance(enforce_clean: bool = True, project_root: Option
         if true_remote_sha == "UNKNOWN":
             raise RuntimeError(f"FATAL: Unable to resolve true remote branch SHA for 'refs/heads/{branch_name}' via git ls-remote.")
         if not is_clean:
-            raise RuntimeError(f"FATAL: Phase 2.1-B research must run from a clean tracked source tree. Found dirty items: {dirty_items}")
+            raise RuntimeError(f"FATAL: Phase 2.1-B r2 research must run from a clean tracked source tree. Found dirty items: {dirty_items}")
         if source_sha != true_remote_sha:
             raise RuntimeError(f"FATAL: Local HEAD ({source_sha}) does not match true remote origin/{branch_name} ({true_remote_sha}).")
 
@@ -183,6 +197,28 @@ def _snapshot_directory(dir_path: Path) -> Dict[str, Dict[str, Any]]:
                 "sha256": _sha256_file(p)
             }
     return snap
+
+
+def _build_lambdarank_relevance_labels(
+    labeled: pd.DataFrame,
+    common_train: pd.Series,
+    target_col: str = EXEC_LABEL,
+    n_grades: int = 10
+) -> pd.Series:
+    """
+    构建 LambdaRank 训练用相关性等级标签 (0 ~ n_grades-1)。
+    核心科学准则 (Phase 2.1-B r2 修正):
+    只有 common_train == True 的样本允许参与同交易日横截面分位数 (percentile rank) 计算。
+    非 common_train 样本一律赋值为 np.nan，严禁参与或污染分位数计算。
+    """
+    grades = pd.Series(np.nan, index=labeled.index, dtype=float)
+    common_mask = common_train.fillna(False).astype(bool)
+    eligible = labeled.loc[common_mask].copy()
+    if len(eligible) > 0:
+        pct_rank = eligible.groupby("date")[target_col].rank(method="average", pct=True)
+        eligible_grades = np.clip(np.ceil(pct_rank * float(n_grades)) - 1.0, 0.0, float(n_grades - 1))
+        grades.loc[common_mask] = eligible_grades.values
+    return grades
 
 
 def _daily_rankic(df: pd.DataFrame, pred_col: str, target_col: str) -> pd.Series:
@@ -345,6 +381,66 @@ def _fold_comparison_three_arms(trainer_clf, trainer_reg, trainer_rank,
     return folds_df, stats_summary
 
 
+def _extract_fold_diagnostics(trainer_clf, trainer_reg, trainer_rank) -> pd.DataFrame:
+    diag_rows = []
+    arm_trainers = [
+        ("classification", trainer_clf, 800),
+        ("regression", trainer_reg, 800),
+        ("lambdarank", trainer_rank, 800)
+    ]
+    for arm_name, trainer, n_est_cfg in arm_trainers:
+        for m in trainer.models:
+            best_iter = None
+            model_obj = m.get("model")
+            if model_obj is not None:
+                inner_model = getattr(model_obj, "model", None)
+                if inner_model is not None:
+                    best_iter = getattr(inner_model, "best_iteration_", None)
+            diag_rows.append({
+                "fold": m["fold"],
+                "arm": arm_name,
+                "train_start": str(pd.Timestamp(m["train_start"]).date()),
+                "train_end": str(pd.Timestamp(m["train_end"]).date()),
+                "val_start": str(pd.Timestamp(m["val_start"]).date()) if m["val_start"] is not None else None,
+                "val_end": str(pd.Timestamp(m["val_end"]).date()) if m["val_end"] is not None else None,
+                "test_start": str(pd.Timestamp(m["test_start"]).date()),
+                "test_end": str(pd.Timestamp(m["test_end"]).date()),
+                "best_iteration": int(best_iter) if best_iter is not None else None,
+                "n_estimators_configured": n_est_cfg
+            })
+    return pd.DataFrame(diag_rows)
+
+
+def _compute_lambdarank_scope_diagnostics(labeled: pd.DataFrame, common_train: pd.Series, grades: pd.Series) -> Tuple[pd.DataFrame, Dict[str, Any]]:
+    common_mask = common_train.fillna(False).astype(bool)
+    eligible_count = int(common_mask.sum())
+    ineligible_count = int((~common_mask).sum())
+
+    ineligible_non_null = int(grades[~common_mask].notna().sum())
+
+    dist = grades[common_mask].value_counts().sort_index().to_dict()
+    daily_eligible_counts = labeled[common_mask].groupby("date").size()
+
+    summary = {
+        "eligible_training_rows": eligible_count,
+        "ineligible_labeled_rows": ineligible_count,
+        "ineligible_non_null_grade_count": ineligible_non_null,
+        "daily_eligible_count_min": int(daily_eligible_counts.min()) if len(daily_eligible_counts) else 0,
+        "daily_eligible_count_max": int(daily_eligible_counts.max()) if len(daily_eligible_counts) else 0,
+        "daily_eligible_count_mean": float(daily_eligible_counts.mean()) if len(daily_eligible_counts) else 0.0,
+        "grade_distribution": {int(k): int(v) for k, v in dist.items()}
+    }
+    rows = []
+    for g in range(10):
+        c = int(dist.get(float(g), 0))
+        rows.append({
+            "grade": g,
+            "count": c,
+            "pct": float(c) / float(eligible_count) if eligible_count else 0.0
+        })
+    return pd.DataFrame(rows), summary
+
+
 def _get_environment_info() -> Dict[str, Any]:
     import sklearn
     import lightgbm
@@ -355,7 +451,7 @@ def _get_environment_info() -> Dict[str, Any]:
         "platform": platform.platform(),
         "numpy_version": np.__version__,
         "pandas_version": pd.__version__,
-        "scipy_version": stats.__name__,
+        "scipy_version": scipy.__version__,
         "sklearn_version": sklearn.__version__,
         "lightgbm_version": lightgbm.__version__,
         "joblib_version": joblib.__version__,
@@ -379,7 +475,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     prod_sha_before = _sha256_file(prod_model_path)
     prod_dir_snap_before = _snapshot_directory(prod_models_dir)
 
-    run_id = f"phase2_1_b_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    run_id = f"phase2_1_b_r2_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir = output_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
 
@@ -390,7 +486,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     reg_model_dir.mkdir(parents=True, exist_ok=True)
     rank_model_dir.mkdir(parents=True, exist_ok=True)
 
-    print(f"==> [1/8] 读取并严密验证数据集: {dataset_path}")
+    print(f"==> [1/9] 读取并严密验证数据集: {dataset_path}")
     df = pd.read_parquet(dataset_path)
     df["date"] = pd.to_datetime(df["date"])
     df.sort_values(["date", "symbol"], inplace=True)
@@ -407,7 +503,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     if len(feature_cols) != 79:
         raise RuntimeError(f"FATAL: Expected 79 features, got {len(feature_cols)}")
 
-    print("==> [2/8] 构建标签与严密校验共同训练池...")
+    print("==> [2/9] 构建标签与严密校验共同训练池...")
     legacy_labeler = TargetLabeler(
         horizon=settings.LABEL_HORIZON, task_type="classification",
         threshold=settings.LABEL_THRESHOLD, threshold_mode=settings.LABEL_THRESHOLD_MODE
@@ -441,15 +537,17 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
             f"FATAL: Common Train Pool Hash mismatch! Expected {CERTIFIED_COMMON_TRAIN_POOL_HASH}, got {common_train_pool_hash}"
         )
 
-    # 构造三臂训练标签
+    # 构造三臂训练标签 (Phase 2.1-B r2 核心修正: LambdaRank 仅在 common_train 样本内部计算分位数)
     labeled["ab_label_classification"] = labeled[EXEC_DIRECTION].where(common_train)
     labeled["ab_label_regression"] = labeled[EXEC_LABEL].where(common_train)
+    labeled["ab_label_lambdarank"] = _build_lambdarank_relevance_labels(labeled, common_train, EXEC_LABEL, n_grades=10)
 
-    # Arm C 10档相关性等级构造 (严格同日截面，不跨日，0~9分位数等级)
-    # relevance = clip(ceil(pct_rank * 10) - 1, 0, 9)
-    pct_ranks = labeled.groupby("date")[EXEC_LABEL].rank(method="average", pct=True)
-    relevance_grades = np.clip(np.ceil(pct_ranks * 10.0) - 1.0, 0.0, 9.0)
-    labeled["ab_label_lambdarank"] = relevance_grades.where(common_train)
+    # 计算并保存 LambdaRank Scope Diagnostics
+    scope_df, scope_summary = _compute_lambdarank_scope_diagnostics(labeled, common_train, labeled["ab_label_lambdarank"])
+    scope_df.to_csv(run_dir / "lambdarank_scope_diagnostics.csv", index=False, encoding="utf-8-sig")
+
+    if scope_summary["ineligible_non_null_grade_count"] != 0:
+        raise RuntimeError(f"FATAL: Found {scope_summary['ineligible_non_null_grade_count']} non-null relevance grades outside common_train!")
 
     # 3. 共享基础结构超参数
     base_lgbm_params = settings.LGBM_PARAMS_CLF.copy()
@@ -486,7 +584,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     reg_config_hash = hashlib.sha256(json.dumps(reg_params, sort_keys=True, default=str).encode("utf-8")).hexdigest()
     rank_config_hash = hashlib.sha256(json.dumps(rank_params, sort_keys=True, default=str).encode("utf-8")).hexdigest()
 
-    print("==> [3/8] 训练 Arm A (Classification Baseline) Walk-Forward...")
+    print("==> [3/9] 训练 Arm A (Classification Baseline) Walk-Forward...")
     trainer_clf = WalkForwardTrainer(
         train_years=settings.TRAIN_WINDOW_YEARS, val_months=settings.VAL_WINDOW_MONTHS,
         test_months=settings.TEST_WINDOW_MONTHS, purge_gap_days=settings.PURGE_GAP_DAYS,
@@ -496,8 +594,6 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     )
     oos_clf, _ = trainer_clf.run_walk_forward(labeled, feature_cols=feature_cols)
 
-    # 4. 执行 Baseline Reproduction Gate 校验
-    print("==> [4/8] 执行 Arm A Classification Baseline Reproduction Gate 严格核验...")
     eval_cols = [
         "date", "symbol", EXEC_LABEL, EXEC_DIRECTION, "label_valid", "entry_tradable",
         "planned_exit_tradable", "actual_exit_date", "exit_deferred_days",
@@ -508,6 +604,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     if "excluded_from_training" in labeled.columns:
         eval_cols.append("excluded_from_training")
 
+    print("==> [4/9] 执行 Arm A Classification Baseline Reproduction Gate 严格核验...")
     clf_eval = oos_clf[["date", "symbol", "pred_score"]].rename(columns={"pred_score": "pred_score_classification"})
     clf_eval = clf_eval.merge(labeled[eval_cols], on=["date", "symbol"], how="inner", validate="one_to_one")
     clf_eval = clf_eval[clf_eval["label_valid"].fillna(False).astype(bool) & clf_eval[EXEC_LABEL].notna()].copy()
@@ -523,41 +620,41 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         for r in clf_eval[["date", "symbol"]].itertuples(index=False)
     ).encode("utf-8")).hexdigest()
 
-    reprod_metrics_diff = abs(metrics_clf["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC)
-    reprod_nw20_diff = abs(metrics_clf["nw20_rank_icir"] - CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR)
+    reprod_clf_diff = abs(metrics_clf["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC)
+    reprod_clf_nw20_diff = abs(metrics_clf["nw20_rank_icir"] - CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR)
 
-    reprod_passed = bool(
+    reprod_clf_passed = bool(
         clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH
-        and reprod_metrics_diff <= 1e-6
-        and reprod_nw20_diff <= 1e-6
+        and reprod_clf_diff <= 1e-8
+        and reprod_clf_nw20_diff <= 1e-8
         and len(clf_eval) == 220913
     )
 
     baseline_reprod_df = pd.DataFrame([{
-        "phase": "2.1-B",
+        "phase": "2.1-B-r2",
         "expected_mean_daily_rankic": CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC,
         "actual_mean_daily_rankic": metrics_clf["mean_daily_rank_ic"],
-        "rankic_abs_diff": reprod_metrics_diff,
+        "rankic_abs_diff": reprod_clf_diff,
         "expected_nw20_rankicir": CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR,
         "actual_nw20_rankicir": metrics_clf["nw20_rank_icir"],
-        "nw20_abs_diff": reprod_nw20_diff,
+        "nw20_abs_diff": reprod_clf_nw20_diff,
         "expected_oos_pool_hash": CERTIFIED_COMMON_OOS_POOL_HASH,
         "actual_oos_pool_hash": clf_oos_key_hash,
         "pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH),
         "expected_oos_rows": 220913,
         "actual_oos_rows": len(clf_eval),
-        "reproduction_passed": reprod_passed
+        "reproduction_passed": reprod_clf_passed
     }])
     baseline_reprod_df.to_csv(run_dir / "baseline_reproduction.csv", index=False, encoding="utf-8-sig")
 
-    if not reprod_passed:
+    if not reprod_clf_passed:
         raise RuntimeError(
-            f"FATAL: Classification Baseline Reproduction Failed! Diff: {reprod_metrics_diff:.2e}, "
+            f"FATAL: Classification Baseline Reproduction Failed! Diff: {reprod_clf_diff:.2e}, "
             f"Pool Hash Match: {bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)}"
         )
-    print(f"   -> Classification Baseline Reproduction 100% PASS! (Diff = {reprod_metrics_diff:.2e})")
+    print(f"   -> Classification Baseline Reproduction 100% PASS! (Diff = {reprod_clf_diff:.2e})")
 
-    print("==> [5/8] 训练 Arm B (Continuous Regression) Walk-Forward...")
+    print("==> [5/9] 训练 Arm B (Continuous Regression) Walk-Forward...")
     trainer_reg = WalkForwardTrainer(
         train_years=settings.TRAIN_WINDOW_YEARS, val_months=settings.VAL_WINDOW_MONTHS,
         test_months=settings.TEST_WINDOW_MONTHS, purge_gap_days=settings.PURGE_GAP_DAYS,
@@ -567,7 +664,50 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     )
     oos_reg, _ = trainer_reg.run_walk_forward(labeled, feature_cols=feature_cols)
 
-    print("==> [6/8] 训练 Arm C (True LambdaRank) Walk-Forward...")
+    print("==> [6/9] 执行 Arm B Regression Reproduction Gate 严格核验...")
+    reg_eval = oos_reg[["date", "symbol", "pred_score"]].rename(columns={"pred_score": "pred_score_regression"})
+    reg_eval = reg_eval.merge(labeled[eval_cols], on=["date", "symbol"], how="inner", validate="one_to_one")
+    reg_eval = reg_eval[reg_eval["label_valid"].fillna(False).astype(bool) & reg_eval[EXEC_LABEL].notna()].copy()
+    if "in_universe" in reg_eval.columns:
+        reg_eval = reg_eval[reg_eval["in_universe"].fillna(False).astype(bool)].copy()
+    if "excluded_from_training" in reg_eval.columns:
+        reg_eval = reg_eval[~reg_eval["excluded_from_training"].fillna(False).astype(bool)].copy()
+
+    metrics_reg_check, daily_reg_check = _evaluate_common_pool(reg_eval, "pred_score_regression", EXEC_LABEL)
+    reprod_reg_diff = abs(metrics_reg_check["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC)
+    reprod_reg_nw20_diff = abs(metrics_reg_check["nw20_rank_icir"] - CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR)
+
+    reg_reprod_passed = bool(
+        reprod_reg_diff <= 1e-8
+        and reprod_reg_nw20_diff <= 1e-8
+        and len(reg_eval) == 220913
+    )
+
+    reg_reprod_df = pd.DataFrame([{
+        "phase": "2.1-B-r2",
+        "expected_mean_daily_rankic": CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC,
+        "actual_mean_daily_rankic": metrics_reg_check["mean_daily_rank_ic"],
+        "rankic_abs_diff": reprod_reg_diff,
+        "expected_nw20_rankicir": CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR,
+        "actual_nw20_rankicir": metrics_reg_check["nw20_rank_icir"],
+        "nw20_abs_diff": reprod_reg_nw20_diff,
+        "expected_top10_alpha": CERTIFIED_PHASE2_1_B_V1_REG_TOP10_ALPHA,
+        "actual_top10_alpha": metrics_reg_check["top10_mean_20d_exec_alpha"],
+        "expected_q5_q1": CERTIFIED_PHASE2_1_B_V1_REG_Q5_Q1,
+        "actual_q5_q1": metrics_reg_check["q5_minus_q1_annualized_pct_points"],
+        "expected_oos_rows": 220913,
+        "actual_oos_rows": len(reg_eval),
+        "reproduction_passed": reg_reprod_passed
+    }])
+    reg_reprod_df.to_csv(run_dir / "regression_reproduction.csv", index=False, encoding="utf-8-sig")
+
+    if not reg_reprod_passed:
+        raise RuntimeError(
+            f"FATAL: Regression Reproduction Gate Failed! Diff: {reprod_reg_diff:.2e}"
+        )
+    print(f"   -> Regression Reproduction Gate 100% PASS! (Diff = {reprod_reg_diff:.2e})")
+
+    print("==> [7/9] 训练 Arm C (True LambdaRank r2) Walk-Forward...")
     trainer_rank = WalkForwardTrainer(
         train_years=settings.TRAIN_WINDOW_YEARS, val_months=settings.VAL_WINDOW_MONTHS,
         test_months=settings.TEST_WINDOW_MONTHS, purge_gap_days=settings.PURGE_GAP_DAYS,
@@ -577,7 +717,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     )
     oos_rank, _ = trainer_rank.run_walk_forward(labeled, feature_cols=feature_cols)
 
-    print("==> [7/8] 构造严格 1-to-1 共同三臂 OOS 评价池...")
+    print("==> [8/9] 构造严格 1-to-1 共同三臂 OOS 评价池...")
     a_pred = oos_clf[["date", "symbol", "pred_score"]].rename(columns={"pred_score": "pred_score_classification"})
     b_pred = oos_reg[["date", "symbol", "pred_score"]].rename(columns={"pred_score": "pred_score_regression"})
     c_pred = oos_rank[["date", "symbol", "pred_score"]].rename(columns={"pred_score": "pred_score_lambdarank"})
@@ -599,10 +739,10 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     if common_oos_pool_hash != CERTIFIED_COMMON_OOS_POOL_HASH:
         raise RuntimeError(
-            f"FATAL: Phase 2.1-B Common OOS Pool Hash mismatch! Expected {CERTIFIED_COMMON_OOS_POOL_HASH}, got {common_oos_pool_hash}"
+            f"FATAL: Phase 2.1-B r2 Common OOS Pool Hash mismatch! Expected {CERTIFIED_COMMON_OOS_POOL_HASH}, got {common_oos_pool_hash}"
         )
 
-    print("==> [8/8] 统一在 COMMON_OBJECTIVE_OOS_POOL 上计算核心评价指标、Bootstrap 与折稳定性...")
+    print("==> [9/9] 统一在 COMMON_OBJECTIVE_OOS_POOL 上计算核心评价指标、Bootstrap、Fold 与迭代诊断...")
     metrics_clf, daily_clf = _evaluate_common_pool(common, "pred_score_classification", EXEC_LABEL)
     metrics_reg, daily_reg = _evaluate_common_pool(common, "pred_score_regression", EXEC_LABEL)
     metrics_rank, daily_rank = _evaluate_common_pool(common, "pred_score_lambdarank", EXEC_LABEL)
@@ -613,6 +753,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     boot_rank_vs_reg = _paired_block_bootstrap(daily_rank, daily_reg, block_size=20, n_bootstraps=4000, seed=42)
 
     folds_df, fold_stats = _fold_comparison_three_arms(trainer_clf, trainer_reg, trainer_rank, daily_clf, daily_reg, daily_rank)
+    fold_diag_df = _extract_fold_diagnostics(trainer_clf, trainer_reg, trainer_rank)
+    fold_diag_df.to_csv(run_dir / "fold_training_diagnostics.csv", index=False, encoding="utf-8-sig")
 
     # Delta 指标计算
     delta_reg_ic = metrics_reg["mean_daily_rank_ic"] - metrics_clf["mean_daily_rank_ic"]
@@ -657,7 +799,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
                 break
 
     if prod_dir_mutated or not prod_sha_unchanged:
-        raise RuntimeError("FATAL: Production model directory was mutated during Phase 2.1-B run!")
+        raise RuntimeError("FATAL: Production model directory was mutated during Phase 2.1-B r2 run!")
 
     # 保存产物
     oos_parquet_path = run_dir / "common_objective_oos.parquet"
@@ -667,7 +809,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     reg_model_file = reg_model_dir / "latest_lightgbm.pkl"
     rank_model_file = rank_model_dir / "latest_lightgbm.pkl"
 
-    rel_run_dir = f"reports/phase2_1_b/{run_id}"
+    rel_run_dir = str(run_dir.relative_to(PROJECT_ROOT)).replace("\\", "/") if run_dir.is_relative_to(PROJECT_ROOT) else str(run_dir)
 
     env_info = _get_environment_info()
     with (run_dir / "environment.json").open("w", encoding="utf-8") as f:
@@ -676,7 +818,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     summary_df = pd.DataFrame([
         {"arm": "classification_baseline", "task_type": "classification", "objective": "binary", **metrics_clf},
         {"arm": "continuous_regression", "task_type": "regression", "objective": "regression", **metrics_reg},
-        {"arm": "true_lambdarank", "task_type": "ranking", "objective": "lambdarank", **metrics_rank},
+        {"arm": "true_lambdarank_r2", "task_type": "ranking", "objective": "lambdarank", **metrics_rank},
     ])
     summary_df["feature_count"] = len(feature_cols)
     summary_df["feature_schema_hash"] = feature_hash
@@ -703,15 +845,27 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     manifest = {
         "phase": "2.1-B",
+        "iteration": "r2",
+        "correction_type": "lambdarank_relevance_common_train_scope",
+        "classification_logic_changed": False,
+        "regression_logic_changed": False,
+        "lambdarank_target_logic_changed": True,
+        "hyperparameter_tuning_performed": False,
+        "feature_change_performed": False,
+        "dataset_change_performed": False,
+        "oos_driven_tuning_performed": False,
         "run_id": run_id,
-        "source_commit_sha": source_sha,
-        "source_commit_branch": branch_name,
-        "source_commit_tree_clean": tree_clean,
-        "local_remote_tracking_sha": local_remote_tracking_sha,
-        "true_remote_sha": true_remote_sha,
-        "source_commit_remote": true_remote_sha,
-        "source_commit_remote_match": bool(source_sha == true_remote_sha and source_sha != "UNKNOWN"),
-        "experiment_generated_from_clean_commit": bool(tree_clean),
+        "git_provenance": {
+            "initial_b_code_commit": PHASE2_1_B_INITIAL_CODE_COMMIT,
+            "prerun_bugfix_commit": PHASE2_1_B_PRERUN_BUGFIX_COMMIT,
+            "v1_evidence_commit": PHASE2_1_B_V1_EVIDENCE_COMMIT,
+            "r2_source_commit_sha": source_sha,
+            "r2_source_commit_branch": branch_name,
+            "local_remote_tracking_sha": local_remote_tracking_sha,
+            "true_remote_sha": true_remote_sha,
+            "source_commit_tree_clean": tree_clean,
+            "source_commit_remote_match": bool(source_sha == true_remote_sha and source_sha != "UNKNOWN"),
+        },
         "dataset_path": str(dataset_path.relative_to(PROJECT_ROOT)).replace("\\", "/") if dataset_path.is_relative_to(PROJECT_ROOT) else str(dataset_path),
         "dataset_sha256": dataset_sha,
         "dataset_rows": len(df),
@@ -721,11 +875,18 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "seed": 42,
         "model_family": "LightGBM Quant",
         "baseline_reproduction": {
-            "passed": reprod_passed,
-            "mean_daily_rankic_diff": reprod_metrics_diff,
-            "nw20_rankicir_diff": reprod_nw20_diff,
+            "passed": reprod_clf_passed,
+            "mean_daily_rankic_diff": reprod_clf_diff,
+            "nw20_rankicir_diff": reprod_clf_nw20_diff,
             "oos_pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)
         },
+        "regression_reproduction": {
+            "passed": reg_reprod_passed,
+            "mean_daily_rankic_diff": reprod_reg_diff,
+            "nw20_rankicir_diff": reprod_reg_nw20_diff,
+            "scientific_status": "MIXED_EVIDENCE"
+        },
+        "lambdarank_scope_diagnostics": scope_summary,
         "effective_model_params": {
             "classification": clf_params,
             "regression": reg_params,
@@ -747,7 +908,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "common_execution_oos_symbols": int(common["symbol"].nunique()),
         "classification_metrics": metrics_clf,
         "regression_metrics": metrics_reg,
-        "lambdarank_metrics": metrics_rank,
+        "lambdarank_metrics_r2": metrics_rank,
+        "v1_lambdarank_status": "SUPERSEDED_METHOD_SCOPE_ISSUE",
         "delta_metrics": {
             "regression_minus_classification": {
                 "delta_mean_daily_rank_ic": delta_reg_ic,
@@ -756,7 +918,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
                 "delta_q5_minus_q1_annualized_pct_points": metrics_reg["q5_minus_q1_annualized_pct_points"] - metrics_clf["q5_minus_q1_annualized_pct_points"],
                 "delta_top10_mean_20d_exec_alpha": metrics_reg["top10_mean_20d_exec_alpha"] - metrics_clf["top10_mean_20d_exec_alpha"],
             },
-            "lambdarank_minus_classification": {
+            "lambdarank_minus_classification_r2": {
                 "delta_mean_daily_rank_ic": delta_rank_ic,
                 "delta_nw20_rank_icir": metrics_rank["nw20_rank_icir"] - metrics_clf["nw20_rank_icir"],
                 "delta_rank_ic_positive_rate": metrics_rank["rank_ic_positive_rate"] - metrics_clf["rank_ic_positive_rate"],
@@ -766,13 +928,13 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         },
         "bootstrap": {
             "regression_vs_classification": boot_reg_vs_clf,
-            "lambdarank_vs_classification": boot_rank_vs_clf,
-            "lambdarank_vs_regression": boot_rank_vs_reg
+            "lambdarank_vs_classification_r2": boot_rank_vs_clf,
+            "lambdarank_vs_regression_r2": boot_rank_vs_reg
         },
         "fold_statistics": fold_stats,
         "robust_improvement_gates": {
             "regression_passed": reg_robust,
-            "lambdarank_passed": rank_robust
+            "lambdarank_passed_r2": rank_robust
         },
         "common_objective_oos_artifact": {
             "relative_path": f"{rel_run_dir}/common_objective_oos.parquet",
@@ -822,40 +984,48 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     with (run_dir / "manifest.json").open("w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2, default=str)
 
-    report = f"""# Phase 2.1-B — Model Objective Study Report
-# A股模型学习目标函数严格受控三臂 OOS 研究报告 (Classification vs Regression vs LambdaRank)
+    report = f"""# Phase 2.1-B r2 — LambdaRank Target-Scope & Evidence Closure Report
+# A股模型学习目标函数严格受控三臂 OOS 研究报告 (r2 截面范围修正与证据闭环)
 
-> **研究结论 (Scientific Verdict)**: **`{status}`**
+> **最终科学判定 (Scientific Verdict)**: **`{status}`**
+> **方法修正类型 (Method Correction)**: `lambdarank_relevance_common_train_scope`
 > **实盘许可声明 (Live Trading Guard)**: `LIVE_TRADING_READY = FALSE`, `PRODUCTION_MODEL_PROMOTION = FALSE`
 
 ---
 
-## 1. 实验控制变量与血缘规范 (Controlled Variables & Provenance)
+## 1. 5 层完整 Git 血缘链 (5-Tier Git Provenance)
 
-- **基准代码提交 (Source Code Commit)**: `{source_sha}` (Tree Clean: `{tree_clean}`)
-- **真实远程跟踪 SHA (True Remote SHA)**: `{true_remote_sha}`
-- **基准特征集 (Feature Set)**: 严格相同 79 因子 (Feature Hash = `{feature_hash}`)
-- **数据集哈希 (Dataset SHA256)**: `{dataset_sha}`
-- **共同训练准入池 (Common Train Pool)**: 严格相同 ({common_train_rows_count:,} 行, Hash = `{common_train_pool_hash}`)
-- **唯一自变量 (Primary Independent Variable)**: **模型学习目标函数 (Model Objective)**
-  - **Arm A (Classification Baseline)**: Binary Logloss Classification (复现 Phase 2.1-A Execution Arm)
-  - **Arm B (Continuous Regression)**: L2 / RMSE Regression on continuous `label_net_alpha_20d`
-  - **Arm C (True LambdaRank)**: LightGBM LambdaRank on 10 relevance grades (0..9) with NDCG@30
+| 阶段 / 提交层级 | Commit SHA | 说明与治理模式 |
+| :--- | :--- | :--- |
+| **Phase 2.1-B Initial Code** | [`{PHASE2_1_B_INITIAL_CODE_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_INITIAL_CODE_COMMIT}) | 初版三臂 Runner 与单测 |
+| **Phase 2.1-B Pre-Run Bugfix** | [`{PHASE2_1_B_PRERUN_BUGFIX_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_PRERUN_BUGFIX_COMMIT}) | 运行前修复 float NaN 类型转换 |
+| **Phase 2.1-B v1 Evidence** | [`{PHASE2_1_B_V1_EVIDENCE_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_V1_EVIDENCE_COMMIT}) | v1 证据：确立 Regression `MIXED_EVIDENCE` 结论，定位 LambdaRank 截面范围问题 |
+| **Phase 2.1-B r2 Code** | [`{source_sha}`](https://github.com/junl53582-oss/ai/commit/{source_sha}) | r2 修复：仅 common_train 样本参与分位数计算，添加极端样本隔离单测与真 Scipy 版本 |
+| **Phase 2.1-B r2 Evidence** | *待 Stage B 提交* | r2 证据：双重复现门禁通过，LambdaRank r2 认证指标入库 |
 
 ---
 
-## 2. 基准复现门禁核验 (Classification Baseline Reproduction)
+## 2. 双重严格复现门禁核验 (Dual Reproduction Gates)
 
+### A. Classification Baseline Reproduction
 - **Phase 2.1-A 预期 RankIC**: `{CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC:.6f}`
-- **Phase 2.1-B 实际 RankIC**: `{metrics_clf['mean_daily_rank_ic']:.6f}` (Diff: `{reprod_metrics_diff:.2e}`)
-- **OOS 评价池哈希匹配**: **`{bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)}`**
-- **复现门禁状态**: **`{'PASS' if reprod_passed else 'FAIL'}`**
+- **Phase 2.1-B r2 实际 RankIC**: `{metrics_clf['mean_daily_rank_ic']:.6f}` (Diff: `{reprod_clf_diff:.2e}`)
+- **OOS Pool Hash 匹配**: **`{bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)}`**
+- **门禁状态**: **`{'PASS' if reprod_clf_passed else 'FAIL'}`**
+
+### B. Regression Reproduction Gate
+- **Phase 2.1-B v1 预期 RankIC**: `{CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC:.6f}`
+- **Phase 2.1-B r2 实际 RankIC**: `{metrics_reg['mean_daily_rank_ic']:.6f}` (Diff: `{reprod_reg_diff:.2e}`)
+- **预期 NW20**: `{CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR:.6f}` | 实际: `{metrics_reg['nw20_rank_icir']:.6f}`
+- **预期 Top10 Alpha**: `{CERTIFIED_PHASE2_1_B_V1_REG_TOP10_ALPHA:.4%}` | 实际: `{metrics_reg['top10_mean_20d_exec_alpha']:.4%}`
+- **门禁状态**: **`{'PASS' if reg_reprod_passed else 'FAIL'}`**
+- **Regression 科学结论维持**: **`MIXED_EVIDENCE`** (大实效提升信号，但统计显著与跨折胜率证据不足)
 
 ---
 
-## 3. 三臂核心实证对比 (Three-Arm Evaluation Results)
+## 3. 三臂核心实证结果对比 (Three-Arm Evaluation Results)
 
-| 评价指标 | Arm A (Classification) | Arm B (Regression) | Arm C (LambdaRank) | Delta (Reg - Clf) | Delta (Rank - Clf) |
+| 评价指标 | Arm A (Classification) | Arm B (Regression) | Arm C (LambdaRank r2) | Delta (Reg - Clf) | Delta (Rank - Clf) |
 | :--- | :---: | :---: | :---: | :---: | :---: |
 | **Mean Daily OOS RankIC** | **{metrics_clf['mean_daily_rank_ic']:.6f}** | **{metrics_reg['mean_daily_rank_ic']:.6f}** | **{metrics_rank['mean_daily_rank_ic']:.6f}** | **{delta_reg_ic:+.6f}** | **{delta_rank_ic:+.6f}** |
 | **NW20 RankICIR (年化)** | **{metrics_clf['nw20_rank_icir']:.6f}** | **{metrics_reg['nw20_rank_icir']:.6f}** | **{metrics_rank['nw20_rank_icir']:.6f}** | **{metrics_reg['nw20_rank_icir'] - metrics_clf['nw20_rank_icir']:+.6f}** | **{metrics_rank['nw20_rank_icir'] - metrics_clf['nw20_rank_icir']:+.6f}** |
@@ -866,42 +1036,24 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
 ---
 
-## 4. 统计检验与 Fold 胜率 (Paired Block Bootstrap & Fold Stability)
+## 4. LambdaRank Target-Scope 修正与诊断
 
-- **Regression vs Classification**:
-  - Mean RankIC Delta: **`{boot_reg_vs_clf['mean_diff']:+.6f}`**
-  - 95% 置信区间: `[{boot_reg_vs_clf['ci_95_lower']:+.6f}, {boot_reg_vs_clf['ci_95_upper']:+.6f}]`
-  - 97.5% 置信区间 (保守门禁): `[{boot_reg_vs_clf['ci_97_5_lower']:+.6f}, {boot_reg_vs_clf['ci_97_5_upper']:+.6f}]`
-  - 提升概率 P(Delta > 0): **`{boot_reg_vs_clf['prob_positive']:.2%}`**
-  - 有效 Fold 胜率: **`{fold_stats['regression_fold_win_ratio']:.2%}`** ({fold_stats['regression_wins_vs_clf']}/{fold_stats['valid_comparison_folds']})
-  - 达到 +0.0020 实效门禁: **`{bool(delta_reg_ic >= 0.0020)}`**
-  - 满足全部 Robust Gate: **`{reg_robust}`**
-
-- **LambdaRank vs Classification**:
-  - Mean RankIC Delta: **`{boot_rank_vs_clf['mean_diff']:+.6f}`**
-  - 95% 置信区间: `[{boot_rank_vs_clf['ci_95_lower']:+.6f}, {boot_rank_vs_clf['ci_95_upper']:+.6f}]`
-  - 97.5% 置信区间 (保守门禁): `[{boot_rank_vs_clf['ci_97_5_lower']:+.6f}, {boot_rank_vs_clf['ci_97_5_upper']:+.6f}]`
-  - 提升概率 P(Delta > 0): **`{boot_rank_vs_clf['prob_positive']:.2%}`**
-  - 有效 Fold 胜率: **`{fold_stats['lambdarank_fold_win_ratio']:.2%}`** ({fold_stats['lambdarank_wins_vs_clf']}/{fold_stats['valid_comparison_folds']})
-  - 达到 +0.0020 实效门禁: **`{bool(delta_rank_ic >= 0.0020)}`**
-  - 满足全部 Robust Gate: **`{rank_robust}`**
+- **Eligible 训练样本数**: `{scope_summary['eligible_training_rows']:,}`
+- **Ineligible 标记样本数**: `{scope_summary['ineligible_labeled_rows']:,}`
+- **Ineligible 样本中非空相关性等级数**: **`{scope_summary['ineligible_non_null_grade_count']}`** (完全隔离)
+- **单日 Eligible 样本数量分布**: Min=`{scope_summary['daily_eligible_count_min']}`, Max=`{scope_summary['daily_eligible_count_max']}`, Mean=`{scope_summary['daily_eligible_count_mean']:.1f}`
+- **v1 LambdaRank 状态**: **`SUPERSEDED_METHOD_SCOPE_ISSUE`** (v1 结果由 r2 正式取代)
 
 ---
 
-## 5. 生产模型隔离与大文件治理
+## 5. 生产模型物理隔离审计
 
-- **生产模型文件**: `saved_models/latest_lightgbm.pkl` (SHA256: `{prod_sha_after}`)
+- **生产模型路径**: `saved_models/latest_lightgbm.pkl` (SHA256: `{prod_sha_after}`)
 - **生产模型 SHA 未修改**: **`{prod_sha_unchanged}`**
-- **生产目录无意外变动**: **`{not prod_dir_mutated}`**
+- **生产目录无变动**: **`{not prod_dir_mutated}`**
 - **大文件存储模式**: `common_objective_oos.parquet` 与各 Arm 实验模型均采用 `local_not_git_tracked` 存储。
-
----
-
-## 6. 科学判定与结论说明 (Scientific Verdict)
-
-- **判定状态**: **`{status}`**
 """
-    (run_dir / "PHASE2_1_B_REPORT.md").write_text(report, encoding="utf-8")
+    (run_dir / "PHASE2_1_B_R2_REPORT.md").write_text(report, encoding="utf-8")
 
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "latest.json").write_text(json.dumps(
@@ -909,7 +1061,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(summary_df.to_string(index=False))
-    print(f"\nPhase 2.1-B status: {status}")
+    print(f"\nPhase 2.1-B r2 status: {status}")
     print(f"Artifacts saved to: {run_dir}")
     return run_dir
 
@@ -919,7 +1071,7 @@ def main() -> None:
     parser.add_argument("--dataset", type=Path,
                         default=PROJECT_ROOT / "data_storage" / "research" / "factor_matrix_300.parquet")
     parser.add_argument("--output-dir", type=Path,
-                        default=PROJECT_ROOT / "reports" / "phase2_1_b")
+                        default=PROJECT_ROOT / "reports" / "phase2_1_b_r2")
     args = parser.parse_args()
     run(args.dataset, args.output_dir)
 

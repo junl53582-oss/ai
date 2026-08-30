@@ -27,6 +27,7 @@ from tools.run_phase2_1_b_objective_study import (
     _daily_rankic,
     _top10_daily_alpha,
     _fold_comparison_three_arms,
+    _build_lambdarank_relevance_labels,
 )
 
 
@@ -47,7 +48,8 @@ def _make_synthetic_multiday_data(seed: int = 42, n_dates: int = 15, n_syms: int
                 "label_direction_20d": 1.0 if ret > 0 else 0.0,
                 "label_valid": True,
                 "in_universe": True,
-                "excluded_from_training": False
+                "excluded_from_training": False,
+                "common_train": True
             })
     df = pd.DataFrame(rows)
     df.sort_values(["date", "symbol"], inplace=True)
@@ -58,13 +60,14 @@ def _make_synthetic_multiday_data(seed: int = 42, n_dates: int = 15, n_syms: int
 def test_lambdarank_relevance_grades_range_and_deciles():
     df = _make_synthetic_multiday_data(seed=42, n_dates=10, n_syms=50)
     
-    # Compute cross-sectional 10-grade relevance
-    pct_ranks = df.groupby("date")["label_net_alpha_20d"].rank(method="average", pct=True)
-    relevance_grades = np.clip(np.ceil(pct_ranks * 10.0) - 1.0, 0.0, 9.0).astype(int)
+    # Compute cross-sectional 10-grade relevance via shared helper
+    relevance_grades = _build_lambdarank_relevance_labels(
+        df, df["common_train"], target_col="label_net_alpha_20d", n_grades=10
+    )
     
     assert relevance_grades.min() == 0
     assert relevance_grades.max() == 9
-    assert set(np.unique(relevance_grades)).issubset(set(range(10)))
+    assert set(np.unique(relevance_grades.dropna())).issubset(set(range(10)))
     
     # Verify per date top decile is 9 and bottom decile is 0
     df["grade"] = relevance_grades
@@ -77,14 +80,16 @@ def test_lambdarank_relevance_grades_range_and_deciles():
 
 def test_lambdarank_relevance_no_cross_date_leakage():
     df = _make_synthetic_multiday_data(seed=42, n_dates=5, n_syms=10)
-    pct_ranks_all = df.groupby("date")["label_net_alpha_20d"].rank(method="average", pct=True)
-    grades_all = np.clip(np.ceil(pct_ranks_all * 10.0) - 1.0, 0.0, 9.0).astype(int)
+    grades_all = _build_lambdarank_relevance_labels(
+        df, df["common_train"], target_col="label_net_alpha_20d", n_grades=10
+    )
     
     # Isolate single date and compute independently
     dt0 = df["date"].iloc[0]
     single_date_df = df[df["date"] == dt0].copy()
-    pct_ranks_single = single_date_df["label_net_alpha_20d"].rank(method="average", pct=True)
-    grades_single = np.clip(np.ceil(pct_ranks_single * 10.0) - 1.0, 0.0, 9.0).astype(int)
+    grades_single = _build_lambdarank_relevance_labels(
+        single_date_df, single_date_df["common_train"], target_col="label_net_alpha_20d", n_grades=10
+    )
     
     np.testing.assert_array_equal(
         grades_all[df["date"] == dt0].values,
@@ -94,8 +99,9 @@ def test_lambdarank_relevance_no_cross_date_leakage():
 
 def test_lambdarank_group_sizes_sum_and_chronology(tmp_path):
     df = _make_synthetic_multiday_data(seed=42, n_dates=10, n_syms=15)
-    pct_ranks = df.groupby("date")["label_net_alpha_20d"].rank(method="average", pct=True)
-    df["label_rank"] = np.clip(np.ceil(pct_ranks * 10.0) - 1.0, 0.0, 9.0).astype(int)
+    df["label_rank"] = _build_lambdarank_relevance_labels(
+        df, df["common_train"], target_col="label_net_alpha_20d", n_grades=10
+    )
     
     rank_params = {
         "objective": "lambdarank",
@@ -164,8 +170,9 @@ def test_three_arms_shared_structural_parameters():
 
 def test_walk_forward_three_arms_isolated_execution(tmp_path):
     df = _make_synthetic_multiday_data(seed=42, n_dates=120, n_syms=10)
-    pct_ranks = df.groupby("date")["label_net_alpha_20d"].rank(method="average", pct=True)
-    df["label_rank"] = np.clip(np.ceil(pct_ranks * 10.0) - 1.0, 0.0, 9.0).astype(int)
+    df["label_rank"] = _build_lambdarank_relevance_labels(
+        df, df["common_train"], target_col="label_net_alpha_20d", n_grades=10
+    )
     
     base_params = {
         "learning_rate": 0.05,
