@@ -102,7 +102,9 @@ def run_phase2_0_2r2_micro_certification():
         dataset_sha256 = hashlib.sha256(data_file.read_bytes()).hexdigest() if data_file.exists() else ""
 
     from factors.processor import FactorProcessor
-    feature_cols = FactorProcessor.get_all_factor_cols()
+    import pyarrow.parquet as pq
+    schema_cols = set(pq.read_schema(data_file).names)
+    feature_cols = [c for c in FactorProcessor.get_all_factor_cols() if c in schema_cols]
     feature_schema_hash = hashlib.sha256(",".join(sorted(feature_cols)).encode("utf-8")).hexdigest()
     model_config_hash = compute_model_config_hash()
 
