@@ -297,10 +297,18 @@ class WalkForwardTrainer:
             if X_v is not None and "date" in val_df.columns:
                 X_v["date"] = val_df["date"]
 
-            # 目标标签处理 (Ranker 将超额收益转换为每日整数等级 0~4)
+            # 目标标签处理 (Ranker 将超额收益转换为每日整数等级 0~4; 若传入整数相关性标签则直接使用)
             if self.model_type in ("lightgbm_ranker", "ranking"):
-                y_tr = (train_df.groupby("date")[self.label_col].rank(pct=True) * 4.999).astype(int)
-                y_v = (val_df.groupby("date")[self.label_col].rank(pct=True) * 4.999).astype(int) if not val_df.empty else None
+                col_data = train_df[self.label_col].dropna()
+                is_int_grade = pd.api.types.is_integer_dtype(train_df[self.label_col]) or (
+                    len(col_data) > 0 and np.all(np.equal(np.mod(col_data, 1), 0)) and col_data.min() >= 0 and col_data.max() <= 31
+                )
+                if is_int_grade:
+                    y_tr = train_df[self.label_col].fillna(0).astype(int)
+                    y_v = val_df[self.label_col].fillna(0).astype(int) if not val_df.empty else None
+                else:
+                    y_tr = (train_df.groupby("date")[self.label_col].rank(pct=True) * 4.999).astype(int)
+                    y_v = (val_df.groupby("date")[self.label_col].rank(pct=True) * 4.999).astype(int) if not val_df.empty else None
             else:
                 y_tr = train_df[self.label_col]
                 y_v = val_df[self.label_col] if not val_df.empty else None
