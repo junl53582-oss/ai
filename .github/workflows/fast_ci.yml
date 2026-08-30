@@ -68,6 +68,10 @@ jobs:
         run: |
           python -u tools/validate_research_artifacts.py --mode ci-smoke --report-dir reports/ci_smoke
 
+      - name: Certification Artifacts Validator
+        run: |
+          python -u tools/validate_certification_artifacts.py
+
       - name: Upload Fast CI Artifacts
         if: always()
         uses: actions/upload-artifact@v4

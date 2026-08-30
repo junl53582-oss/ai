@@ -219,8 +219,20 @@ def test_worst_decile_mean_is_actual_bottom_decile_mean():
 # 18. Artifact reuse compatibility validation (Fail-Closed)
 def test_artifact_reuse_compatibility_validation():
     from models.certification_logic import validate_artifact_reuse_compatibility
-    meta_a = {"dataset_sha256": "sha_1", "feature_schema_hash": "f_1", "label_horizon": 20, "model_config_hash": "c_1"}
-    meta_mismatch = {"dataset_sha256": "sha_2", "feature_schema_hash": "f_1", "label_horizon": 20, "model_config_hash": "c_1"}
+    meta_a = {
+        "dataset_sha256": "sha_1",
+        "feature_schema_hash": "f_1",
+        "label_horizon": 20,
+        "research_protocol_config_hash": "p_1",
+        "model_full_config_hash": "m_1"
+    }
+    meta_mismatch = {
+        "dataset_sha256": "sha_2",
+        "feature_schema_hash": "f_1",
+        "label_horizon": 20,
+        "research_protocol_config_hash": "p_1",
+        "model_full_config_hash": "m_1"
+    }
     
     ok_b, msg_b = validate_artifact_reuse_compatibility(meta_a, meta_mismatch)
     assert ok_b is False
@@ -249,18 +261,117 @@ def test_negative_nw20_passes_structural_certification():
     assert is_valid_structure is True
 
 
-# 21. Model config hash reconstruction from git
-def test_model_config_hash_reconstruction_from_git():
+# 21. Two-tier config hash sensitivity test
+def test_two_tier_config_hash_sensitivity():
     from models.certification_logic import (
-        build_canonical_model_config,
-        compute_model_config_hash,
-        reconstruct_source_model_config_from_git
+        build_research_protocol_config,
+        build_model_full_config,
+        compute_research_protocol_config_hash,
+        compute_model_full_config_hash
     )
-    current_hash = compute_model_config_hash()
-    ok, hist_hash, cfg = reconstruct_source_model_config_from_git("e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48")
+    base_full = build_model_full_config()
+    base_full_hash = compute_model_full_config_hash(base_full)
+    base_proto_hash = compute_research_protocol_config_hash(base_full["protocol"])
+
+    # A. 修改 learning_rate -> 改变 full hash 但不改变 protocol hash
+    mod_full = build_model_full_config()
+    mod_full["full_parameters"]["lightgbm_clf_baseline"]["learning_rate"] = 0.05
+    assert compute_model_full_config_hash(mod_full) != base_full_hash
+    assert compute_research_protocol_config_hash(mod_full["protocol"]) == base_proto_hash
+
+    # B. 修改 num_leaves -> 改变 full hash
+    mod_full2 = build_model_full_config()
+    mod_full2["full_parameters"]["lightgbm_clf_baseline"]["num_leaves"] = 127
+    assert compute_model_full_config_hash(mod_full2) != base_full_hash
+
+    # C. 修改 ranker feature selection -> 改变 protocol hash 和 full hash
+    mod_full3 = build_model_full_config()
+    mod_full3["protocol"]["candidates"]["lightgbm_ranker"]["top_k_features"] = 30
+    assert compute_research_protocol_config_hash(mod_full3["protocol"]) != base_proto_hash
+    assert compute_model_full_config_hash(mod_full3) != base_full_hash
+
+
+# 22. Historical config reconstruction from git
+def test_historical_config_reconstruction_from_git():
+    from models.certification_logic import (
+        compute_research_protocol_config_hash,
+        compute_model_full_config_hash,
+        reconstruct_source_configs_from_git
+    )
+    current_proto_hash = compute_research_protocol_config_hash()
+    current_full_hash = compute_model_full_config_hash()
+
+    ok, hist_hashes, cfg = reconstruct_source_configs_from_git("e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48")
     assert ok is True
-    assert len(hist_hash) == 64
-    assert current_hash == hist_hash
+    assert hist_hashes["research_protocol_config_hash"] == current_proto_hash
+    assert hist_hashes["model_full_config_hash"] == current_full_hash
+
+    # 不存在的 Commit 返回 Fail-Closed
+    ok_fake, fake_hashes, _ = reconstruct_source_configs_from_git("0000000000000000000000000000000000000000")
+    assert ok_fake is False
+    assert "error" in fake_hashes
+
+
+# 23. Turnover and trade consistency gate
+def test_turnover_and_trade_consistency_gate():
+    from models.certification_logic import evaluate_all_gates
+    # 正常数据通过
+    gates = evaluate_all_gates(
+        worktree_clean=True,
+        source_commits_valid=True,
+        dataset_and_schema_valid=True,
+        research_protocol_hash_valid=True,
+        model_full_config_hash_valid=True,
+        artifact_reuse_valid=True,
+        seed_params_valid=True,
+        pred_champion_seed_status="VERIFIED_STABLE",
+        common_rows_equal=True,
+        common_dates_equal=True,
+        nw20_valid=True,
+        bootstrap_valid=True,
+        self_comp_guard_passed=True,
+        report_semantics_passed=True,
+        trading_fold_valid=True,
+        turnover_evidence_valid=True,
+        test_exit_code_zero=True
+    )
+    assert gates["TURNOVER_EVIDENCE_VALIDITY"] == "PASS"
+    assert gates["TRADING_CANDIDATE_SEED_ROBUSTNESS"] == "NOT_CERTIFIED"
+    assert gates["PREDICTION_CHAMPION_SEED_ROBUSTNESS"] == "PASS"
+
+    # 如果换手率证据无效，门禁 FAIL
+    gates_bad = evaluate_all_gates(
+        worktree_clean=True,
+        source_commits_valid=True,
+        dataset_and_schema_valid=True,
+        research_protocol_hash_valid=True,
+        model_full_config_hash_valid=True,
+        artifact_reuse_valid=True,
+        seed_params_valid=True,
+        pred_champion_seed_status="VERIFIED_STABLE",
+        common_rows_equal=True,
+        common_dates_equal=True,
+        nw20_valid=True,
+        bootstrap_valid=True,
+        self_comp_guard_passed=True,
+        report_semantics_passed=True,
+        trading_fold_valid=True,
+        turnover_evidence_valid=False,
+        test_exit_code_zero=True
+    )
+    assert gates_bad["TURNOVER_EVIDENCE_VALIDITY"] == "FAIL"
+
+
+# 24. Trading fold stability verified CSV has positive turnover
+def test_trading_fold_stability_verified_csv_turnover():
+    fold_file = Path("reports/model_research/trading_fold_stability_verified.csv")
+    assert fold_file.exists()
+    df = pd.read_csv(fold_file)
+    assert (df["ranker_annualized_turnover"] > 0).all()
+    assert (df["baseline_annualized_turnover"] > 0).all()
+    assert (df["ranker_filled_trades"] > 0).all()
+    assert (df["ranker_total_costs"] > 0).all()
+
 
 
 
