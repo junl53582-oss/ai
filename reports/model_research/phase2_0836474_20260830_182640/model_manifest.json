@@ -1,0 +1,24 @@
+{
+  "run_id": "phase2_0836474_20260830_182640",
+  "created_at": "2026-08-30T19:04:35.604734",
+  "source_commit_sha": "0836474186350096fb984572d0d2083c99eab265",
+  "dataset_path": "data_storage\\research\\factor_matrix_300.parquet",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "dataset_manifest_sha256": "0186efebe3a8fe4645e9d945aca336043d346a6187e86213d9e38130e9895c98",
+  "local_production_dataset_verified": true,
+  "github_clean_runner_production_data_available": false,
+  "label_horizon": 20,
+  "label_column": "label_excess_20d",
+  "classification_label_column": "label_up_down_20d",
+  "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
+  "outer_fold_count": 20,
+  "inner_validation_policy": "temporal_purged_validation",
+  "purge_gap_trading_days": 25,
+  "champion_model_id": "lightgbm_clf_baseline",
+  "random_seeds": [
+    42,
+    2026,
+    3407
+  ],
+  "production_verified": true
+}

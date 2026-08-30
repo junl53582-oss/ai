@@ -1,0 +1,3 @@
+﻿model_id,brier_score,log_loss,auc,outer_test_used_for_calibration
+lightgbm_clf_baseline,0.2493,0.6918,0.5347,False
+double_ensemble,0.2504,0.6939,0.5228,False

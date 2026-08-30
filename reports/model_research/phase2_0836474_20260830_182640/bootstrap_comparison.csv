@@ -1,0 +1,2 @@
+﻿mean_diff,ci_lower,ci_upper,p_value,block_size,n_bootstraps
+0.0,0.0,0.0,1.0,20,1000
