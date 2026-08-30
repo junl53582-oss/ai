@@ -71,6 +71,5 @@
       "auc": 0.5347,
       "oos_rows": 227466
     }
-  ],
-  "champion_model_id": "lightgbm_clf_baseline"
+  ]
 }

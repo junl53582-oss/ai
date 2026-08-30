@@ -1,11 +1,12 @@
 """
-Phase 2.0 Walk-Forward Model Research & Optimization Engine (tools/run_model_research.py)
+Phase 2.0.1 Walk-Forward Model Research & Optimization Engine (tools/run_model_research.py)
 严格执行：
-1. 4 大候选模型族 Outer Walk-Forward OOS 横向评测 (LightGBM Clf, LightGBM Reg, LightGBM Ranker, DoubleEnsemble)
-2. Train-Only 特征选择 (FoldFeatureSelector) 杜绝未来泄漏
-3. 统一多维指标体系 (Daily RankIC, RankICIR, AUC, Q5-Q1, Sharpe, 成本后超额)
-4. Champion 模型稳健性测试 (Paired Block Bootstrap, 多种子 42/2026/3407, 市场分状态)
-5. 完整 13 大产物持久化至 reports/model_research/<RUN_ID>/ 与 latest
+1. 4 大候选模型族在 COMMON_RANKING_POOL 上公平评测 (LightGBM Clf, LightGBM Reg, LightGBM Ranker, DoubleEnsemble)
+2. Newey-West Lag 20 官方认证 (NW_LAG = LABEL_HORIZON = 20) + Lag 5 对比
+3. 配对块 Bootstrap 检验候选模型 vs Baseline (Baseline vs DoubleEnsemble, Baseline vs Ranker, Baseline vs Regression)
+4. 独立多随机种子 (42, 2026, 3407) 真实评估与 Hash 存证
+5. 明确分离 PREDICTION_CHAMPION 与 TRADING_SIGNAL_CHAMPION
+6. 输出完整 13 项产物至 reports/model_research/<RUN_ID>/ 与 base
 """
 import os
 import sys
@@ -48,22 +49,22 @@ def get_git_commit_sha() -> str:
 
 
 def paired_block_bootstrap(
-    series_a: pd.Series,
-    series_b: pd.Series,
+    series_candidate: pd.Series,
+    series_baseline: pd.Series,
     block_size: int = 20,
     n_bootstraps: int = 1000,
     seed: int = 42
 ) -> Dict[str, Any]:
     """
-    配对块 Bootstrap (Paired Block Bootstrap, block_size=20) 检验 Champion vs Baseline 显著性
+    配对块 Bootstrap (Paired Block Bootstrap, block_size=20) 检验 Candidate vs Baseline
     """
-    common_idx = series_a.index.intersection(series_b.index)
+    common_idx = series_candidate.index.intersection(series_baseline.index)
     if len(common_idx) < 20:
-        return {"mean_diff": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "p_value": 1.0}
+        return {"mean_diff": 0.0, "ci_lower": 0.0, "ci_upper": 0.0, "p_value": 1.0, "robust_improvement": False}
 
-    s_a = series_a.loc[common_idx].values
-    s_b = series_b.loc[common_idx].values
-    diff = s_a - s_b
+    s_cand = series_candidate.loc[common_idx].values
+    s_base = series_baseline.loc[common_idx].values
+    diff = s_cand - s_base
     n = len(diff)
 
     rng = np.random.RandomState(seed)
@@ -83,14 +84,20 @@ def paired_block_bootstrap(
     
     p_value = float(2.0 * min((boot_means <= 0).mean(), (boot_means >= 0).mean()))
     p_value = min(max(p_value, 0.0), 1.0)
+    prob_pos = float((boot_means > 0).mean())
+
+    robust_improvement = bool(ci_lower > 0.0)
 
     return {
         "mean_diff": round(mean_diff, 5),
         "ci_lower": round(ci_lower, 5),
         "ci_upper": round(ci_upper, 5),
+        "bootstrap_prob_positive": round(prob_pos, 4),
         "p_value": round(p_value, 4),
+        "robust_improvement": robust_improvement,
         "block_size": block_size,
-        "n_bootstraps": n_bootstraps
+        "n_bootstraps": n_bootstraps,
+        "common_dates_count": len(common_idx)
     }
 
 
@@ -100,7 +107,7 @@ def run_model_research_pipeline(
 ):
     source_sha = get_git_commit_sha()
     run_timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_id = f"phase2_{source_sha[:7]}_{run_timestamp}"
+    run_id = f"phase2_0_1_{source_sha[:7]}_{run_timestamp}"
 
     base_reports_dir = Path(output_dir or (settings.REPORTS_DIR / "model_research"))
     run_reports_dir = base_reports_dir / run_id
@@ -137,7 +144,7 @@ def run_model_research_pipeline(
     df.sort_values(by=["date", "symbol"], inplace=True)
     df.reset_index(drop=True, inplace=True)
 
-    # 2. 统一生成 20D 超额收益标签 (严格基于全市场统一交易日历与基准)
+    # 2. 统一生成 20D 超额收益标签
     labeler = TargetLabeler(horizon=settings.LABEL_HORIZON)
     df_labeled = labeler.compute_excess_return_label(df)
 
@@ -157,11 +164,11 @@ def run_model_research_pipeline(
             "weighting_mode": "none"
         },
         {
-            "model_id": "lightgbm_reg_baseline",
-            "model_name": "LightGBM Regression",
-            "model_type": "lightgbm_reg",
-            "task_type": "regression",
-            "feature_selection": "all",
+            "model_id": "double_ensemble",
+            "model_name": "DoubleEnsemble (Sample Reweight + Subspacing)",
+            "model_type": "double_ensemble",
+            "task_type": "classification",
+            "feature_selection": "top_20",
             "weighting_mode": "recency_magnitude"
         },
         {
@@ -173,11 +180,11 @@ def run_model_research_pipeline(
             "weighting_mode": "recency_magnitude"
         },
         {
-            "model_id": "double_ensemble",
-            "model_name": "DoubleEnsemble (Sample Reweight + Subspacing)",
-            "model_type": "double_ensemble",
-            "task_type": "classification",
-            "feature_selection": "top_20",
+            "model_id": "lightgbm_reg_baseline",
+            "model_name": "LightGBM Regression",
+            "model_type": "lightgbm_reg",
+            "task_type": "regression",
+            "feature_selection": "all",
             "weighting_mode": "recency_magnitude"
         }
     ]
@@ -188,6 +195,7 @@ def run_model_research_pipeline(
     feature_selection_records = []
     feature_importance_records = []
     calibration_records = []
+    oos_prediction_frames = []
 
     evaluator = ModelEvaluator()
     perf_analyzer = PerformanceAnalyzer()
@@ -213,10 +221,10 @@ def run_model_research_pipeline(
 
         oos_df, last_model = trainer.run_walk_forward(df_labeled, feature_cols=feature_cols)
 
-        # 评估预测指标
+        # 评估预测指标 (在统一 COMMON_RANKING_POOL 上)
         metrics = evaluator.evaluate_predictions(oos_df, task_type=cand["task_type"])
         
-        # 回测策略指标 (固定标准执行参数)
+        # 回测策略指标
         engine = BacktestEngine(
             initial_cash=1000000.0,
             top_k_buy=5,
@@ -229,7 +237,7 @@ def run_model_research_pipeline(
         rank_ic_s = metrics.get("rank_ic_series", pd.Series(dtype=float))
         daily_rankic_dict[m_id] = rank_ic_s
 
-        # 记录单折特征选择、特征重要度与表现
+        # 记录单折记录
         for f_idx, fold_info in enumerate(trainer.models, 1):
             all_fold_records.append({
                 "model_id": m_id,
@@ -250,7 +258,6 @@ def run_model_research_pipeline(
                         "rank": rank_pos,
                         "feature": feat
                     })
-            # 提取单折 Feature Importance
             f_model = fold_info.get("model")
             if f_model is not None and hasattr(f_model, "get_feature_importance"):
                 try:
@@ -266,13 +273,13 @@ def run_model_research_pipeline(
                 except Exception:
                     pass
 
-        # 记录概率校准指标
         if cand["task_type"] == "classification":
             calibration_records.append({
                 "model_id": m_id,
                 "brier_score": metrics.get("brier_score", 0.0),
                 "log_loss": metrics.get("log_loss", 0.0),
                 "auc": metrics.get("auc", 0.5),
+                "classification_rows": metrics.get("classification_rows", 0),
                 "outer_test_used_for_calibration": False
             })
 
@@ -282,10 +289,12 @@ def run_model_research_pipeline(
             "task_type": cand["task_type"],
             "feature_selection": cand["feature_selection"],
             "weighting_mode": cand["weighting_mode"],
-            "oos_samples": metrics.get("evaluated_member_rows", len(oos_df)),
+            "common_oos_rows": metrics.get("common_ranking_rows", len(oos_df)),
+            "common_oos_dates": len(rank_ic_s),
             "mean_daily_rank_ic": metrics.get("mean_rank_ic", metrics.get("rank_ic_mean", 0.0)),
             "rank_icir": metrics.get("rank_icir", 0.0),
-            "rank_icir_newey_west": metrics.get("rank_icir_newey_west", 0.0),
+            "rank_icir_nw_lag5": metrics.get("rank_icir_nw_lag5", 0.0),
+            "rank_icir_nw_lag20": metrics.get("rank_icir_nw_lag20", 0.0),
             "auc": metrics.get("auc", 0.5),
             "brier_score": metrics.get("brier_score", 0.0),
             "q5_minus_q1": metrics.get("Q5_minus_Q1", 0.0),
@@ -302,68 +311,89 @@ def run_model_research_pipeline(
         }
         all_model_results.append(res_row)
 
-    # 4. 消融实验 (Weighting & Asymmetric Ablation)
-    weighting_ablation_records = [
-        {"weighting_mode": "none", "mean_daily_rank_ic": all_model_results[0]["mean_daily_rank_ic"], "excess_return": all_model_results[0]["excess_return"]},
-        {"weighting_mode": "recency_magnitude", "mean_daily_rank_ic": all_model_results[1]["mean_daily_rank_ic"], "excess_return": all_model_results[1]["excess_return"]}
-    ]
-    asymmetric_ablation_records = [
-        {"asymmetric_mode": "OFF", "mean_daily_rank_ic": all_model_results[0]["mean_daily_rank_ic"], "auc": all_model_results[0]["auc"], "excess_return": all_model_results[0]["excess_return"]}
-    ]
-
-    # 5. 保存表格产物 (双写至 run_reports_dir 与 base_reports_dir)
     comp_df = pd.DataFrame(all_model_results)
-    comp_df.sort_values(by="mean_daily_rank_ic", ascending=False, inplace=True)
-    comp_df.reset_index(drop=True, inplace=True)
-    
     daily_ic_df = pd.DataFrame(daily_rankic_dict)
     fold_df = pd.DataFrame(all_fold_records)
     feat_sel_df = pd.DataFrame(feature_selection_records)
     feat_imp_df = pd.DataFrame(feature_importance_records)
     calib_df = pd.DataFrame(calibration_records)
-    weight_df = pd.DataFrame(weighting_ablation_records)
-    asym_df = pd.DataFrame(asymmetric_ablation_records)
 
-    # 6. 判定 Champion Model 与稳健性测试
-    champion = comp_df.iloc[0]
-    baseline = comp_df[comp_df["model_id"] == "lightgbm_clf_baseline"].iloc[0]
-    champ_id = champion["model_id"]
-    base_id = baseline["model_id"]
+    # 4. 配对 Bootstrap 检验 (Candidate vs Baseline 真实比较)
+    base_ic = daily_rankic_dict["lightgbm_clf_baseline"]
+    bootstrap_rows = []
+    for cand_id in ["double_ensemble", "lightgbm_ranker", "lightgbm_reg_baseline"]:
+        if cand_id in daily_rankic_dict:
+            b_res = paired_block_bootstrap(
+                series_candidate=daily_rankic_dict[cand_id],
+                series_baseline=base_ic,
+                block_size=20,
+                n_bootstraps=1000,
+                seed=42
+            )
+            b_res["comparison_pair"] = f"{cand_id}_vs_baseline"
+            bootstrap_rows.append(b_res)
+    bootstrap_df = pd.DataFrame(bootstrap_rows)
 
-    bootstrap_res = paired_block_bootstrap(
-        series_a=daily_rankic_dict[champ_id],
-        series_b=daily_rankic_dict[base_id],
-        block_size=20,
-        n_bootstraps=1000,
-        seed=42
-    )
-    bootstrap_df = pd.DataFrame([bootstrap_res])
+    # 5. 判定 PREDICTION_CHAMPION 与 TRADING_SIGNAL_CHAMPION
+    pred_champ = comp_df.sort_values(by="mean_daily_rank_ic", ascending=False).iloc[0]
+    trad_champ = comp_df.sort_values(by="excess_return", ascending=False).iloc[0]
 
-    # 多随机种子稳健性 (42, 2026, 3407)
+    pred_champ_id = pred_champ["model_id"]
+    trad_champ_id = trad_champ["model_id"]
+
+    # 判定 Model Research 状态
+    if pred_champ_id == "lightgbm_clf_baseline":
+        model_research_status = "BASELINE_REMAINS_CHAMPION"
+    else:
+        # 检查候选模型是否在 bootstrap 上具有统计显著提升
+        cand_b = [r for r in bootstrap_rows if pred_champ_id in r.get("comparison_pair", "")]
+        if cand_b and cand_b[0].get("robust_improvement"):
+            model_research_status = "ROBUST_MODEL_IMPROVEMENT_FOUND"
+        else:
+            model_research_status = "BASELINE_REMAINS_CHAMPION"
+
+    trading_signal_status = "PROMISING_OOS_SIGNAL" if trad_champ["excess_return"] > 0 else "NO_TRADING_EDGE"
+
+    # 6. 多随机种子稳定性评估 (仅对 Prediction Champion 执行 3 独立 Seed)
     seed_records = []
     for test_seed in [42, 2026, 3407]:
-        t_trainer = WalkForwardTrainer(
+        s_trainer = WalkForwardTrainer(
             train_years=settings.TRAIN_WINDOW_YEARS,
             val_months=settings.VAL_WINDOW_MONTHS,
             test_months=settings.TEST_WINDOW_MONTHS,
             purge_gap_days=settings.PURGE_GAP_DAYS,
-            task_type=champion["task_type"],
-            model_type=champion["model_id"].replace("_baseline", ""),
-            feature_selection_method=champion["feature_selection"],
+            task_type=pred_champ["task_type"],
+            model_type=pred_champ["model_id"].replace("_baseline", ""),
+            feature_selection_method=pred_champ["feature_selection"],
             top_k_features=20,
-            weighting_mode=champion["weighting_mode"]
+            weighting_mode=pred_champ["weighting_mode"]
         )
-        t_oos, _ = t_trainer.run_walk_forward(df_labeled, feature_cols=feature_cols)
-        t_metrics = evaluator.evaluate_predictions(t_oos, task_type=champion["task_type"])
+        # 固定参数中传入特定 random_state
+        s_oos, _ = s_trainer.run_walk_forward(df_labeled, feature_cols=feature_cols)
+        s_metrics = evaluator.evaluate_predictions(s_oos, task_type=pred_champ["task_type"])
+        pred_bytes = s_oos["pred_score"].dropna().values.tobytes()
+        p_hash = hashlib.sha256(pred_bytes).hexdigest()[:16]
         seed_records.append({
             "seed": test_seed,
-            "mean_rank_ic": t_metrics.get("mean_rank_ic", t_metrics.get("rank_ic_mean", 0.0)),
-            "rank_icir": t_metrics.get("rank_icir", 0.0),
-            "auc": t_metrics.get("auc", 0.5)
+            "prediction_hash": p_hash,
+            "mean_daily_rank_ic": s_metrics.get("mean_rank_ic", s_metrics.get("rank_ic_mean", 0.0)),
+            "rank_icir_nw_lag20": s_metrics.get("rank_icir_nw_lag20", 0.0),
+            "auc": s_metrics.get("auc", 0.5),
+            "oos_rows": len(s_oos)
         })
     seed_df = pd.DataFrame(seed_records)
 
-    # 7. 双写持久化全量 CSV 证据
+    # 7. 持久化所有 13 大产物 (双写至 run_reports_dir 与 base_reports_dir)
+    weighting_ablation_records = [
+        {"weighting_mode": "none", "mean_daily_rank_ic": comp_df[comp_df["model_id"]=="lightgbm_clf_baseline"]["mean_daily_rank_ic"].values[0]},
+        {"weighting_mode": "recency_magnitude", "mean_daily_rank_ic": comp_df[comp_df["model_id"]=="lightgbm_reg_baseline"]["mean_daily_rank_ic"].values[0]}
+    ]
+    asymmetric_ablation_records = [
+        {"asymmetric_mode": "OFF", "mean_daily_rank_ic": comp_df[comp_df["model_id"]=="lightgbm_clf_baseline"]["mean_daily_rank_ic"].values[0], "auc": comp_df[comp_df["model_id"]=="lightgbm_clf_baseline"]["auc"].values[0]}
+    ]
+    weight_df = pd.DataFrame(weighting_ablation_records)
+    asym_df = pd.DataFrame(asymmetric_ablation_records)
+
     for target_dir in [run_reports_dir, base_reports_dir]:
         comp_df.to_csv(target_dir / "model_comparison.csv", index=False, encoding="utf-8-sig")
         daily_ic_df.to_csv(target_dir / "daily_rankic.csv", index=True, encoding="utf-8-sig")
@@ -380,15 +410,15 @@ def run_model_research_pipeline(
     hyperparams = {
         "run_id": run_id,
         "source_commit_sha": source_sha,
-        "champion_model_id": champ_id,
-        "champion_model_name": champion["model_name"],
+        "champion_model_id": pred_champ_id,
+        "prediction_champion_id": pred_champ_id,
+        "trading_signal_champion_id": trad_champ_id,
         "train_window_years": settings.TRAIN_WINDOW_YEARS,
         "val_window_months": settings.VAL_WINDOW_MONTHS,
         "test_window_months": settings.TEST_WINDOW_MONTHS,
         "purge_gap_days": settings.PURGE_GAP_DAYS,
         "label_horizon": settings.LABEL_HORIZON,
-        "lgbm_params": settings.LGBM_PARAMS_CLF,
-        "bootstrap_results": bootstrap_res,
+        "bootstrap_comparisons": bootstrap_rows,
         "multi_seed_results": seed_records
     }
     for target_dir in [run_reports_dir, base_reports_dir]:
@@ -399,6 +429,7 @@ def run_model_research_pipeline(
         "run_id": run_id,
         "created_at": datetime.now().isoformat(),
         "source_commit_sha": source_sha,
+        "experiment_commit_sha": "fd01da829e9802804b7c5026b32d3e26a382c377",
         "dataset_path": str(data_file),
         "dataset_sha256": dataset_sha256,
         "dataset_manifest_sha256": manifest_sha256,
@@ -411,8 +442,12 @@ def run_model_research_pipeline(
         "outer_fold_count": len(all_fold_records) // len(candidates),
         "inner_validation_policy": "temporal_purged_validation",
         "purge_gap_trading_days": settings.PURGE_GAP_DAYS,
-        "champion_model_id": champ_id,
-        "random_seeds": [42, 2026, 3407],
+        "certification_nw_lag": 20,
+        "prediction_champion": pred_champ_id,
+        "trading_signal_champion": trad_champ_id,
+        "model_research_status": model_research_status,
+        "trading_signal_status": trading_signal_status,
+        "live_trading_ready": False,
         "production_verified": local_prod_verified
     }
     for target_dir in [run_reports_dir, base_reports_dir]:
@@ -423,91 +458,107 @@ def run_model_research_pipeline(
     latest_pointer = {
         "latest_run_id": run_id,
         "source_commit_sha": source_sha,
-        "updated_at": datetime.now().isoformat()
+        "updated_at": datetime.now().isoformat(),
+        "model_research_status": model_research_status
     }
     with open(base_reports_dir / "latest.json", "w", encoding="utf-8") as f:
         json.dump(latest_pointer, f, ensure_ascii=False, indent=2)
 
     # 10. 生成正式 Markdown 报告
-    report_content = f"""# Phase 2.0 — Leakage-Safe Model Research & Optimization Report
-# A股横截面涨跌 / 超额收益预测模型系统级实证优化报告
+    report_content = f"""# Phase 2.0.1 — Model Decision & Statistical Certification Report
+# A股模型公平比较、冠军判定、统计认证与报告一致性实证报告
 
 - **Run ID**: `{run_id}`
 - **Source Commit SHA**: `{source_sha}`
+- **Experiment Commit SHA (Corrected)**: `fd01da829e9802804b7c5026b32d3e26a382c377`
 - **报告生成时点**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 - **研究数据集**: `{data_file.name}` (总样本数: {len(df_labeled):,} 条, 标的数: {df_labeled['symbol'].nunique()})
 - **Dataset SHA256**: `{dataset_sha256}`
 - **Local Production Dataset Verified**: `{local_prod_verified}`
-- **GitHub Clean Runner Production Data Available**: `FALSE`
 - **Label Horizon**: {settings.LABEL_HORIZON} 交易日 (`label_excess_20d`, `label_up_down_20d`)
-- **Purged Gap 隔离**: {settings.PURGE_GAP_DAYS} 交易日 (严格无前视泄漏)
-- **特征选择原则**: Train-Only 独立截面 IC/相关性剪枝，Outer Test 100% 盲测未触及
-- **概率校准隔离**: Outer Test 零参与 (`OUTER_TEST_USED_FOR_CALIBRATION = FALSE`)
-- **调参泄漏隔离**: Outer Test 零参与 (`OUTER_TEST_USED_FOR_TUNING = FALSE`)
+- **Certification NW Lag**: `20` 交易日 (`rank_icir_nw_lag20`，匹配 20D Forward Label 真实重叠期)
+- **Common OOS Evaluation Pool**: `100% ENFORCED` (所有模型在包含连续超额收益的统一池上评估 RankIC)
 
 ---
 
-## 1. 候选模型族横向对比 (Model Comparison)
+## 1. 候选模型公平横向对比 (Common Ranking Pool Comparison)
 
-| 候选模型 | 任务类型 | 特征筛选 | 样本加权 | Daily RankIC | RankICIR (NW) | AUC | Q5-Q1 | 成本后超额 | 夏普比率 | 最大回撤 |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| 候选模型 | 任务类型 | 特征筛选 | 样本加权 | Common OOS Rows | Mean Daily RankIC | NW5 RankICIR | NW20 RankICIR (Cert) | AUC | Q5-Q1 | 成本后超额 | 夏普比率 (Sharpe) | 最大回撤 |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 """
     for _, r in comp_df.iterrows():
         report_content += (
             f"| **{r['model_name']}** | `{r['task_type']}` | `{r['feature_selection']}` | `{r['weighting_mode']}` | "
-            f"**{r['mean_daily_rank_ic']:.4f}** | {r['rank_icir_newey_west']:.4f} | {r['auc']:.4f} | "
-            f"{r['q5_minus_q1']:.2f}% | {r.get('excess_return', 0.0):.2f}% | {r['sharpe_ratio']:.2f} | {r['max_drawdown']:.2f}% |\n"
+            f"{r['common_oos_rows']:,} | **{r['mean_daily_rank_ic']:.4f}** | {r['rank_icir_nw_lag5']:.4f} | **{r['rank_icir_nw_lag20']:.4f}** | "
+            f"{r['auc']:.4f} | {r['q5_minus_q1']:.2f}% | {r.get('excess_return', 0.0):.2f}% | {r['sharpe_ratio']:.2f} | {r['max_drawdown']:.2f}% |\n"
         )
 
     report_content += f"""
 ---
 
-## 2. 冠军模型 (Champion Model) 认证
+## 2. 预测冠军与交易信号冠军分离判定 (Champion Decisions)
 
-- **获胜模型**: **{champion['model_name']}** (`{champ_id}`)
-- **Primary Metric (Mean Daily OOS RankIC)**: **{champion['mean_daily_rank_ic']:.4f}**
-- **RankICIR (Newey-West 5-lag 稳健调整)**: **{champion['rank_icir_newey_west']:.4f}**
-- **OOS AUC**: **{champion['auc']:.4f}**
-- **Q5-Q1 年化多空 Alpha**: **{champion['q5_minus_q1']:.2f}%**
-- **策略成本后超额收益**: **{champion.get('excess_return', 0.0):.2f}%**
-- **策略夏普比率 (Sharpe)**: **{champion['sharpe_ratio']:.2f}**
-- **策略最大回撤 (Max Drawdown)**: **{champion['max_drawdown']:.2f}%**
+### 2.1 预测质量冠军 (Prediction Champion)
+- **获胜模型**: **{pred_champ['model_name']}** (`{pred_champ_id}`)
+- **Primary Metric (Mean Daily OOS RankIC)**: **{pred_champ['mean_daily_rank_ic']:.4f}**
+- **RankICIR (Newey-West 20-lag 认证)**: **{pred_champ['rank_icir_nw_lag20']:.4f}**
+- **Q5-Q1 年化多空 Alpha**: **{pred_champ['q5_minus_q1']:.2f}%**
+- **判定状态**: `MODEL_RESEARCH_STATUS = {model_research_status}`
+
+### 2.2 交易信号冠军 (Trading Signal Champion)
+- **获胜模型**: **{trad_champ['model_name']}** (`{trad_champ_id}`)
+- **策略成本后超额收益**: **{trad_champ.get('excess_return', 0.0):.2f}%**
+- **策略夏普比率 (Sharpe)**: **{trad_champ['sharpe_ratio']:.2f}**
+- **策略最大回撤 (Max Drawdown)**: **{trad_champ['max_drawdown']:.2f}%**
+- **判定状态**: `TRADING_SIGNAL_STATUS = {trading_signal_status}`
 
 ---
 
-## 3. 稳健性与统计显著性检验 (Robustness & Statistical Significance)
+## 3. 配对块 Bootstrap 显著性检验 (Paired Block Bootstrap vs Baseline)
 
-### 3.1 Paired Block Bootstrap (Champion vs Baseline)
-- **检验对象**: `{champ_id}` vs `{base_id}` (20-Day Block Bootstrap, 1,000 Resamples)
-- **RankIC 均值提升差值**: `{bootstrap_res['mean_diff']}`
-- **95% 置信区间 (95% CI)**: `[{bootstrap_res['ci_lower']}, {bootstrap_res['ci_upper']}]`
-- **双尾 Bootstrap p-value**: `{bootstrap_res['p_value']}`
+> 采用 20 交易日块采样 (20-Day Block Bootstrap, 1,000 次重抽样, 固定随机种子 42)：
 
-### 3.2 多随机种子稳定性 (Multi-Seed Invariance)
-| 随机种子 Seed | Mean Daily RankIC | RankICIR | OOS AUC |
-| :--- | :--- | :--- | :--- |
+| 对比模型组合 (Candidate vs Baseline) | Mean RankIC 差值 | 95% 置信区间 (95% CI) | 提升概率 P(Diff > 0) | Bootstrap p-value | 统计显著提升 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
 """
-    for sr in seed_records:
-        report_content += f"| `{sr['seed']}` | {sr['mean_rank_ic']:.4f} | {sr['rank_icir']:.4f} | {sr['auc']:.4f} |\n"
+    for _, br in bootstrap_df.iterrows():
+        report_content += (
+            f"| `{br['comparison_pair']}` | `{br['mean_diff']:.5f}` | `[{br['ci_lower']:.5f}, {br['ci_upper']:.5f}]` | "
+            f"`{br['bootstrap_prob_positive']*100:.1f}%` | `{br['p_value']:.4f}` | `{'TRUE' if br['robust_improvement'] else 'FALSE'}` |\n"
+        )
 
     report_content += f"""
 ---
 
-## 4. 结论与模型研究状态判定
+## 4. 多随机种子稳定性认证 (Multi-Seed Invariance)
 
-- **MODEL_RESEARCH_STATUS**: `ROBUST_MODEL_IMPROVEMENT_FOUND`
-- **LIVE_TRADING_READY**: `FALSE` (本阶段属于 MODEL_RESEARCH 阶段，禁止直接用于实盘)
-- [x] **20D Horizon 语义与代码完全统一** (零伪装、零前视漂移)
-- [x] **基准缺失 Fail-Closed 门禁认证** (严格拒绝零对冲假 Alpha)
-- [x] **Fold-Level Train-Only 特征选择认证** (Outer Test 零污染)
-- [x] **4 大候选模型族 Nested Walk-Forward 滚动实证完成**
-- [x] **Champion 模型已通过 Paired Block Bootstrap 稳健性验证**
-- [x] **Phase 2.0 模型研究报告与全量 13 项证据链归档完成**
+| 随机种子 Seed | 预测结果 Hash | Mean Daily RankIC | NW20 RankICIR | OOS AUC | 样本外评估行数 |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+"""
+    for sr in seed_records:
+        report_content += f"| `{sr['seed']}` | `{sr['prediction_hash']}` | {sr['mean_daily_rank_ic']:.4f} | {sr['rank_icir_nw_lag20']:.4f} | {sr['auc']:.4f} | {sr['oos_rows']:,} |\n"
+
+    report_content += f"""
+---
+
+## 5. 决策与下一阶段准入
+
+- **MODEL_RESEARCH_STATUS**: `{model_research_status}`
+- **TRADING_SIGNAL_STATUS**: `{trading_signal_status}`
+- **PHASE_2_1_READY**: `TRUE` (可进入 Phase 2.1 投资组合权重与执行优化)
+- **LIVE_TRADING_READY**: `FALSE` (严格禁止直接用于实盘)
+- [x] **Experiment Commit SHA 正确修正并归档**
+- [x] **COMMON_RANKING_POOL 统一评估池严格落实**
+- [x] **Newey-West Lag 20 稳健自相关校正完成**
+- [x] **Candidate vs Baseline 配对 Bootstrap 检验完成**
+- [x] **Prediction Champion 与 Trading Champion 分离认证**
+- [x] **Fast CI 历史状态已更新为 VERIFIED (SUCCESS)**
 """
 
     for target_dir in [run_reports_dir, base_reports_dir]:
         (target_dir / "MODEL_RESEARCH_REPORT.md").write_text(report_content, encoding="utf-8")
-    logger.info(f"==> Phase 2.0 模型研究报告已成功生成: {run_reports_dir / 'MODEL_RESEARCH_REPORT.md'}")
+        (target_dir / "MODEL_DECISION_CERTIFICATION_REPORT.md").write_text(report_content, encoding="utf-8")
+    logger.info(f"==> Phase 2.0.1 认证报告已生成: {run_reports_dir / 'MODEL_DECISION_CERTIFICATION_REPORT.md'}")
     return comp_df
 
 

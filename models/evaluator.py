@@ -54,10 +54,8 @@ class ModelEvaluator:
     def _evaluate_classification(self, oos_df: pd.DataFrame, label_col: str = settings.LABEL_COLUMN_CLF) -> Dict[str, Any]:
         """
         分类模式评估 (涨跌二分类)：
-        1. 严格仅在 in_universe == True 且标签与概率均有效的样本上评估
-        2. AUC-ROC (核心)、Accuracy、Precision、Recall、F1、混淆矩阵
-        3. Brier Score 与对数损失 (概率质量)
-        4. Q1 ~ Q5 分层单调性 (基于概率排序，用连续超额收益标签衡量真实分层收益)
+        1. 分类专属指标 (AUC, Accuracy, F1, Brier, LogLoss) 仅在二值标签有效的 CLASSIFICATION_METRIC_POOL 评估
+        2. 排序与经济指标 (Mean Daily RankIC, NW20 RankICIR, Q1~Q5) 在完整 COMMON_RANKING_POOL 评估
         """
         from sklearn.metrics import (
             roc_auc_score, accuracy_score, precision_score, recall_score,
@@ -66,78 +64,65 @@ class ModelEvaluator:
 
         logger.info("开始计算分类模型样本外评估指标 (AUC / Accuracy / F1 / Brier ...)...")
         oos_total_rows = len(oos_df)
-        df_valid = oos_df[oos_df[label_col].notna() & oos_df["pred_score"].notna()].copy()
+        oos_df_valid = oos_df[oos_df["pred_score"].notna()].copy()
 
         # 过滤未纳入股票池与严格 ST 排除行
-        if "excluded_from_training" in df_valid.columns:
-            not_excl = ~df_valid["excluded_from_training"].fillna(False).astype(bool)
-            df_valid = df_valid[not_excl].copy()
+        if "excluded_from_training" in oos_df_valid.columns:
+            not_excl = ~oos_df_valid["excluded_from_training"].fillna(False).astype(bool)
+            oos_df_valid = oos_df_valid[not_excl].copy()
 
-        if "in_universe" in df_valid.columns:
-            in_univ_mask = df_valid["in_universe"].fillna(False).astype(bool)
-            df = df_valid[in_univ_mask].copy()
-        else:
-            df = df_valid.copy()
+        if "in_universe" in oos_df_valid.columns:
+            in_univ_mask = oos_df_valid["in_universe"].fillna(False).astype(bool)
+            oos_df_valid = oos_df_valid[in_univ_mask].copy()
 
-        evaluated_member_rows = len(df)
+        # 连续超额标签字段
+        cont_col = settings.LABEL_COLUMN if settings.LABEL_COLUMN in oos_df.columns else None
+        if cont_col is None:
+            cand_cols = [c for c in oos_df.columns if "excess" in c and c != label_col]
+            cont_col = cand_cols[0] if cand_cols else None
+
+        # 1. CLASSIFICATION_METRIC_POOL
+        df_clf = oos_df_valid[oos_df_valid[label_col].notna()].copy()
+        clf_member_rows = len(df_clf)
+
+        # 2. COMMON_RANKING_POOL
+        df_ranking = oos_df_valid[oos_df_valid[cont_col].notna()].copy() if cont_col else oos_df_valid.copy()
+        evaluated_member_rows = len(df_ranking)
         oos_excluded_nonmember_rows = oos_total_rows - evaluated_member_rows
         evaluation_coverage_ratio = round(evaluated_member_rows / max(oos_total_rows, 1), 4)
 
-        if len(df) == 0:
-            return {
-                "task_type": "classification",
-                "auc": 0.0, "accuracy": 0.0, "precision": 0.0, "recall": 0.0,
-                "f1": 0.0, "brier_score": 0.0, "log_loss": 0.0,
-                "confusion_matrix": [[0, 0], [0, 0]],
-                "positive_rate": 0.0, "evaluated_member_rows": 0,
-                "oos_total_rows": oos_total_rows,
-                "oos_excluded_nonmember_rows": oos_excluded_nonmember_rows,
-                "evaluation_coverage_ratio": evaluation_coverage_ratio,
-                "quantile_returns": {}, "Q5_minus_Q1": 0.0,
-                "monotonicity_score": 0.0, "quantile_observation_count": 0
-            }
+        if len(df_clf) == 0:
+            auc, accuracy, precision, recall, f1 = 0.5, 0.0, 0.0, 0.0, 0.0
+            cm, brier, logloss, positive_rate = [[0, 0], [0, 0]], 0.0, 0.0, 0.0
+        else:
+            y_true = df_clf[label_col].astype(int).values
+            y_prob = df_clf["pred_score"].values
+            try:
+                auc = float(roc_auc_score(y_true, y_prob)) if len(np.unique(y_true)) > 1 else 0.5
+            except Exception:
+                auc = 0.5
+            y_pred = (y_prob >= 0.5).astype(int)
+            accuracy = float(accuracy_score(y_true, y_pred))
+            precision = float(precision_score(y_true, y_pred, zero_division=0))
+            recall = float(recall_score(y_true, y_pred, zero_division=0))
+            f1 = float(f1_score(y_true, y_pred, zero_division=0))
+            cm = confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
+            brier = float(brier_score_loss(y_true, y_prob))
+            y_prob_clipped = np.clip(y_prob, 1e-7, 1 - 1e-7)
+            try:
+                logloss = float(log_loss(y_true, y_prob_clipped))
+            except Exception:
+                logloss = 0.0
+            positive_rate = float(y_true.mean())
 
-        y_true = df[label_col].astype(int).values
-        y_prob = df["pred_score"].values
+        # 分层单调性 (在 COMMON_RANKING_POOL 上评估)
+        quantile_info = self._compute_quantile_returns(df_ranking, label_col=cont_col or label_col, n_groups=5)
 
-        # AUC (处理单类别样本边缘情况)
-        try:
-            auc = float(roc_auc_score(y_true, y_prob)) if len(np.unique(y_true)) > 1 else 0.5
-        except Exception:
-            auc = 0.5
-
-        # 0.5 阈值二值化预测
-        y_pred = (y_prob >= 0.5).astype(int)
-
-        accuracy = float(accuracy_score(y_true, y_pred))
-        precision = float(precision_score(y_true, y_pred, zero_division=0))
-        recall = float(recall_score(y_true, y_pred, zero_division=0))
-        f1 = float(f1_score(y_true, y_pred, zero_division=0))
-        cm = confusion_matrix(y_true, y_pred, labels=[0, 1]).tolist()
-        brier = float(brier_score_loss(y_true, y_prob))
-
-        # 对数损失 (概率截断避免 log(0))
-        y_prob_clipped = np.clip(y_prob, 1e-7, 1 - 1e-7)
-        try:
-            logloss = float(log_loss(y_true, y_prob_clipped))
-        except Exception:
-            logloss = 0.0
-
-        positive_rate = float(y_true.mean())
-
-        # 分层单调性 (按概率排序，用连续超额收益标签衡量真实分层收益)
-        cont_col = settings.LABEL_COLUMN if settings.LABEL_COLUMN in df.columns else None
-        if cont_col is None:
-            cand_cols = [c for c in df.columns if "excess" in c and c != label_col]
-            cont_col = cand_cols[0] if cand_cols else None
-
-        quantile_info = self._compute_quantile_returns(df, label_col=cont_col or label_col, n_groups=5)
-
-        # 计算每日横截面 RankIC 与 RankICIR
+        # 计算每日横截面 RankIC 与 RankICIR (在 COMMON_RANKING_POOL 上评估)
         daily_rank_ic_list = []
         rank_ic_dates = []
         if cont_col is not None:
-            for dt, group in df.groupby("date"):
+            for dt, group in df_ranking.groupby("date"):
                 valid_g = group[group[cont_col].notna() & group["pred_score"].notna()]
                 if len(valid_g) >= 3:
                     s_ic = stats.spearmanr(valid_g["pred_score"], valid_g[cont_col])[0]
@@ -150,8 +135,10 @@ class ModelEvaluator:
         rank_ic_std = float(rank_ic_series.std()) if len(rank_ic_series) > 0 else 1.0
         annual_factor = np.sqrt(242.0 / settings.LABEL_HORIZON)
         rank_icir = (rank_ic_mean / (rank_ic_std + 1e-8)) * annual_factor
-        std_nw = self._compute_newey_west_std(rank_ic_series, max_lag=5)
-        rank_icir_newey_west = (rank_ic_mean / (std_nw + 1e-8)) * annual_factor
+        std_nw5 = self._compute_newey_west_std(rank_ic_series, max_lag=5)
+        std_nw20 = self._compute_newey_west_std(rank_ic_series, max_lag=20)
+        rank_icir_nw_lag5 = (rank_ic_mean / (std_nw5 + 1e-8)) * annual_factor
+        rank_icir_nw_lag20 = (rank_ic_mean / (std_nw20 + 1e-8)) * annual_factor
 
         metrics = {
             "task_type": "classification",
@@ -165,6 +152,8 @@ class ModelEvaluator:
             "confusion_matrix": cm,
             "positive_rate": round(positive_rate, 4),
             "evaluated_member_rows": evaluated_member_rows,
+            "common_ranking_rows": evaluated_member_rows,
+            "classification_rows": clf_member_rows,
             "oos_total_rows": oos_total_rows,
             "oos_excluded_nonmember_rows": oos_excluded_nonmember_rows,
             "evaluation_coverage_ratio": evaluation_coverage_ratio,
@@ -176,15 +165,17 @@ class ModelEvaluator:
             "mean_rank_ic": round(rank_ic_mean, 4),
             "rank_ic_std": round(rank_ic_std, 4),
             "rank_icir": round(rank_icir, 4),
-            "rank_icir_newey_west": round(rank_icir_newey_west, 4),
+            "rank_icir_newey_west": round(rank_icir_nw_lag20, 4),
+            "rank_icir_nw_lag5": round(rank_icir_nw_lag5, 4),
+            "rank_icir_nw_lag20": round(rank_icir_nw_lag20, 4),
             "rank_ic_series": rank_ic_series
         }
 
         logger.info(
             f"分类 OOS 评估: AUC={metrics['auc']} | RankIC={metrics['mean_rank_ic']} | "
-            f"RankICIR(NW)={metrics['rank_icir_newey_west']} | Accuracy={metrics['accuracy']} | "
+            f"RankICIR(NW20)={metrics['rank_icir_nw_lag20']} | Accuracy={metrics['accuracy']} | "
             f"F1={metrics['f1']} | Brier={metrics['brier_score']} | "
-            f"上涨样本占比={positive_rate*100:.1f}% | 评估行数={evaluated_member_rows}/{oos_total_rows}"
+            f"通用池评估行数={evaluated_member_rows}/{oos_total_rows}"
         )
         return metrics
 
@@ -237,14 +228,16 @@ class ModelEvaluator:
         rank_ic_mean = float(rank_ic_series.mean()) if len(rank_ic_series) > 0 else 0.0
         rank_ic_std = float(rank_ic_series.std()) if len(rank_ic_series) > 0 else 1.0
 
-        # 年化 ICIR 与 RankICIR (以 5 日预测为周期折算)
+        # 年化 ICIR 与 RankICIR
         annual_factor = np.sqrt(242.0 / settings.LABEL_HORIZON)
         icir = (ic_mean / (ic_std + 1e-8)) * annual_factor
         rank_icir = (rank_ic_mean / (rank_ic_std + 1e-8)) * annual_factor
 
-        # Newey-West 自相关调整 RankICIR (P1-4 Lag=5)
-        std_nw = self._compute_newey_west_std(rank_ic_series, max_lag=5)
-        rank_icir_newey_west = (rank_ic_mean / (std_nw + 1e-8)) * annual_factor
+        # Newey-West 自相关调整 RankICIR (Lag 5 & Lag 20)
+        std_nw5 = self._compute_newey_west_std(rank_ic_series, max_lag=5)
+        std_nw20 = self._compute_newey_west_std(rank_ic_series, max_lag=20)
+        rank_icir_nw_lag5 = (rank_ic_mean / (std_nw5 + 1e-8)) * annual_factor
+        rank_icir_nw_lag20 = (rank_ic_mean / (std_nw20 + 1e-8)) * annual_factor
 
         ic_win_rate = float((ic_series > 0).mean() * 100.0) if len(ic_series) > 0 else 0.0
         rank_ic_win_rate = float((rank_ic_series > 0).mean() * 100.0) if len(rank_ic_series) > 0 else 0.0
@@ -253,7 +246,7 @@ class ModelEvaluator:
         rolling_rank_ic_20 = float(rank_ic_series.rolling(20).mean().dropna().mean()) if len(rank_ic_series) >= 20 else rank_ic_mean
         rolling_rank_ic_60 = float(rank_ic_series.rolling(60).mean().dropna().mean()) if len(rank_ic_series) >= 60 else rank_ic_mean
 
-        # 5 分层组合收益 (基于未来超额收益标签 P0-6, P1-1)
+        # 5 分层组合收益
         quantile_info = self._compute_quantile_returns(df, label_col=label_col, n_groups=5)
 
         metrics = {
@@ -266,7 +259,9 @@ class ModelEvaluator:
             "rank_ic_std": round(rank_ic_std, 4),
             "icir": round(float(icir), 4),
             "rank_icir": round(float(rank_icir), 4),
-            "rank_icir_newey_west": round(float(rank_icir_newey_west), 4),
+            "rank_icir_newey_west": round(float(rank_icir_nw_lag20), 4),
+            "rank_icir_nw_lag5": round(float(rank_icir_nw_lag5), 4),
+            "rank_icir_nw_lag20": round(float(rank_icir_nw_lag20), 4),
             "ic_win_rate": round(ic_win_rate, 2),
             "rank_ic_win_rate": round(rank_ic_win_rate, 2),
             "rolling_rank_ic_20d": round(rolling_rank_ic_20, 4),
@@ -274,6 +269,7 @@ class ModelEvaluator:
             "total_evaluated_days": len(dates),
             "oos_total_rows": oos_total_rows,
             "evaluated_member_rows": evaluated_member_rows,
+            "common_ranking_rows": evaluated_member_rows,
             "oos_excluded_nonmember_rows": oos_excluded_nonmember_rows,
             "evaluation_coverage_ratio": evaluation_coverage_ratio,
             "quantile_returns": quantile_info["annualized_arithmetic_forward_excess_return"],
@@ -287,7 +283,7 @@ class ModelEvaluator:
         logger.info(
             f"OOS 评估结果: Mean IC={metrics['ic_mean']} | "
             f"Mean RankIC={metrics['rank_ic_mean']} | "
-            f"RankICIR={metrics['rank_icir']} (Newey-West: {metrics['rank_icir_newey_west']}) | "
+            f"RankICIR(NW20)={metrics['rank_icir_nw_lag20']} | "
             f"RankIC>0 胜率={metrics['rank_ic_win_rate']}% | 评估成分股行数={evaluated_member_rows}/{oos_total_rows}"
         )
         return metrics

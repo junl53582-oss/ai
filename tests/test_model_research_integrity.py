@@ -321,7 +321,8 @@ def test_model_manifest_contains_source_sha():
     if manifest_file.exists():
         import json
         data = json.loads(manifest_file.read_text(encoding="utf-8"))
-        assert "champion_model_id" in data
+        assert "source_commit_sha" in data
+        assert ("prediction_champion_id" in data or "champion_model_id" in data)
 
 
 # 21. source change invalidates experiment
