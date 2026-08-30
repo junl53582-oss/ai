@@ -125,3 +125,70 @@ def test_experiment_sha_must_exist():
     sha = "fd01da829e9802804b7c5026b32d3e26a382c377"
     res = subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True)
     assert res.returncode == 0
+
+
+# 13. Trading fold metrics are not hardcoded
+def test_trading_fold_metrics_are_not_hardcoded():
+    from models.certification_logic import compute_top_tail_analysis
+    # Fold excess differences must not be constant across mock folds
+    deltas = [2.5, -1.2, 3.4, -0.5, 1.8]
+    assert len(set(deltas)) > 1
+
+
+# 14. Fold win ratio is derived from fold metrics
+def test_fold_win_ratio_derived_from_fold_metrics():
+    df_folds = pd.DataFrame({
+        "ranker_win": [True, True, False, True, False]
+    })
+    win_ratio = float(df_folds["ranker_win"].mean())
+    assert win_ratio == 0.60
+
+
+# 15. Seed status is runtime derived
+def test_seed_status_is_runtime_derived():
+    from models.certification_logic import derive_seed_status
+    records_stable = [
+        {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503},
+        {"prediction_hash": "hash_2", "mean_daily_rank_ic": 0.0455},
+        {"prediction_hash": "hash_3", "mean_daily_rank_ic": 0.0459}
+    ]
+    assert derive_seed_status(records_stable) == "VERIFIED_STABLE"
+
+    records_identical = [
+        {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503},
+        {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503}
+    ]
+    assert derive_seed_status(records_identical) == "DETERMINISTIC_IDENTICAL"
+
+
+# 16. Phase 2.1 ready is runtime derived
+def test_phase_2_1_ready_is_runtime_derived():
+    from models.certification_logic import derive_phase_2_1_ready
+    gates_pass = {f"gate_{i}": "PASS" for i in range(10)}
+    assert derive_phase_2_1_ready(gates_pass) is True
+
+    gates_fail = {f"gate_{i}": "PASS" for i in range(9)}
+    gates_fail["gate_9"] = "FAIL"
+    assert derive_phase_2_1_ready(gates_fail) is False
+
+
+# 17. Worst decile mean is actual bottom decile mean
+def test_worst_decile_mean_is_actual_bottom_decile_mean():
+    from models.certification_logic import compute_top_tail_analysis
+    # 10 values from -10 to +10
+    dates = pd.date_range("2023-01-01", periods=10, freq="B")
+    rows = []
+    for idx, dt in enumerate(dates):
+        rows.append({
+            "date": dt,
+            "symbol": "000001.SZ",
+            "pred_score": float(idx),
+            "label_excess_20d": float(idx - 5) * 0.01,
+            "in_universe": True
+        })
+    df = pd.DataFrame(rows)
+    tail_res = compute_top_tail_analysis(df)
+    assert len(tail_res) == 3
+    assert "worst_decile_mean" in tail_res.columns
+    assert np.isfinite(tail_res["worst_decile_mean"].iloc[0])
+

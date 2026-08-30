@@ -141,9 +141,17 @@ class LightGBMQuantModel:
 
             fit_kwargs = {
                 "sample_weight": sample_weight,
-                "eval_set": eval_set,
                 "callbacks": callbacks
             }
+            if eval_set is not None and len(eval_set) > 0:
+                import inspect
+                fit_sig = inspect.signature(self.model.fit)
+                if "eval_X" in fit_sig.parameters and "eval_y" in fit_sig.parameters:
+                    fit_kwargs["eval_X"] = eval_set[0][0]
+                    fit_kwargs["eval_y"] = eval_set[0][1]
+                else:
+                    fit_kwargs["eval_set"] = eval_set
+
             if train_group is not None:
                 fit_kwargs["group"] = train_group
             if eval_group is not None:
