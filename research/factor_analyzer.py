@@ -563,11 +563,11 @@ class FactorResearchEngine:
         tree_hash = None
         is_clean = False
         try:
-            r_commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True)
+            r_commit = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, check=True, timeout=5)
             git_commit = r_commit.stdout.strip()
-            r_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], capture_output=True, text=True, check=True)
+            r_tree = subprocess.run(["git", "rev-parse", "HEAD^{tree}"], capture_output=True, text=True, check=True, timeout=5)
             tree_hash = r_tree.stdout.strip()
-            r_status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True)
+            r_status = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True, check=True, timeout=5)
             is_clean = (len(r_status.stdout.strip()) == 0)
         except Exception as e:
             logger.debug(f"提取 Git 信息失败: {e}")
