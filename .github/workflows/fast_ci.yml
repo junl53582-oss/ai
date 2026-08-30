@@ -42,7 +42,14 @@ jobs:
 
       - name: Core Fast Tests
         run: |
-          python -m pytest -q tests/test_factor_research.py tests/test_pit_state_integrity.py tests/test_evidence_integrity.py tests/test_execution_safety.py -m "not slow and not production"
+          python -m pytest -q \
+            tests/test_factor_research.py \
+            tests/test_pit_state_integrity.py \
+            tests/test_evidence_integrity.py \
+            tests/test_execution_safety.py \
+            tests/test_no_leakage.py \
+            tests/test_neutralization_parity.py \
+            -m "not slow and not integration and not production"
 
       - name: Dataset Schema Gate
         run: |
