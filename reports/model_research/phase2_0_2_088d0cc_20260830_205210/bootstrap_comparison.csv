@@ -1,0 +1,4 @@
+﻿comparison_pair,mean_diff,ci_lower,ci_upper,bootstrap_prob_positive,bootstrap_two_sided_tail_probability,bootstrap_p_like,robust_improvement,block_size,n_bootstraps,common_dates_count
+double_ensemble_vs_lightgbm_clf_baseline,-0.01989,-0.03911,0.00123,0.038,0.076,0.076,False,20,1000,744
+lightgbm_ranker_vs_lightgbm_clf_baseline,-0.01238,-0.03386,0.01084,0.149,0.298,0.298,False,20,1000,744
+lightgbm_reg_baseline_vs_lightgbm_clf_baseline,-0.03081,-0.06746,0.00865,0.082,0.164,0.164,False,20,1000,744

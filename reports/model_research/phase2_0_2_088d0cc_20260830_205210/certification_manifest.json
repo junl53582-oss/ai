@@ -1,0 +1,11 @@
+{
+  "run_id": "phase2_0_2_088d0cc_20260830_205210",
+  "created_at": "2026-08-30T21:22:26.199191",
+  "source_commit_sha": "088d0cce07967487a3692c8fb77675f6f78ae155",
+  "dataset_path": "data_storage\\research\\factor_matrix_300.parquet",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "manifest_sha256": "0186efebe3a8fe4645e9d945aca336043d346a6187e86213d9e38130e9895c98",
+  "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
+  "label_horizon": 20,
+  "common_oos_dates": 744,
+  "common_ranking_rows": 

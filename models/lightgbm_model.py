@@ -28,17 +28,24 @@ class LightGBMQuantModel:
         params: Optional[Dict[str, Any]] = None,
         model_dir: Optional[Path] = None,
         task_type: str = settings.TASK_TYPE,
-        use_asymmetric_loss: bool = False
+        use_asymmetric_loss: bool = False,
+        random_state: Optional[int] = None
     ):
         self.task_type = task_type
         self.use_asymmetric_loss = use_asymmetric_loss
         # 分类模式使用分类参数，回归模式使用回归参数
         if params is not None:
-            self.params = params
+            self.params = params.copy()
         elif task_type == "classification":
             self.params = settings.LGBM_PARAMS_CLF.copy()
         else:
             self.params = settings.LGBM_PARAMS.copy()
+
+        self.random_state = int(random_state) if random_state is not None else int(self.params.get("random_state", 42))
+        self.params["random_state"] = self.random_state
+        self.params["feature_fraction_seed"] = self.random_state
+        self.params["bagging_seed"] = self.random_state
+        self.params["data_random_seed"] = self.random_state
         self.model_dir = model_dir or settings.MODELS_DIR
         self.model_dir.mkdir(parents=True, exist_ok=True)
         self.model = None

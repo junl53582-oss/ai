@@ -58,11 +58,11 @@ def test_rankic_uses_continuous_label_excess_20d(synthetic_oos_df):
     assert np.isfinite(res["mean_rank_ic"])
 
 
-# 4. Bootstrap cannot compare model to itself
+# 4. Bootstrap cannot compare model to itself (must raise ValueError)
 def test_bootstrap_cannot_compare_model_to_itself():
     s = pd.Series(np.random.normal(0.05, 0.02, 100), index=pd.date_range("2023-01-01", periods=100))
-    res = paired_block_bootstrap(s, s, block_size=20, n_bootstraps=100)
-    assert res["mean_diff"] == 0.0
+    with pytest.raises(ValueError, match="must be different"):
+        paired_block_bootstrap(s, s, candidate_id="baseline", baseline_id="baseline", block_size=20, n_bootstraps=100)
 
 
 # 5. Block size >= label horizon
@@ -76,6 +76,7 @@ def test_certification_nw_lag_equals_label_horizon(synthetic_oos_df):
     res = evaluator.evaluate_predictions(synthetic_oos_df, task_type="regression")
     assert "rank_icir_nw_lag20" in res
     assert "rank_icir_nw_lag5" in res
+    assert settings.LABEL_HORIZON == 20
 
 
 # 7. Prediction Champion status logic
@@ -118,7 +119,9 @@ def test_fast_ci_historical_completed_status_can_be_updated():
     assert ci_status == "VERIFIED"
 
 
-# 12. Experiment SHA must exist
+# 12. Experiment SHA exists in git
 def test_experiment_sha_must_exist():
+    import subprocess
     sha = "fd01da829e9802804b7c5026b32d3e26a382c377"
-    assert len(sha) == 40
+    res = subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True)
+    assert res.returncode == 0
