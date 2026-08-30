@@ -1,9 +1,9 @@
 {
-  "latest_run_id": "phase2_0_2r2_closure_ca9a914_20260830_235424",
-  "source_commit_sha": "ca9a914e48b836181b99e97b0bb00e6c080863c5",
-  "updated_at": "2026-08-30T23:54:25.361003",
+  "latest_run_id": "phase2_0_2r2_closure_c8cd81e_20260830_235447",
+  "source_commit_sha": "c8cd81e9ac2b78edaf0376638b2cb9e7aafd8b2c",
+  "updated_at": "2026-08-30T23:54:48.578834",
   "model_research_status": "BASELINE_REMAINS_CHAMPION",
-  "local_phase_2_1_ready": false,
+  "local_phase_2_1_ready": true,
   "final_phase_2_1_ready": "PENDING_CI",
   "no_phase_2_0_2r3": true
 }

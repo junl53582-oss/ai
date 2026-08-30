@@ -1,0 +1,25 @@
+{
+  "reused_artifacts": [
+    "model_comparison_certified.csv",
+    "daily_rankic.csv",
+    "bootstrap_comparison.csv",
+    "seed_robustness_verified.csv",
+    "seed_parameter_evidence.json",
+    "trading_fold_stability_verified.csv",
+    "trading_tail_analysis_verified.csv"
+  ],
+  "retrained_models": [],
+  "skipped_models": [
+    "lightgbm_clf_baseline",
+    "double_ensemble",
+    "lightgbm_ranker",
+    "lightgbm_reg_baseline",
+    "multi_seed_certification"
+  ],
+  "source_run": "phase2_0_2r1_3409514_20260830_225537",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
+  "model_config_hash": "28dd57c9b671172d3abe936db2643ddb7c1523ef3625aea2248ae7ec2eef1802",
+  "reconstructed_source_model_config_hash": "28dd57c9b671172d3abe936db2643ddb7c1523ef3625aea2248ae7ec2eef1802",
+  "artifact_reuse_compatibility": "PASS"
+}
