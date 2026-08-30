@@ -8,26 +8,37 @@ from typing import Dict, Any, List, Optional
 
 
 class MissingExperimentMetricError(ValueError):
-    """缺失必要对比指标异常"""
+    """缺失必要对比指标异常。"""
     pass
 
 
 class BaselineIntegrityError(RuntimeError):
-    """基准完整性与防伪校验异常"""
+    """基准完整性与防伪校验异常。"""
+    pass
+
+
+class ExperimentIntegrityError(RuntimeError):
+    """实验 Manifest 损坏、路径不一致或重复冲突。"""
     pass
 
 
 def require_metric(metrics: Dict[str, Any], key: str) -> float:
-    """提取必要指标，若缺失、None、NaN、Inf 则抛出异常"""
+    """提取必要指标，若缺失、None、NaN、Inf 则抛出异常。"""
     if key not in metrics or metrics[key] is None:
-        raise MissingExperimentMetricError(f"Missing required experiment metric '{key}'")
+        raise MissingExperimentMetricError(
+            f"Missing required experiment metric '{key}'"
+        )
     val = metrics[key]
     try:
         f_val = float(val)
     except (ValueError, TypeError):
-        raise MissingExperimentMetricError(f"Metric '{key}' cannot be converted to float: {val}")
+        raise MissingExperimentMetricError(
+            f"Metric '{key}' cannot be converted to float: {val}"
+        )
     if math.isnan(f_val) or math.isinf(f_val):
-        raise MissingExperimentMetricError(f"Metric '{key}' is invalid (NaN or Inf): {val}")
+        raise MissingExperimentMetricError(
+            f"Metric '{key}' is invalid (NaN or Inf): {val}"
+        )
     return f_val
 
 
@@ -114,12 +125,30 @@ class ExperimentRecord:
     def validate(self) -> None:
         if not self.experiment_id or not isinstance(self.experiment_id, str):
             raise ValueError("experiment_id is required and must be a string")
+        if "/" in self.experiment_id or "\\" in self.experiment_id:
+            raise ValueError(
+                "experiment_id must be a single path-safe identifier"
+            )
         if not self.primary_change or not isinstance(self.primary_change, str):
-            raise ValueError("primary_change is required for single-variable research discipline")
-        if not self.controlled_variables or not isinstance(self.controlled_variables, dict):
-            raise ValueError("controlled_variables is required to guarantee reproducibility")
+            raise ValueError(
+                "primary_change is required for single-variable research discipline"
+            )
+        if not self.controlled_variables or not isinstance(
+            self.controlled_variables, dict
+        ):
+            raise ValueError(
+                "controlled_variables is required to guarantee reproducibility"
+            )
         if not self.parent_baseline_id:
             raise ValueError("parent_baseline_id is required")
+        if self.train_window_years <= 0:
+            raise ValueError("train_window_years must be > 0")
+        if self.val_window_months <= 0 or self.test_window_months <= 0:
+            raise ValueError(
+                "val_window_months and test_window_months must be > 0"
+            )
+        if self.purge_gap_days < 0:
+            raise ValueError("purge_gap_days must be >= 0")
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
