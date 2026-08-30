@@ -1,6 +1,7 @@
 {
-  "latest_run_id": "phase2_0_1_fd01da8_20260830_191932",
-  "source_commit_sha": "fd01da829e9802804b7c5026b32d3e26a382c377",
-  "updated_at": "2026-08-30T19:52:39.835974",
-  "model_research_status": "BASELINE_REMAINS_CHAMPION"
+  "latest_run_id": "phase2_0_2_e6da4a2_20260830_215520",
+  "source_commit_sha": "e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48",
+  "updated_at": "2026-08-30T22:36:10.394237",
+  "model_research_status": "BASELINE_REMAINS_CHAMPION",
+  "phase_2_1_ready": true
 }
