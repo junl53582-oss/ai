@@ -1,0 +1,4 @@
+﻿tail_tier,quantile_pct,tail_size_avg,mean_forward_20d_excess,median_forward_20d_excess,positive_excess_hit_rate,worst_decile_mean
+Top 5%,0.05,14.1,2.07,0.28,51.55,-14.64
+Top 10%,0.1,29.1,1.53,0.09,50.52,-14.31
+Top 20%,0.2,59.1,1.14,-0.01,49.93,-13.67

@@ -187,10 +187,11 @@ def run_phase2_0_2r2_closure():
             seed_params_valid = False
             break
         ev = seed_param_evidence[s_key]
+        lgbm_p = ev.get("lgbm_params", {})
         if not (ev.get("model_random_state") == s_val and
-                ev.get("feature_fraction_seed") == s_val and
-                ev.get("bagging_seed") == s_val and
-                ev.get("data_random_seed") == s_val):
+                (ev.get("feature_fraction_seed") == s_val or lgbm_p.get("feature_fraction_seed") == s_val) and
+                (ev.get("bagging_seed") == s_val or lgbm_p.get("bagging_seed") == s_val) and
+                (ev.get("data_random_seed") == s_val or lgbm_p.get("data_random_seed") == s_val)):
             seed_params_valid = False
             break
 

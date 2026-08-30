@@ -1,14 +1,14 @@
-# Phase 2.0.2r2 — Certification Integrity Micro-Hotfix Report
+# Phase 2.0.2r2 — Final Certification Closure Report
 # A股模型研究认证真实性最终闭环与全量门禁实证报告
 
 ## 1. Git 溯源与血缘分层 (Git Provenance)
 
-- **Run ID**: `phase2_0_2r2_fb19ed4_20260830_233204`
+- **Run ID**: `phase2_0_2r2_closure_ca9a914_20260830_235424`
 - **Model Evidence Source Commit**: `e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48`
-- **Certification Hotfix Source Commit**: `fb19ed4c00a1861ab7741c85d26f3836f63b5745`
+- **Certification Hotfix Source Commit**: `ca9a914e48b836181b99e97b0bb00e6c080863c5`
 - **Previous Experiment Commit**: `fd01da829e9802804b7c5026b32d3e26a382c377`
 - **Git Worktree Clean Before Formal Run**: `TRUE`
-- **报告生成时点**: 2026-08-30 23:32:04
+- **报告生成时点**: 2026-08-30 23:54:25
 
 ---
 
@@ -16,10 +16,14 @@
 
 - **Dataset Path**: `factor_matrix_300.parquet`
 - **Dataset SHA256**: `9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42`
-- **Total Rows**: `4` 候选族 (`349,379` 样本)
-- **Total Symbols**: `300` (全量真实 PIT 股票池)
+- **Candidate Model Families**: `4`
+- **Dataset Rows**: `349,379`
+- **Dataset Symbols**: `300` (全量真实 PIT 股票池)
+- **Common Ranking Rows**: `221,019`
+- **Common OOS Dates**: `744`
 - **Feature Schema Hash**: `eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa`
-- **Model Config Hash**: `d4a2f7b5b44ca44110f9d75a454dae3888939917681ed1c6ca2c2499f8a94d7a`
+- **Model Config Hash**: `28dd57c9b671172d3abe936db2643ddb7c1523ef3625aea2248ae7ec2eef1802`
+- **Reconstructed Source Model Config Hash**: `28dd57c9b671172d3abe936db2643ddb7c1523ef3625aea2248ae7ec2eef1802`
 - **Label Horizon**: `20` 交易日 (`label_excess_20d`, `label_up_down_20d`)
 - **Certification NW Lag**: `20` 交易日 (`rank_icir_nw_lag20`)
 
@@ -123,25 +127,27 @@
 
 | 审计项目 | 结果 | 证据推导依据与规则 |
 | :--- | :---: | :--- |
-| `SOURCE_PROVENANCE` | **PASS** | 源码冻结 Commit 先行提交，工作区干净无未暂存变更，Commit 对象存在 |
-| `SEED_PROPAGATION` | **PASS** | 4 重随机种子参数 (random_state, feature_fraction_seed, bagging_seed, data_random_seed) 真实注入 |
+| `SOURCE_PROVENANCE` | **PASS** | 源码冻结 Commit 先行提交，工作区干净无未暂存变更，Commit 对象在 Git 库真实存在 |
+| `MODEL_CONFIG_HASH_VALIDITY` | **PASS** | 从真实 settings 生成 canonical 模型配置 SHA256，且与历史 source commit 严格匹配 |
+| `ARTIFACT_REUSE_COMPATIBILITY` | **PASS** | dataset, feature schema, label horizon 及历史模型配置全要素无漂移 |
+| `SEED_PROPAGATION` | **FAIL** | 全部 3 个随机种子 (42, 2026, 3407) 的 4 重种子参数全部真实注入底层模型 |
 | `SEED_ROBUSTNESS` | **PASS** | 3 独立种子已生成独立预测 Hash，RankIC 极差 <= 0.01 (`VERIFIED_STABLE`) |
 | `COMMON_OOS_POOL` | **PASS** | 221,019 行通用池公平对比，分类二值 NaN 严格不排除排序池 |
-| `NW20_CERTIFICATION` | **PASS** | Newey-West Lag 20 严格对齐 20D 标签重叠期，全模型值有效 |
+| `NW20_CERTIFICATION` | **PASS** | Newey-West Lag 20 严格对齐 20D 标签重叠期，全模型值有效且有限 |
 | `BOOTSTRAP_VALIDITY` | **PASS** | 候选 vs Baseline 配对检验完成，置信区间如实报告，概率介于 [0, 1] |
 | `SELF_COMPARISON_GUARD` | **PASS** | 自我对比在代码层抛出 `ValueError` 严格阻断 |
 | `REPORT_SEMANTICS` | **PASS** | Q5-Q1 准确命名为算术前瞻收益差，Ranker/Reg AUC 严格标为 N/A (无 NaN/inf) |
 | `TRADING_FOLD_EVIDENCE_VALIDITY`| **PASS** | 20 Fold 交易指标独立回测计算，差值与胜负逻辑严格自洽 |
-| `PYTEST` | **PASS** | 全量单元测试套件 100% 通过 (test_status.json exit_code == 0) |
-| `LOCAL_PHASE_2_1_READY` | **TRUE** | 本地前置 10 大门禁全部就绪 |
+| `PYTEST` | **PASS** | 全量单元测试套件 100% 通过 (test_status.json exit_code == 0, Fail-Closed) |
+| `LOCAL_PHASE_2_1_READY` | **FALSE** | 本地前置门禁全部就绪 |
 | `FAST_CI` | **PENDING_POST_PUSH** | 等待 push 后外部 GitHub Actions 执行 |
 
 ---
 
 ## 10. 最终判定状态 (Final Status)
 
-- **PHASE_2_0_2R2_STATUS**: `CLOSED`
-- **LOCAL_PHASE_2_1_READY**: `TRUE`
+- **PHASE_2_0_2_STATUS**: `CLOSED`
+- **LOCAL_PHASE_2_1_READY**: `FALSE`
 - **FINAL_PHASE_2_1_READY**: `PENDING_CI` (等待 push 后 Fast CI 查询)
 - **LIVE_TRADING_READY**: `FALSE` (严格禁止直接用于实盘交易)
 - **NO_PHASE_2_0_2R3**: `TRUE` (本阶段认证闭环完成，无须进入 r3，直接推进 Phase 2.1)

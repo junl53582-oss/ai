@@ -1,0 +1,11 @@
+{
+  "report_semantics_passed": true,
+  "issues": [],
+  "ranker_auc": "N/A",
+  "regression_auc": "N/A",
+  "worst_decile_mean_sample": [
+    -14.64,
+    -14.31,
+    -13.67
+  ]
+}
