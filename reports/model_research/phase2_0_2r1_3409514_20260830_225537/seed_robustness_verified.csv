@@ -1,0 +1,4 @@
+﻿seed,lightgbm_random_state,feature_fraction_seed,bagging_seed,data_random_seed,prediction_hash,prediction_count,common_ranking_rows,mean_daily_rank_ic,nw20_rankicir,auc
+42,42,42,42,42,0912c793c922a8ea,227466,221019,0.0503,0.4044,0.5319
+2026,2026,2026,2026,2026,b52900d7c0fb782a,227466,221019,0.0455,0.3396,0.529
+3407,3407,3407,3407,3407,e20ce8cec27e2969,227466,221019,0.0459,0.356,0.5305

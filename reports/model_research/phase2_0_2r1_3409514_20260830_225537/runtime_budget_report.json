@@ -1,0 +1,11 @@
+{
+  "total_runtime_seconds": 907.72,
+  "full_model_research_runs": 0,
+  "double_ensemble_runs": 0,
+  "seed_runs": 0,
+  "baseline_targeted_runs": 1,
+  "ranker_targeted_runs": 1,
+  "targeted_pytest_runs": 1,
+  "full_pytest_runs": 1,
+  "expensive_commands_deduplicated": 3
+}

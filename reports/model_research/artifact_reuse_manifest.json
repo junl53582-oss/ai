@@ -1,0 +1,22 @@
+{
+  "reused_artifacts": [
+    "model_comparison_certified.csv",
+    "daily_rankic.csv",
+    "bootstrap_comparison.csv",
+    "seed_robustness_verified.csv",
+    "seed_parameter_evidence.json"
+  ],
+  "retrained_models": [
+    "lightgbm_clf_baseline (Targeted for fold trading metrics)",
+    "lightgbm_ranker (Targeted for fold trading metrics)"
+  ],
+  "skipped_models": [
+    "double_ensemble (Reused from phase2_0_2)",
+    "lightgbm_reg_baseline (Reused from phase2_0_2)",
+    "multi_seed_certification_3407/2026 (Reused from phase2_0_2)"
+  ],
+  "source_run": "phase2_0_2_e6da4a2_20260830_215520",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "feature_schema_hash": "eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa",
+  "reuse_justification": "Exact matching dataset SHA, feature schema hash, and model configuration"
+}

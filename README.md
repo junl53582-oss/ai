@@ -1,11 +1,26 @@
-# A股多因子机器学习量化交易与实盘决策闭环系统 (Enterprise A-Share AI Quant System)
+# A股多因子机器学习量化交易与投研闭环系统 (A-Share AI Quant Research & Trading System)
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests: 155 Passed](https://img.shields.io/badge/Tests-155%20Passed%20(100%25)-brightgreen.svg)](tests/)
+[![Fast CI](https://github.com/junl53582-oss/ai/actions/workflows/fast_ci.yml/badge.svg)](https://github.com/junl53582-oss/ai/actions/workflows/fast_ci.yml)
 [![Provenance: Fail--Closed](https://img.shields.io/badge/Provenance-Fail--Closed%20%7C%20Zero--Mock-success.svg)](data/)
 
-企业级端到端 A 股多因子 AI 量化投研与实盘决策系统，构建了从 **「原始数据血缘 $\to$ 107 因子特征工厂 $\to$ 多模型 Walk-Forward 时序滚动训练 $\to$ 凸优化组合决策 $\to$ 7 重机构级资金安全防御 $\to$ 券商实盘/模拟撮合网关 $\to$ 盘后定时自动化推送 $\to$ 7 大主题 Streamlit 交互大屏」** 的全闭环链路。
+端到端 A 股多因子 AI 量化投研与策略系统，涵盖从 **「Point-in-Time 真实数据血缘 $\to$ 多因子特征工程 $\to$ 严格 Walk-Forward 时序滚动训练 $\to$ 组合优化 $\to$ 7 重资金安全防线 $\to$ 券商执行网关 $\to$ 盘后定时自动化推送 $\to$ Streamlit 交互大屏」** 的全流程闭环。
+
+---
+
+## 📈 当前研究认证状态 (Current Research Status — Phase 2.0.2r1)
+
+| 投研与验证维度 | 当前认证状态 | 核心实证指标 / 结论 |
+| :--- | :---: | :--- |
+| **数据与 PIT 血缘** | `VERIFIED` | 300 股票全样本真实 PIT 数据集 (`349,379` 行, 无 Mock, SHA256 存证) |
+| **特征工程与中性化** | `VERIFIED` | 每日截面 MAD 去极值 + Z-Score + OLS 行业/市值中性化 |
+| **预测质量冠军** | `BASELINE_REMAINS_CHAMPION` | **LightGBM Classification (Baseline)**: Mean Daily RankIC = **+0.0503**, NW20 RankICIR = **+0.4044**, Q5-Q1 Spread = **+7.17%** |
+| **交易信号候选** | `PROMISING_OOS_SIGNAL` | **LightGBM Ranker (LambdaRank)**: 成本后超额收益 = **+5.72%**, 夏普比率 = **+0.36**, 20-Fold 真实胜率 = **55.0%** |
+| **随机种子稳健性** | `VERIFIED_STABLE` | 3 独立种子 (42, 2026, 3407) 真实重训，RankIC 极差 max-min = **0.0048 <= 0.01** |
+| **20-Fold 交易实证** | `PASS` | 20 个滚动折全部完成独立 T+1 撮合与费用扣除，真实胜率 55.0% (11/20 Folds 胜出) |
+| **投资组合优化准入** | `PHASE_2_1_READY = TRUE` | 已具备进入 Phase 2.1 组合权重分配与执行优化的全部先决条件 |
+| **实盘交易许可状态** | `LIVE_TRADING_READY = FALSE` | **当前阶段属于科学建模与策略研发阶段，严格禁止直接用于实盘交易** |
 
 ---
 
