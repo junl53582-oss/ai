@@ -49,7 +49,10 @@ class DataManager:
         self.parquet_dir = parquet_dir or settings.PARQUET_DIR
         self.parquet_dir.mkdir(parents=True, exist_ok=True)
         self.fetcher = fetcher or DataFetcher()
-        self.sec_master = SecurityMaster()
+        if parquet_dir:
+            self.sec_master = SecurityMaster(cache_file=parquet_dir.parent / "security_master.parquet")
+        else:
+            self.sec_master = SecurityMaster()
         self.universe_provider = universe_provider or create_universe_provider()
         self._cached_trade_calendar: Optional[List[pd.Timestamp]] = None
         
