@@ -104,6 +104,7 @@ def test_universe_provider_factory():
 
 
 @pytest.mark.integration
+@pytest.mark.slow
 def test_four_year_pit_pipeline_e2e_integration(tmp_path):
     symbols = ['A', 'B', 'C', 'D', 'E', 'F']
     dates = pd.date_range('2021-01-01', '2024-12-31', freq='B')

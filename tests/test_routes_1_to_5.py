@@ -68,6 +68,8 @@ class TestRoutes1To5Integration:
         assert "2026-08-28" in md
         assert "贵州茅台" in md
 
+    @pytest.mark.integration
+    @pytest.mark.slow
     def test_full_pipeline_verification_e2e(self):
         """路线一至五全链路端到端综合测试"""
         from scripts.verify_full_pipeline_e2e import verify_all_routes
