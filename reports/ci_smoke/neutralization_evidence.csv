@@ -1,0 +1,4 @@
+﻿factor_name,raw_rank_ic,neutralized_rank_ic,delta_rank_ic,total_dates,successful_dates,failed_dates,mean_cross_section_size,min_cross_section_size,max_cross_section_size,status
+KMID,-0.0108,,,911,0,911,0.0,0,0,INSUFFICIENT_CROSS_SECTION
+KLEN,0.0248,,,911,0,911,0.0,0,0,INSUFFICIENT_CROSS_SECTION
+KMID2,0.0071,,,911,0,911,0.0,0,0,INSUFFICIENT_CROSS_SECTION

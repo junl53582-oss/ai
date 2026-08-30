@@ -1,0 +1,11 @@
+{
+  "source_id": "CSINDEX_CSI300_OFFICIAL_SNAPSHOT_20210929",
+  "source_class": "OFFICIAL_PRIMARY",
+  "source_name": "中证指数公司官方沪深300成分股基线快照",
+  "publisher": "China Securities Index Co., Ltd.",
+  "acquired_at": "2026-08-24T00:00:00Z",
+  "effective_date": "2021-09-29",
+  "evidence_type": "BASELINE_SNAPSHOT",
+  "original_filename": "baseline_snapshot_20210929.csv",
+  "sha256": "dbe171bb76e42ca1b4b1a9c3097760e7b7fdee0f9284089c35332dd213de6fe6"
+}

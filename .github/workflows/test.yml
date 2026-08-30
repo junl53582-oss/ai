@@ -34,11 +34,11 @@ jobs:
 
       - name: Run Factor Research Pipeline (CI Smoke)
         run: |
-          python -u tools/run_factor_research.py --dataset data_storage/factors/factor_matrix.parquet --limit-factors 3
+          python -u tools/run_factor_research.py --dataset data_storage/factors/factor_matrix.parquet --limit-factors 3 --output-dir reports/ci_smoke
 
-      - name: Validate Research Artifacts & Lineage Evidence
+      - name: Validate Research Artifacts & Lineage Evidence (CI Smoke)
         run: |
-          python -u tools/validate_research_artifacts.py
+          python -u tools/validate_research_artifacts.py --mode ci-smoke --report-dir reports/ci_smoke
 
       - name: Upload Pytest Test Results
         if: always()
@@ -53,5 +53,5 @@ jobs:
         with:
           name: factor-research-reports
           path: |
-            reports/factor_research/
+            reports/
             FACTOR_RESEARCH_REPORT.md

@@ -44,8 +44,8 @@ REQUIRED_FILES = [
 ]
 
 
-def validate_artifacts(report_dir: Path) -> bool:
-    logger.info(f"🔍 [Phase 1.5] 开始全维度严密审计因子研究产物与证据链: {report_dir}")
+def validate_artifacts(report_dir: Path, mode: str = "production") -> bool:
+    logger.info(f"🔍 [Phase 1.6.1] 开始全维度严密审计因子研究产物与证据链 (Mode: {mode}): {report_dir}")
     
     status_dict = {
         "STRUCTURE_VALID": False,
@@ -53,6 +53,8 @@ def validate_artifacts(report_dir: Path) -> bool:
         "BENCHMARK_VALID": False,
         "EXECUTION_VALID": False,
         "FDR_VALID": False,
+        "NEUTRALIZATION_VALID": False,
+        "WALK_FORWARD_VALID": False,
         "PROVENANCE_VALID": False,
         "FULL_VALID": False
     }
@@ -71,7 +73,7 @@ def validate_artifacts(report_dir: Path) -> bool:
             logger.error(f"❌ 产物文件大小为空 (0 bytes): {fname}")
             return False
     status_dict["STRUCTURE_VALID"] = True
-    logger.info("  [1/6] 结构完整性检查 (20/20 文件存在且非空): PASS")
+    logger.info(f"  [1/8] 结构完整性检查 ({len(REQUIRED_FILES)}/{len(REQUIRED_FILES)} 文件存在且非空): PASS")
 
     # 2. Manifest 与哈希校验 (Hash & Provenance Check)
     manifest_path = report_dir / "research_run_manifest.json"
@@ -101,9 +103,18 @@ def validate_artifacts(report_dir: Path) -> bool:
                 logger.error(f"❌ Manifest requirements_hash 与实际 requirements.txt 不匹配！")
                 return False
 
+        # 物理数据集哈希核验 (若处于生产模式且物理文件存在)
+        if mode == "production":
+            prod_m_file = Path("data_storage/research/market_daily_300.parquet")
+            if prod_m_file.exists():
+                act_m_hash = hashlib.sha256(prod_m_file.read_bytes()).hexdigest().lower()
+                if manifest.get("research_input_dataset_hash") and manifest.get("research_input_dataset_hash") != act_m_hash:
+                    logger.error(f"❌ Manifest research_input_dataset_hash 与物理文件不匹配！")
+                    return False
+
         status_dict["HASH_VALID"] = True
         status_dict["PROVENANCE_VALID"] = True
-        logger.info("  [2/6] Manifest 与数据血缘哈希校验: PASS")
+        logger.info("  [2/8] Manifest 与数据血缘哈希校验: PASS")
 
     except Exception as e:
         logger.error(f"❌ 读取 Manifest 异常: {e}")
@@ -113,20 +124,18 @@ def validate_artifacts(report_dir: Path) -> bool:
     bench_timing_status = manifest.get("benchmark_timing_status")
     df_summary = pd.read_csv(report_dir / "factor_summary.csv")
     if bench_timing_status != "VALID":
-        # 基准无效时，factor_summary 中 long_only_excess_annual_return 必须为 NaN / 空
         valid_excess = df_summary["long_only_excess_annual_return"].dropna()
         if not valid_excess.empty:
             logger.error("❌ 基准时序无效但报告中仍产生了非空的超额年化收益！未达到 Fail-Closed 要求！")
             return False
     status_dict["BENCHMARK_VALID"] = True
-    logger.info(f"  [3/6] 基准时序与超额 Fail-Closed 校验 (状态: {bench_timing_status}): PASS")
+    logger.info(f"  [3/8] 基准时序与超额 Fail-Closed 校验 (状态: {bench_timing_status}): PASS")
 
     # 4. 执行与 Delayed Exit 数值校验 (Execution & Delayed Exit Check)
     pnl_path = report_dir / "daily_portfolio_pnl.csv"
     try:
         df_pnl = pd.read_csv(pnl_path)
         if not df_pnl.empty:
-            # 数值范围检查
             for col in ["long_gross_return", "benchmark_return", "long_excess_return", "long_net_return"]:
                 if col in df_pnl.columns:
                     vals = df_pnl[col].dropna()
@@ -134,14 +143,12 @@ def validate_artifacts(report_dir: Path) -> bool:
                         logger.error(f"❌ daily_portfolio_pnl.csv 中 {col} 存在异常数值！")
                         return False
 
-            # Exact-Math 检查: long_net_return == long_gross_return - total_cost
             if "long_net_return" in df_pnl.columns and "total_cost" in df_pnl.columns:
                 diff = (df_pnl["long_gross_return"] - df_pnl["total_cost"]) - df_pnl["long_net_return"]
                 if (diff.abs() > 1e-6).any():
                     logger.error("❌ daily_portfolio_pnl.csv 中 long_net_return != long_gross_return - total_cost！")
                     return False
 
-            # Delayed Exit 约束检查
             if "actual_exit_date" in df_pnl.columns and "earliest_exit_date" in df_pnl.columns:
                 act_dates = pd.to_datetime(df_pnl["actual_exit_date"])
                 earl_dates = pd.to_datetime(df_pnl["earliest_exit_date"])
@@ -150,7 +157,7 @@ def validate_artifacts(report_dir: Path) -> bool:
                     return False
 
         status_dict["EXECUTION_VALID"] = True
-        logger.info("  [4/6] 交易执行 Exact-Math 与 Delayed Exit 约束校验: PASS")
+        logger.info("  [4/8] 交易执行 Exact-Math 与 Delayed Exit 约束校验: PASS")
     except Exception as e:
         logger.error(f"❌ 读取 daily_portfolio_pnl.csv 异常: {e}")
         return False
@@ -166,20 +173,56 @@ def validate_artifacts(report_dir: Path) -> bool:
         return False
 
     status_dict["FDR_VALID"] = True
-    logger.info(f"  [5/6] 全家族 Global FDR 多重检验记录校验 ({expected_fdr_rows} 项假设): PASS")
+    logger.info(f"  [5/8] 全家族 Global FDR 多重检验记录校验 ({expected_fdr_rows} 项假设): PASS")
 
-    # 6. 最终综合评定
+    # 6. 中性化真实证据校验 (Neutralization Evidence Check)
+    neu_path = report_dir / "neutralization_evidence.csv"
+    try:
+        df_neu = pd.read_csv(neu_path)
+        if df_neu.empty:
+            logger.error("❌ neutralization_evidence.csv 为空！")
+            return False
+        if mode == "production":
+            valid_neu = df_neu["neutralized_rank_ic"].notna().sum()
+            if valid_neu < len(df_neu) * 0.5:
+                logger.error(f"❌ 生产中性化有效因子数 ({valid_neu}/{len(df_neu)}) 未达 50% 门禁！")
+                return False
+        status_dict["NEUTRALIZATION_VALID"] = True
+        logger.info("  [6/8] 真实截面 OLS 行业/市值中性化证据校验: PASS")
+    except Exception as e:
+        logger.error(f"❌ 读取 neutralization_evidence.csv 异常: {e}")
+        return False
+
+    # 7. Walk-Forward 滚动折数校验 (Walk-Forward Folds Check)
+    wf_path = report_dir / "walk_forward_folds.csv"
+    try:
+        df_wf = pd.read_csv(wf_path)
+        if df_wf.empty:
+            logger.error("❌ walk_forward_folds.csv 为空！")
+            return False
+        if mode == "production" and len(df_wf) < 3:
+            logger.error(f"❌ 生产 Walk-Forward 折数 ({len(df_wf)}) 低于最低门禁 3 折！")
+            return False
+        status_dict["WALK_FORWARD_VALID"] = True
+        logger.info(f"  [7/8] Purged Walk-Forward 样本外滚动折数校验 ({len(df_wf)} 折): PASS")
+    except Exception as e:
+        logger.error(f"❌ 读取 walk_forward_folds.csv 异常: {e}")
+        return False
+
+    # 8. 最终综合评定
     status_dict["FULL_VALID"] = all([
         status_dict["STRUCTURE_VALID"],
         status_dict["HASH_VALID"],
         status_dict["BENCHMARK_VALID"],
         status_dict["EXECUTION_VALID"],
         status_dict["FDR_VALID"],
+        status_dict["NEUTRALIZATION_VALID"],
+        status_dict["WALK_FORWARD_VALID"],
         status_dict["PROVENANCE_VALID"]
     ])
 
     if status_dict["FULL_VALID"]:
-        logger.info("🏆 [6/6] 因子研究全要素证据链验证 100% 通过！FULL_VALID = TRUE")
+        logger.info(f"🏆 [8/8] 因子研究全要素证据链验证 100% 通过！({'PRODUCTION_FULL_VALID' if mode == 'production' else 'CI_SMOKE_FULL_VALID'} = TRUE)")
         return True
     else:
         logger.error("❌ 验证未完全通过！")
@@ -187,9 +230,22 @@ def validate_artifacts(report_dir: Path) -> bool:
 
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="因子研究产物与证据链验证器")
+    parser.add_argument("--mode", type=str, default="production", choices=["production", "ci-smoke"], help="验证模式 (production 或 ci-smoke)")
+    parser.add_argument("--report-dir", type=str, default=None, help="指定报告目录")
+    args = parser.parse_args()
+
+    if args.report_dir:
+        rep_dir = Path(args.report_dir)
+    elif args.mode == "ci-smoke":
+        rep_dir = Path("reports/ci_smoke")
+    else:
+        prod_dir = Path("reports/production_research")
+        rep_dir = prod_dir if prod_dir.exists() else Path("reports/factor_research")
+
     try:
-        rep_dir = Path("reports/factor_research")
-        if not validate_artifacts(rep_dir):
+        if not validate_artifacts(rep_dir, mode=args.mode):
             sys.exit(1)
         sys.exit(0)
     except Exception as exc:

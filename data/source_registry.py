@@ -49,7 +49,9 @@ TRUSTED_SOURCE_REGISTRY: Dict[str, Dict[str, Any]] = {
             "CONSTITUENT_CHANGE",
             "CONSTITUENT_WEIGHT",
             "CORPORATE_ACTION",
-            "INDEX_DAILY"
+            "INDEX_DAILY",
+            "BASELINE_SNAPSHOT",
+            "INDEX_CONSTITUENT_ADJUSTMENT"
         ]
     },
     "SSE": {

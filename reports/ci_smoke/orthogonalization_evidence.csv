@@ -1,0 +1,4 @@
+﻿factor_name,raw_rank_ic,orthogonalized_rank_ic,delta_rank_ic,successful_cross_sections,failed_cross_sections,status
+KMID,-0.0108,-0.0108,0.0,911,0,REAL_CALCULATED
+KLEN,0.0248,0.0376,0.0128,911,0,REAL_CALCULATED
+KMID2,0.0071,0.0185,0.0115,911,0,REAL_CALCULATED

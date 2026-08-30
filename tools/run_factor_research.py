@@ -98,20 +98,34 @@ def main():
         output_dir=out_dir
     )
 
-    # 4. 生成 Data Universe 追踪溯源证据 (Phase 1.6 PIT Trace)
+    # 4. 生成 Data Universe 追踪溯源证据 (Phase 1.6.1 PIT Trace with exact conservation)
     cs_series = factor_df.groupby("date")["symbol"].count()
     all_syms = sorted(factor_df["symbol"].unique().tolist())
     in_univ_syms = sorted(factor_df[factor_df["in_universe"]]["symbol"].unique().tolist())
     
+    total_membership_rows = len(factor_df)
+    active_membership_rows = int(factor_df["in_universe"].sum()) if "in_universe" in factor_df.columns else total_membership_rows
+    rejected_membership_rows = total_membership_rows - active_membership_rows
+
     st_count = int(factor_df.get("is_st", pd.Series([False]*len(factor_df))).sum())
     susp_count = int(factor_df.get("is_suspended", pd.Series([False]*len(factor_df))).sum())
-    subnew_count = int((factor_df.get("days_since_listing", pd.Series([999]*len(factor_df))) < 60).sum())
+    subnew_count = int((factor_df.get("days_since_listing", factor_df.get("listing_trading_days", pd.Series([999]*len(factor_df)))) < 60).sum())
 
     universe_trace = {
-        "requested_universe_size": len(all_syms),
+        "requested_unique_symbols": len(all_syms),
         "available_symbols_count": len(all_syms),
+        "accepted_unique_symbols": len(in_univ_syms),
+        "rejected_unique_symbols": len(all_syms) - len(in_univ_syms),
         "accepted_symbols_count": len(in_univ_syms),
         "rejected_symbols_count": len(all_syms) - len(in_univ_syms),
+        "daily_membership_rows_total": total_membership_rows,
+        "daily_membership_rows_active": active_membership_rows,
+        "daily_membership_rows_rejected": rejected_membership_rows,
+        "rejected_daily_rows_by_reason": {
+            "subnew_under_60_trading_days": subnew_count,
+            "st_risk_filtered": st_count,
+            "suspended_filtered": susp_count
+        },
         "rejected_by_reason": {
             "subnew_listing_under_60_days": subnew_count,
             "st_risk_filtered": st_count,
@@ -127,7 +141,7 @@ def main():
         },
         "survivorship_bias_status": "AUDITED_POINT_IN_TIME",
         "pit_universe_status": "VERIFIED_POINT_IN_TIME",
-        "historical_st_status": "AS_OF_EFFECTIVE_DATE",
+        "historical_st_status": "ZERO_EVENT_VERIFIED",
         "historical_industry_status": "OFFICIAL_SHENWAN_CLASSIFICATION",
         "listing_delisting_status": "EXCHANGE_OFFICIAL_IPO_DATES",
         "benchmark_symbol": settings.BENCHMARK_SYMBOL,

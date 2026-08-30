@@ -1,0 +1,4 @@
+﻿fold_id,train_start,train_end,purge_start,purge_end,validation_start,validation_end,train_symbols,train_rows,validation_symbols,validation_rows,selected_factor_count,selected_factors,oos_evaluation
+1,2021-01-01,2022-06-14,2022-06-15,2022-07-26,2022-07-27,2023-01-18,5,1890,5,630,0,[],{}
+2,2021-06-28,2022-12-07,2022-12-08,2023-01-18,2023-01-19,2023-07-13,5,1890,5,630,0,[],{}
+3,2021-12-21,2023-06-01,2023-06-02,2023-07-13,2023-07-14,2024-01-05,5,1890,5,630,1,['KLEN'],"{'KLEN': {'train_direction': 1, 'train_horizon': '10D', 'oos_raw_rank_ic': 0.0035, 'oos_aligned_rank_ic': 0.0035, 'oos_icir': 0.0066}}"

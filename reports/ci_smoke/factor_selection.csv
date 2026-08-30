@@ -1,0 +1,4 @@
+﻿factor_name,abs_rank_ic,rank_ic,rank_ic_ir,monotonicity,sign_stability,net_sharpe,turnover,missing_ratio,coverage_ratio,is_redundant,recommended_direction,selection_score
+KLEN,0.0248,0.0248,0.1714,0.6,1.0,0.0,0.7318,0.0,1.0,0.0,1,0.8694
+KMID,0.0108,-0.0108,0.0779,0.3,0.75,0.0,0.7517,0.0,1.0,1.0,-1,-0.3229
+KMID2,0.0071,0.0071,0.0507,0.1,0.25,0.0,0.7242,0.0,1.0,1.0,1,-0.7465

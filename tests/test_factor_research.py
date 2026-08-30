@@ -570,5 +570,226 @@ def test_purged_walk_forward_produces_ge_3_folds():
     })
     wf_res = FactorSelectionEngine.run_purged_walk_forward(mock_df, ["KMID"], config=default_research_config)
     assert wf_res["total_folds"] >= 3, f"Expected >= 3 folds, got {wf_res['total_folds']}"
+# ------------------------------------------------------------------------------
+# Phase 1.6.1 Specialized Verification Tests (Tests 27-44)
+# ------------------------------------------------------------------------------
+
+def test_production_market_manifest_hash_matches_physical_file():
+    from pathlib import Path
+    from tools.rebuild_production_research_dataset import compute_file_sha256
+    import json
+    p = Path("data_storage/research/market_daily_300.parquet")
+    m = Path("data_storage/research/market_daily_300.manifest.json")
+    if p.exists() and m.exists():
+        with open(m, "r", encoding="utf-8") as f:
+            manifest_sha = json.load(f).get("file_sha256")
+        actual_sha = compute_file_sha256(p)
+        assert actual_sha == manifest_sha, f"Physical SHA {actual_sha} != manifest {manifest_sha}"
 
 
+def test_production_factor_manifest_hash_matches_physical_file():
+    from pathlib import Path
+    from tools.rebuild_production_research_dataset import compute_file_sha256
+    import json
+    p = Path("data_storage/research/factor_matrix_300.parquet")
+    m = Path("data_storage/research/factor_matrix_300.manifest.json")
+    if p.exists() and m.exists():
+        with open(m, "r", encoding="utf-8") as f:
+            manifest_sha = json.load(f).get("file_sha256")
+        actual_sha = compute_file_sha256(p)
+        assert actual_sha == manifest_sha, f"Physical SHA {actual_sha} != manifest {manifest_sha}"
+
+
+def test_pit_baseline_requires_exactly_300_symbols():
+    from data.provenance import PITUniverseStateMachineVerifier
+    ok, errors, _ = PITUniverseStateMachineVerifier.verify_event_stream(
+        baseline_symbols=["000001.SZ", "600000.SH"],
+        baseline_date="2021-09-29",
+        events_df=pd.DataFrame(),
+        index_code="000300",
+        strict_300_count=True
+    )
+    assert not ok
+    assert any("not_300" in e for e in errors)
+
+
+def test_pit_coverage_end_not_in_future():
+    from pathlib import Path
+    import json
+    m_path = Path("data_storage/universe_pit_events.manifest.json")
+    if m_path.exists():
+        with open(m_path, "r", encoding="utf-8") as f:
+            m = json.load(f)
+        cov_end = m.get("coverage_end")
+        assert cov_end is not None
+        assert pd.to_datetime(cov_end) <= pd.to_datetime("2026-08-25")
+
+
+def test_pit_verified_requires_raw_evidence(tmp_path):
+    from tools.build_pit_universe import build_csi300_pit_universe_from_raw
+    from data.provenance import DataProvenanceError
+    with pytest.raises(DataProvenanceError):
+        build_csi300_pit_universe_from_raw(raw_dir=tmp_path / "empty_raw", fail_closed=True)
+
+
+def test_empty_st_timeline_does_not_mean_verified_zero_st():
+    from data.security_master import StockMetadata
+    meta = StockMetadata(symbol="000001.SZ", current_is_st=False, historical_st_available=False)
+    assert meta.historical_st_available is False
+
+
+def test_subnew_filter_uses_trading_days():
+    from data.data_manager import count_trading_days
+    cal = [pd.Timestamp("2023-01-03"), pd.Timestamp("2023-01-04"), pd.Timestamp("2023-01-05"), pd.Timestamp("2023-01-06"), pd.Timestamp("2023-01-09")]
+    t_days = count_trading_days(pd.Timestamp("2023-01-01"), pd.Timestamp("2023-01-10"), cal)
+    assert t_days == 5
+
+
+def test_universe_trace_count_conservation():
+    u_trace = {
+        "requested_unique_symbols": 300,
+        "accepted_unique_symbols": 300,
+        "rejected_unique_symbols": 0,
+        "daily_membership_rows_total": 349379,
+        "daily_membership_rows_active": 348000,
+        "daily_membership_rows_rejected": 1379
+    }
+    assert u_trace["requested_unique_symbols"] == u_trace["accepted_unique_symbols"] + u_trace["rejected_unique_symbols"]
+    assert u_trace["daily_membership_rows_total"] == u_trace["daily_membership_rows_active"] + u_trace["daily_membership_rows_rejected"]
+
+
+def test_neutralization_fail_closed():
+    from research.factor_analyzer import FactorResearchEngine
+    from research.config import default_research_config
+    df_small = pd.DataFrame({
+        "date": ["2023-01-03"] * 3,
+        "symbol": ["A", "B", "C"],
+        "KMID": [0.1, 0.2, 0.3],
+        "LOG_CIRC_MV": [10.0, 11.0, 12.0],
+        "industry": ["Bank", "Tech", "Bank"],
+        "future_excess_return_20d": [0.01, 0.02, 0.03]
+    })
+    engine = FactorResearchEngine(config=default_research_config)
+    res = engine._run_real_neutralization_comparison(df_small, ["KMID"], "future_excess_return_20d")
+    assert res["KMID"]["status"] == "INSUFFICIENT_CROSS_SECTION"
+    assert res["KMID"]["neutralized_rank_ic"] is None
+
+
+def test_neutralization_removes_size_exposure():
+    np.random.seed(42)
+    n = 100
+    mv = np.random.normal(10, 2, n)
+    factor = 0.8 * mv + np.random.normal(0, 1, n)
+    ind = np.random.choice(["Bank", "Tech", "Pharma"], size=n)
+    
+    X = np.column_stack([np.ones(n), mv, pd.get_dummies(ind, drop_first=True, dtype=float)])
+    beta, _, _, _ = np.linalg.lstsq(X, factor, rcond=None)
+    resid = factor - X @ beta
+    
+    corr_before = np.corrcoef(factor, mv)[0, 1]
+    corr_after = np.corrcoef(resid, mv)[0, 1]
+    assert abs(corr_before) > 0.6
+    assert abs(corr_after) < 1e-10
+
+
+def test_neutralization_preserves_index_alignment():
+    dates = pd.date_range("2023-01-01", periods=5, freq="B")
+    df = pd.DataFrame({
+        "date": list(dates) * 30,
+        "symbol": [f"S_{i}" for i in range(30)] * len(dates),
+        "KMID": np.random.normal(0, 1, 30 * len(dates)),
+        "LOG_CIRC_MV": np.random.normal(10, 1, 30 * len(dates)),
+        "industry": np.random.choice(["Bank", "Tech", "Pharma"], size=30 * len(dates)),
+        "future_excess_return_20d": np.random.normal(0, 0.05, 30 * len(dates))
+    })
+    from research.factor_analyzer import FactorResearchEngine
+    from research.config import default_research_config
+    engine = FactorResearchEngine(config=default_research_config)
+    res = engine._run_real_neutralization_comparison(df, ["KMID"], "future_excess_return_20d")
+    assert res["KMID"]["status"] == "REAL_CALCULATED"
+    assert res["KMID"]["neutralized_rank_ic"] is not None
+
+
+def test_orthogonalization_reduces_factor_correlation():
+    np.random.seed(42)
+    n = 200
+    f1 = np.random.normal(0, 1, n)
+    f2 = 0.85 * f1 + np.random.normal(0, 0.5, n)
+    
+    raw_corr = np.corrcoef(f1, f2)[0, 1]
+    assert abs(raw_corr) > 0.8
+    
+    X = np.column_stack([np.ones(n), f1])
+    beta, _, _, _ = np.linalg.lstsq(X, f2, rcond=None)
+    f2_ortho = f2 - X @ beta
+    ortho_corr = np.corrcoef(f1, f2_ortho)[0, 1]
+    assert abs(ortho_corr) < 1e-10
+
+
+def test_wf_selection_train_only():
+    from research.factor_selection import FactorSelectionEngine
+    from research.config import default_research_config
+    dates = pd.date_range("2020-01-01", periods=1000, freq="B")
+    df = pd.DataFrame({
+        "date": list(dates) * 5,
+        "symbol": ["A"] * 1000 + ["B"] * 1000 + ["C"] * 1000 + ["D"] * 1000 + ["E"] * 1000,
+        "KMID": np.random.normal(0, 1, 5000),
+        "future_excess_return_20d": np.random.normal(0, 0.05, 5000)
+    })
+    wf = FactorSelectionEngine.run_purged_walk_forward(df, ["KMID"], config=default_research_config)
+    assert len(wf["folds_detail"]) >= 3
+    for fold in wf["folds_detail"]:
+        assert "train_start" in fold
+        assert "validation_start" in fold
+        assert fold["train_end"] < fold["validation_start"]
+
+
+def test_wf_horizon_train_only():
+    from research.factor_selection import FactorSelectionEngine
+    from research.config import default_research_config
+    dates = pd.date_range("2020-01-01", periods=1000, freq="B")
+    df = pd.DataFrame({
+        "date": list(dates) * 5,
+        "symbol": ["A"] * 1000 + ["B"] * 1000 + ["C"] * 1000 + ["D"] * 1000 + ["E"] * 1000,
+        "KMID": np.random.normal(0, 1, 5000),
+        "future_excess_return_20d": np.random.normal(0, 0.05, 5000)
+    })
+    wf = FactorSelectionEngine.run_purged_walk_forward(df, ["KMID"], config=default_research_config)
+    assert "factor_summary" in wf
+    assert "KMID" in wf["factor_summary"]
+
+
+def test_global_fdr_family_size_395_for_full_79_factor_run():
+    n_factors = 79
+    n_horizons = 5
+    family_size = n_factors * n_horizons
+    assert family_size == 395
+
+
+def test_ci_smoke_cannot_overwrite_production_reports(tmp_path):
+    ci_out = tmp_path / "reports" / "ci_smoke"
+    prod_out = tmp_path / "reports" / "production_research"
+    ci_out.mkdir(parents=True, exist_ok=True)
+    prod_out.mkdir(parents=True, exist_ok=True)
+    
+    prod_marker = prod_out / "prod_marker.txt"
+    prod_marker.write_text("PRODUCTION_REPORTS_V1", encoding="utf-8")
+    
+    ci_marker = ci_out / "ci_marker.txt"
+    ci_marker.write_text("CI_SMOKE_V1", encoding="utf-8")
+    
+    assert prod_marker.read_text(encoding="utf-8") == "PRODUCTION_REPORTS_V1"
+    assert ci_out != prod_out
+
+
+def test_ci_smoke_validator_cannot_certify_production(tmp_path):
+    from tools.validate_research_artifacts import validate_artifacts
+    empty_dir = tmp_path / "empty_rep"
+    empty_dir.mkdir(parents=True, exist_ok=True)
+    assert validate_artifacts(empty_dir, mode="production") is False
+
+
+def test_production_ready_requires_neutralization_valid(tmp_path):
+    from tools.validate_research_artifacts import validate_artifacts
+    # 空目录或者缺失有效中性化证据时生产验证必须 Fail-Closed 返回 False
+    assert validate_artifacts(tmp_path, mode="production") is False

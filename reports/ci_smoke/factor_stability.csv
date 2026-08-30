@@ -1,0 +1,4 @@
+﻿factor_name,overall_rank_ic,sign_consistency,annual_stability_status,bull_rank_ic,bear_rank_ic,sideways_rank_ic,ic_2021,ic_2022,ic_2023,ic_2024
+KMID,-0.0108,0.75,VALID,-0.0752,-0.0588,0.0289,-0.0244,-0.0391,0.0458,-0.0459
+KLEN,0.0248,1.0,VALID,0.0096,0.0248,0.0291,0.0083,0.033,0.0404,0.0079
+KMID2,0.0071,0.25,VALID,-0.0607,-0.0241,0.0401,-0.0058,-0.0194,0.0658,-0.0392

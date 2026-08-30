@@ -1,0 +1,4 @@
+﻿factor_name,mean_rank_ic,std_rank_ic,rank_ic_ir,annualized_rank_icir,positive_rank_ic_ratio,rank_ic_t_stat,rank_ic_hac_t_stat,rank_ic_p_value,rank_ic_hac_p_value,rank_ic_fdr_p_value,recommended_direction
+KLEN,0.0248,0.5141,0.0483,0.1714,0.4933,1.4408,1.4699,0.149988,0.141939,0.425817,1
+KMID,-0.0108,0.493,-0.0219,-0.0779,0.4697,-0.6545,-0.68,0.512981,0.4967,0.733286,-1
+KMID2,0.0071,0.4965,0.0143,0.0507,0.482,0.4257,0.4323,0.670414,0.665651,0.768059,1
