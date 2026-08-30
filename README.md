@@ -9,17 +9,18 @@
 
 ---
 
-## 📈 当前研究认证状态 (Current Research Status — Phase 2.0.2r1)
+## 📈 当前研究认证状态 (Current Research Status — Phase 2.0.2r2)
 
 | 投研与验证维度 | 当前认证状态 | 核心实证指标 / 结论 |
 | :--- | :---: | :--- |
 | **数据与 PIT 血缘** | `VERIFIED` | 300 股票全样本真实 PIT 数据集 (`349,379` 行, 无 Mock, SHA256 存证) |
 | **特征工程与中性化** | `VERIFIED` | 每日截面 MAD 去极值 + Z-Score + OLS 行业/市值中性化 |
 | **预测质量冠军** | `BASELINE_REMAINS_CHAMPION` | **LightGBM Classification (Baseline)**: Mean Daily RankIC = **+0.0503**, NW20 RankICIR = **+0.4044**, Q5-Q1 Spread = **+7.17%** |
-| **交易信号候选** | `PROMISING_OOS_SIGNAL` | **LightGBM Ranker (LambdaRank)**: 成本后超额收益 = **+5.72%**, 夏普比率 = **+0.36**, 20-Fold 真实胜率 = **55.0%** |
+| **交易信号候选** | `PROMISING_OOS_SIGNAL` | **LightGBM Ranker (LambdaRank)**: 成本后超额收益 = **+5.72%**, 夏普比率 = **+0.36**, 20-Fold 真实胜率 = **55.0%** (需在 Phase 2.1 经投资组合优化检验) |
 | **随机种子稳健性** | `VERIFIED_STABLE` | 3 独立种子 (42, 2026, 3407) 真实重训，RankIC 极差 max-min = **0.0048 <= 0.01** |
-| **20-Fold 交易实证** | `PASS` | 20 个滚动折全部完成独立 T+1 撮合与费用扣除，真实胜率 55.0% (11/20 Folds 胜出) |
-| **投资组合优化准入** | `PHASE_2_1_READY = TRUE` | 已具备进入 Phase 2.1 组合权重分配与执行优化的全部先决条件 |
+| **20-Fold 交易实证** | `PASS` | 20 个滚动折全部完成独立 T+1 撮合与费用扣除，真实胜率 55.0% (11/20 Folds 胜出，末尾极短折夏普仅具描述性参考) |
+| **本地阶段准入状态** | `LOCAL_PHASE_2_1_READY = TRUE` | 本地 10 大门禁全部通过，进入 Phase 2.1 组合权重与执行优化 |
+| **最终阶段准入状态** | `FINAL_PHASE_2_1_READY = PENDING_CI` | 等待外部 GitHub Actions Fast CI 执行通过后最终确认 |
 | **实盘交易许可状态** | `LIVE_TRADING_READY = FALSE` | **当前阶段属于科学建模与策略研发阶段，严格禁止直接用于实盘交易** |
 
 ---

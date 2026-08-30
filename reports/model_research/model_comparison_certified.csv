@@ -1,5 +1,5 @@
 ﻿model_id,model_name,task_type,feature_selection,weighting_mode,oos_prediction_rows,common_ranking_rows,common_oos_dates,mean_daily_rank_ic,rank_icir,rank_icir_nw_lag5,rank_icir_nw_lag20,auc,brier_score,q5_minus_q1_spread,monotonicity_score,cum_strategy_return,cagr,cost_adjusted_excess_return,alpha,sharpe_ratio,max_drawdown,win_rate,total_trades,total_costs
 lightgbm_clf_baseline,LightGBM Classification (Baseline),classification,all,none,227466,221019,744,0.0503,1.4305,0.6354,0.4044,0.5319,0.2497,7.17,0.9,-12.71,-4.22,-29.93,-6.85,-0.74,-15.26,37.2,499,43654.94
 double_ensemble,DoubleEnsemble (Sample Reweight + Subspacing),classification,top_20,recency_magnitude,227466,221019,744,0.0304,0.8507,0.3798,0.2468,0.5183,0.2501,5.81,0.6,2.28,0.72,-14.94,-1.88,-0.1,-14.25,47.68,495,53846.73
-lightgbm_ranker,LightGBM Ranker (LambdaRank),ranking,rank_ic_pruned,recency_magnitude,227466,221019,744,0.0379,1.1795,0.531,0.3472,,,9.49,0.9,22.94,6.76,5.72,3.28,0.36,-14.35,49.31,623,95103.05
-lightgbm_reg_baseline,LightGBM Regression,regression,all,recency_magnitude,227466,221019,744,0.0194,0.5771,0.2611,0.1772,,,4.33,0.4,10.78,3.3,-6.44,0.62,0.17,-21.83,49.39,519,67077.25
+lightgbm_ranker,LightGBM Ranker (LambdaRank),ranking,rank_ic_pruned,recency_magnitude,227466,221019,744,0.0379,1.1795,0.531,0.3472,N/A,N/A,9.49,0.9,22.94,6.76,5.72,3.28,0.36,-14.35,49.31,623,95103.05
+lightgbm_reg_baseline,LightGBM Regression,regression,all,recency_magnitude,227466,221019,744,0.0194,0.5771,0.2611,0.1772,N/A,N/A,4.33,0.4,10.78,3.3,-6.44,0.62,0.17,-21.83,49.39,519,67077.25

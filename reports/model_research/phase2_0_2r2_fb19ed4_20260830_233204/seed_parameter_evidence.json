@@ -1,0 +1,92 @@
+{
+  "42": {
+    "model_random_state": 42,
+    "lgbm_params": {
+      "objective": "binary",
+      "metric": [
+        "binary_logloss",
+        "auc"
+      ],
+      "boosting_type": "gbdt",
+      "learning_rate": 0.02,
+      "num_leaves": 63,
+      "max_depth": 8,
+      "feature_fraction": 0.7,
+      "bagging_fraction": 0.7,
+      "bagging_freq": 1,
+      "min_child_samples": 150,
+      "lambda_l1": 10.0,
+      "lambda_l2": 20.0,
+      "random_state": 42,
+      "verbose": -1,
+      "n_jobs": -1,
+      "feature_fraction_seed": 42,
+      "bagging_seed": 42,
+      "data_random_seed": 42,
+      "scale_pos_weight": 0.9878024658798708,
+      "early_stopping_rounds": 80,
+      "n_estimators": 800
+    },
+    "prediction_hash": "0912c793c922a8ea"
+  },
+  "2026": {
+    "model_random_state": 2026,
+    "lgbm_params": {
+      "objective": "binary",
+      "metric": [
+        "binary_logloss",
+        "auc"
+      ],
+      "boosting_type": "gbdt",
+      "learning_rate": 0.02,
+      "num_leaves": 63,
+      "max_depth": 8,
+      "feature_fraction": 0.7,
+      "bagging_fraction": 0.7,
+      "bagging_freq": 1,
+      "min_child_samples": 150,
+      "lambda_l1": 10.0,
+      "lambda_l2": 20.0,
+      "random_state": 2026,
+      "verbose": -1,
+      "n_jobs": -1,
+      "feature_fraction_seed": 2026,
+      "bagging_seed": 2026,
+      "data_random_seed": 2026,
+      "scale_pos_weight": 0.9878024658798708,
+      "early_stopping_rounds": 80,
+      "n_estimators": 800
+    },
+    "prediction_hash": "b52900d7c0fb782a"
+  },
+  "3407": {
+    "model_random_state": 3407,
+    "lgbm_params": {
+      "objective": "binary",
+      "metric": [
+        "binary_logloss",
+        "auc"
+      ],
+      "boosting_type": "gbdt",
+      "learning_rate": 0.02,
+      "num_leaves": 63,
+      "max_depth": 8,
+      "feature_fraction": 0.7,
+      "bagging_fraction": 0.7,
+      "bagging_freq": 1,
+      "min_child_samples": 150,
+      "lambda_l1": 10.0,
+      "lambda_l2": 20.0,
+      "random_state": 3407,
+      "verbose": -1,
+      "n_jobs": -1,
+      "feature_fraction_seed": 3407,
+      "bagging_seed": 3407,
+      "data_random_seed": 3407,
+      "scale_pos_weight": 0.9878024658798708,
+      "early_stopping_rounds": 80,
+      "n_estimators": 800
+    },
+    "prediction_hash": "e20ce8cec27e2969"
+  }
+}

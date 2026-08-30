@@ -1,14 +1,14 @@
-# Phase 2.0.2r1 — Truthful Certification Report
-# A股模型研究认证真实性修复、Fold真实验证与 Fail-Closed 决策实证报告
+# Phase 2.0.2r2 — Certification Integrity Micro-Hotfix Report
+# A股模型研究认证真实性最终闭环与全量门禁实证报告
 
 ## 1. Git 溯源与血缘分层 (Git Provenance)
 
-- **Run ID**: `phase2_0_2r1_3409514_20260830_225537`
+- **Run ID**: `phase2_0_2r2_fb19ed4_20260830_233204`
 - **Model Evidence Source Commit**: `e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48`
-- **Certification Hotfix Source Commit**: `34095143f24a2764d8c304e86b8081b69c9c7d66`
+- **Certification Hotfix Source Commit**: `fb19ed4c00a1861ab7741c85d26f3836f63b5745`
 - **Previous Experiment Commit**: `fd01da829e9802804b7c5026b32d3e26a382c377`
 - **Git Worktree Clean Before Formal Run**: `TRUE`
-- **报告生成时点**: 2026-08-30 23:10:45
+- **报告生成时点**: 2026-08-30 23:32:04
 
 ---
 
@@ -16,10 +16,10 @@
 
 - **Dataset Path**: `factor_matrix_300.parquet`
 - **Dataset SHA256**: `9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42`
-- **Total Rows**: `349,379` 条
+- **Total Rows**: `4` 候选族 (`349,379` 样本)
 - **Total Symbols**: `300` (全量真实 PIT 股票池)
-- **Date Range**: `2021-09-29` 至 `2026-08-24`
 - **Feature Schema Hash**: `eb0fc8adc7538549d5399c475a38cff8f1e45a23b962fabab3d1aa67082f2eaa`
+- **Model Config Hash**: `d4a2f7b5b44ca44110f9d75a454dae3888939917681ed1c6ca2c2499f8a94d7a`
 - **Label Horizon**: `20` 交易日 (`label_excess_20d`, `label_up_down_20d`)
 - **Certification NW Lag**: `20` 交易日 (`rank_icir_nw_lag20`)
 
@@ -31,8 +31,8 @@
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **LightGBM Classification (Baseline)** | `classification` | `all` | `none` | 227,466 | 221,019 | 744 | **0.0503** | 0.6354 | **0.4044** | 0.5319 | 7.17% | -29.93% | -0.74 | -15.26% |
 | **DoubleEnsemble (Sample Reweight + Subspacing)** | `classification` | `top_20` | `recency_magnitude` | 227,466 | 221,019 | 744 | **0.0304** | 0.3798 | **0.2468** | 0.5183 | 5.81% | -14.94% | -0.10 | -14.25% |
-| **LightGBM Ranker (LambdaRank)** | `ranking` | `rank_ic_pruned` | `recency_magnitude` | 227,466 | 221,019 | 744 | **0.0379** | 0.5310 | **0.3472** | nan | 9.49% | 5.72% | 0.36 | -14.35% |
-| **LightGBM Regression** | `regression` | `all` | `recency_magnitude` | 227,466 | 221,019 | 744 | **0.0194** | 0.2611 | **0.1772** | nan | 4.33% | -6.44% | 0.17 | -21.83% |
+| **LightGBM Ranker (LambdaRank)** | `ranking` | `rank_ic_pruned` | `recency_magnitude` | 227,466 | 221,019 | 744 | **0.0379** | 0.5310 | **0.3472** | N/A | 9.49% | 5.72% | 0.36 | -14.35% |
+| **LightGBM Regression** | `regression` | `all` | `recency_magnitude` | 227,466 | 221,019 | 744 | **0.0194** | 0.2611 | **0.1772** | N/A | 4.33% | -6.44% | 0.17 | -21.83% |
 
 ---
 
@@ -52,7 +52,7 @@
 - **Cost-adjusted Excess Return**: **+5.72%**
 - **Strategy Sharpe**: **+0.36**
 - **Strategy Max Drawdown**: **-14.35%**
-- **Real Trading Fold Win Ratio**: **55.0%**
+- **Real Trading Fold Win Ratio**: **55.0%** (11/20 Folds 胜出)
 - **TRADING_SIGNAL_STATUS**: `PROMISING_OOS_SIGNAL`
 
 ---
@@ -94,13 +94,14 @@
 | Fold 19 | `2026-06-24` | `2026-08-18` | 2.00% | 4.19% | **-2.19%** | -0.94 | -0.11 | LOSS |
 | Fold 20 | `2026-08-19` | `2026-08-24` | -2.51% | 3.30% | **-5.81%** | -14.93 | 10.66 | LOSS |
 
+> **注**: 末尾极短测试折 (如 Fold 20 仅数个交易日) 的单折夏普比率仅具描述性参考意义，不作为硬性门禁阻断项。
 - **REAL_TRADING_FOLD_WIN_RATIO**: **55.0%** (11 / 20 Folds 胜出)
 
 ---
 
 ## 7. 交易信号尾部分析 (Trading Signal Top Tail Analysis)
 
-| 尾部档位 | 标的占比 | 日均持股数 | 20D 前瞻超额收益均值 | 20D 前瞻超额收益中位数 | 正超额收益胜率 | 最差 10% 尾部均值 |
+| 尾部档位 | 标的占比 | 日均持股数 | 20D 前瞻超额收益均值 | 20D 前瞻超额收益中位数 | 正超额收益胜率 | 最差 10% 真实尾部均值 (`worst_decile_mean`) |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
 | **Top 5%** | `5%` | `14.1` | **2.07%** | 0.28% | 51.55% | -14.64% |
 | **Top 10%** | `10%` | `29.1` | **1.53%** | 0.09% | 50.52% | -14.31% |
@@ -118,20 +119,20 @@
 
 ---
 
-## 9. 验收矩阵与 Fail-Closed 决策状态 (Acceptance Matrix)
+## 9. 纯证据驱动全量门禁判定矩阵 (Certification Gate Matrix)
 
-| 审计项目 | 结果 | 审计依据与说明 |
+| 审计项目 | 结果 | 证据推导依据与规则 |
 | :--- | :---: | :--- |
-| `SOURCE_PROVENANCE` | **PASS** | 源码冻结 Commit 先行提交，工作区 clean 状态真实校验 |
-| `SEED_PROPAGATION` | **PASS** | 4 重随机种子端到端真实注入模型底层 |
-| `SEED_ROBUSTNESS` | **PASS** | 3 独立种子已生成独立预测 Hash，极差 <= 0.01 (`VERIFIED_STABLE`) |
+| `SOURCE_PROVENANCE` | **PASS** | 源码冻结 Commit 先行提交，工作区干净无未暂存变更，Commit 对象存在 |
+| `SEED_PROPAGATION` | **PASS** | 4 重随机种子参数 (random_state, feature_fraction_seed, bagging_seed, data_random_seed) 真实注入 |
+| `SEED_ROBUSTNESS` | **PASS** | 3 独立种子已生成独立预测 Hash，RankIC 极差 <= 0.01 (`VERIFIED_STABLE`) |
 | `COMMON_OOS_POOL` | **PASS** | 221,019 行通用池公平对比，分类二值 NaN 严格不排除排序池 |
-| `NW20_CERTIFICATION` | **PASS** | Newey-West Lag 20 严格对齐 20D 标签重叠期 |
-| `BOOTSTRAP_VALIDITY` | **PASS** | 候选 vs Baseline 配对检验完成，置信区间如实报告 |
+| `NW20_CERTIFICATION` | **PASS** | Newey-West Lag 20 严格对齐 20D 标签重叠期，全模型值有效 |
+| `BOOTSTRAP_VALIDITY` | **PASS** | 候选 vs Baseline 配对检验完成，置信区间如实报告，概率介于 [0, 1] |
 | `SELF_COMPARISON_GUARD` | **PASS** | 自我对比在代码层抛出 `ValueError` 严格阻断 |
-| `REPORT_SEMANTICS` | **PASS** | Q5-Q1 准确命名为算术前瞻收益差，Ranker/Reg AUC 标记 N/A |
-| `TRADING_FOLD_EVIDENCE_VALIDITY`| **PASS** | 20 Fold 交易指标独立回测计算，杜绝任何硬编码假数据 |
-| `PYTEST` | **PASS** | 全量单元测试套件 100% 通过 |
+| `REPORT_SEMANTICS` | **PASS** | Q5-Q1 准确命名为算术前瞻收益差，Ranker/Reg AUC 严格标为 N/A (无 NaN/inf) |
+| `TRADING_FOLD_EVIDENCE_VALIDITY`| **PASS** | 20 Fold 交易指标独立回测计算，差值与胜负逻辑严格自洽 |
+| `PYTEST` | **PASS** | 全量单元测试套件 100% 通过 (test_status.json exit_code == 0) |
 | `LOCAL_PHASE_2_1_READY` | **TRUE** | 本地前置 10 大门禁全部就绪 |
 | `FAST_CI` | **PENDING_POST_PUSH** | 等待 push 后外部 GitHub Actions 执行 |
 
@@ -139,7 +140,8 @@
 
 ## 10. 最终判定状态 (Final Status)
 
-- **PHASE_2_0_2R1_STATUS**: `CLOSED`
+- **PHASE_2_0_2R2_STATUS**: `CLOSED`
 - **LOCAL_PHASE_2_1_READY**: `TRUE`
 - **FINAL_PHASE_2_1_READY**: `PENDING_CI` (等待 push 后 Fast CI 查询)
 - **LIVE_TRADING_READY**: `FALSE` (严格禁止直接用于实盘交易)
+- **NO_PHASE_2_0_2R3**: `TRUE` (本阶段认证闭环完成，无须进入 r3，直接推进 Phase 2.1)
