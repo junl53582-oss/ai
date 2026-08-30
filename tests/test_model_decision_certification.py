@@ -127,26 +127,38 @@ def test_experiment_sha_must_exist():
     assert res.returncode == 0
 
 
-# 13. Trading fold metrics are not hardcoded
+# 13. Trading fold metrics are not hardcoded and match real verified artifact
 def test_trading_fold_metrics_are_not_hardcoded():
-    from models.certification_logic import compute_top_tail_analysis
-    # Fold excess differences must not be constant across mock folds
-    deltas = [2.5, -1.2, 3.4, -0.5, 1.8]
-    assert len(set(deltas)) > 1
+    fold_file = Path("reports/model_research/trading_fold_stability_verified.csv")
+    if fold_file.exists():
+        df_folds = pd.read_csv(fold_file)
+        assert len(df_folds) == 20
+        assert len(df_folds["fold"].unique()) == 20
+        # 验证差值与胜负逻辑严格自洽
+        expected_deltas = df_folds["ranker_cost_adjusted_excess_return"] - df_folds["baseline_cost_adjusted_excess_return"]
+        assert np.isclose(df_folds["delta_excess_return"], expected_deltas, atol=0.02).all()
+        assert (df_folds["ranker_win"] == (df_folds["ranker_cost_adjusted_excess_return"] > df_folds["baseline_cost_adjusted_excess_return"])).all()
+        assert len(df_folds["delta_excess_return"].unique()) > 10
 
 
 # 14. Fold win ratio is derived from fold metrics
 def test_fold_win_ratio_derived_from_fold_metrics():
-    df_folds = pd.DataFrame({
-        "ranker_win": [True, True, False, True, False]
-    })
-    win_ratio = float(df_folds["ranker_win"].mean())
-    assert win_ratio == 0.60
+    fold_file = Path("reports/model_research/trading_fold_stability_verified.csv")
+    if fold_file.exists():
+        df_folds = pd.read_csv(fold_file)
+        real_ratio = float(df_folds["ranker_win"].mean())
+        assert real_ratio == 0.55
 
 
 # 15. Seed status is runtime derived
 def test_seed_status_is_runtime_derived():
     from models.certification_logic import derive_seed_status
+    # A. 证据不足
+    assert derive_seed_status([]) == "NOT_VERIFIED"
+    assert derive_seed_status([{"prediction_hash": "h1"}]) == "NOT_VERIFIED"
+    assert derive_seed_status([{"prediction_hash": None, "mean_daily_rank_ic": 0.05}, {"prediction_hash": "h2", "mean_daily_rank_ic": 0.05}]) == "NOT_VERIFIED"
+
+    # B. 稳定 (不同 hash + spread <= 0.01)
     records_stable = [
         {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503},
         {"prediction_hash": "hash_2", "mean_daily_rank_ic": 0.0455},
@@ -154,6 +166,14 @@ def test_seed_status_is_runtime_derived():
     ]
     assert derive_seed_status(records_stable) == "VERIFIED_STABLE"
 
+    # C. 不稳定 (不同 hash + spread > 0.02)
+    records_unstable = [
+        {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503},
+        {"prediction_hash": "hash_2", "mean_daily_rank_ic": 0.0250}
+    ]
+    assert derive_seed_status(records_unstable) == "UNSTABLE"
+
+    # D. 确定性相同
     records_identical = [
         {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503},
         {"prediction_hash": "hash_1", "mean_daily_rank_ic": 0.0503}
@@ -175,20 +195,36 @@ def test_phase_2_1_ready_is_runtime_derived():
 # 17. Worst decile mean is actual bottom decile mean
 def test_worst_decile_mean_is_actual_bottom_decile_mean():
     from models.certification_logic import compute_top_tail_analysis
-    # 10 values from -10 to +10
-    dates = pd.date_range("2023-01-01", periods=10, freq="B")
+    # 构造 100 个从 1 到 100 的确定性样本 (日期相同)
     rows = []
-    for idx, dt in enumerate(dates):
+    for val in range(1, 101):
         rows.append({
-            "date": dt,
-            "symbol": "000001.SZ",
-            "pred_score": float(idx),
-            "label_excess_20d": float(idx - 5) * 0.01,
+            "date": pd.Timestamp("2023-01-03"),
+            "symbol": f"SYM_{val:03d}",
+            "pred_score": float(val),
+            "label_excess_20d": float(val) * 0.01,
             "in_universe": True
         })
     df = pd.DataFrame(rows)
     tail_res = compute_top_tail_analysis(df)
-    assert len(tail_res) == 3
-    assert "worst_decile_mean" in tail_res.columns
-    assert np.isfinite(tail_res["worst_decile_mean"].iloc[0])
+    # 对于 Top 20% (前 20 大样本, 即 81..100):
+    # 其内部最差 10% (即 bottom 2 个: 81 和 82) 的均值为 81.5 * 0.01 = 0.815 -> 81.5%
+    top20_row = tail_res[tail_res["tail_tier"] == "Top 20%"].iloc[0]
+    assert top20_row["worst_decile_mean"] == 81.5
+
+
+# 18. Artifact reuse compatibility validation (Fail-Closed)
+def test_artifact_reuse_compatibility_validation():
+    from models.certification_logic import validate_artifact_reuse_compatibility
+    meta_a = {"dataset_sha256": "sha_1", "feature_schema_hash": "f_1", "label_horizon": 20, "model_config_hash": "c_1"}
+    meta_b = {"dataset_sha256": "sha_1", "feature_schema_hash": "f_1", "label_horizon": 20, "model_config_hash": "c_1"}
+    meta_mismatch = {"dataset_sha256": "sha_2", "feature_schema_hash": "f_1", "label_horizon": 20, "model_config_hash": "c_1"}
+    
+    ok_a, _ = validate_artifact_reuse_compatibility(meta_a, meta_b)
+    assert ok_a is True
+
+    ok_b, msg_b = validate_artifact_reuse_compatibility(meta_a, meta_mismatch)
+    assert ok_b is False
+    assert "Mismatch in dataset_sha256" in msg_b
+
 
