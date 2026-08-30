@@ -20,16 +20,16 @@ class TargetLabeler:
     def __init__(
         self,
         horizon: int = settings.LABEL_HORIZON,
-        label_col: str = settings.LABEL_COLUMN,
+        label_col: Optional[str] = None,
         task_type: str = settings.TASK_TYPE,
-        label_col_clf: str = settings.LABEL_COLUMN_CLF,
+        label_col_clf: Optional[str] = None,
         threshold: float = settings.LABEL_THRESHOLD,
         threshold_mode: str = settings.LABEL_THRESHOLD_MODE
     ):
         self.horizon = horizon
-        self.label_col = label_col  # 连续超额收益列
+        self.label_col = label_col or f"label_excess_{horizon}d"  # 连续超额收益列
         self.task_type = task_type
-        self.label_col_clf = label_col_clf  # 二分类标签列
+        self.label_col_clf = label_col_clf or f"label_up_down_{horizon}d"  # 二分类标签列
         self.threshold = threshold
         self.threshold_mode = threshold_mode  # "fixed" | "cross_sectional_median"
 
@@ -42,6 +42,12 @@ class TargetLabeler:
         基于全市场统一交易日历计算未来 N 个交易日超额收益率 (P1-2 支持注入 canonical_dates)：
         Label = (Stock_Price(t+N_trd) / Stock_Price(t) - 1) - (Benchmark_Price(t+N_trd) / Benchmark_Price(t) - 1)
         """
+        if "benchmark_close" not in df.columns:
+            raise ValueError(
+                "Dataframe missing required 'benchmark_close' column for excess return labeling! "
+                "股票超额收益计算必须依赖基准收盘价，禁止将未对冲基准的绝对收益伪装成 Alpha 标签 (Fail-Closed)."
+            )
+
         logger.info(f"正在基于市场真实交易日历计算未来 {self.horizon} 交易日超额收益率标签 ({self.label_col})...")
         df = df.copy()
         df["date"] = pd.to_datetime(df["date"])
@@ -85,18 +91,15 @@ class TargetLabeler:
             np.nan
         )
 
-        # 基准未来收益 (P0-11 基准缺失置 NaN 绝不赋 0.0)
-        if "benchmark_close" in df.columns:
-            bench_daily = df.groupby("date")["benchmark_close"].first().reset_index()
-            bench_future = bench_daily.rename(columns={"date": "future_date", "benchmark_close": "future_bench_close"})
-            merged = pd.merge(merged, bench_future, on="future_date", how="left")
-            bench_ret = np.where(
-                merged["future_bench_close"].notna() & (merged["benchmark_close"] > 0),
-                (merged["future_bench_close"] / merged["benchmark_close"]) - 1.0,
-                np.nan
-            )
-        else:
-            bench_ret = 0.0
+        # 基准未来收益 (严格 Fail-Closed，基准有效时计算相对超额)
+        bench_daily = df.groupby("date")["benchmark_close"].first().reset_index()
+        bench_future = bench_daily.rename(columns={"date": "future_date", "benchmark_close": "future_bench_close"})
+        merged = pd.merge(merged, bench_future, on="future_date", how="left")
+        bench_ret = np.where(
+            merged["future_bench_close"].notna() & (merged["benchmark_close"] > 0),
+            (merged["future_bench_close"] / merged["benchmark_close"]) - 1.0,
+            np.nan
+        )
 
         merged[self.label_col] = stock_ret - bench_ret
 

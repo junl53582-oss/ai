@@ -95,6 +95,14 @@ class LightGBMQuantModel:
                     n_estimators=n_estimators,
                     **fit_params
                 )
+            elif self.task_type == "ranking":
+                # LambdaRank 排序学习目标
+                if "objective" not in fit_params:
+                    fit_params["objective"] = "lambdarank"
+                self.model = lgb.LGBMRanker(
+                    n_estimators=n_estimators,
+                    **fit_params
+                )
             else:
                 self.model = lgb.LGBMRegressor(
                     n_estimators=n_estimators,
@@ -102,6 +110,17 @@ class LightGBMQuantModel:
                 )
 
             callbacks = [lgb.log_evaluation(period=0)]
+            eval_set = None
+            eval_group = None
+            train_group = None
+
+            # Ranking 任务计算交易日横截面 group
+            if self.task_type == "ranking":
+                if "date" in X_train.columns:
+                    train_group = list(X_train.groupby("date", sort=False).size())
+                if X_val is not None and "date" in X_val.columns:
+                    eval_group = [list(X_val.groupby("date", sort=False).size())]
+
             if X_val is not None and y_val is not None and len(X_val) > 0:
                 y_tr_classes = set(np.unique(y_train))
                 y_val_classes = set(np.unique(y_val))
@@ -113,12 +132,20 @@ class LightGBMQuantModel:
             else:
                 eval_set = None
 
+            fit_kwargs = {
+                "sample_weight": sample_weight,
+                "eval_set": eval_set,
+                "callbacks": callbacks
+            }
+            if train_group is not None:
+                fit_kwargs["group"] = train_group
+            if eval_group is not None:
+                fit_kwargs["eval_group"] = eval_group
+
             self.model.fit(
                 X_train[self.feature_names],
                 y_train,
-                sample_weight=sample_weight,
-                eval_set=eval_set,
-                callbacks=callbacks
+                **fit_kwargs
             )
         else:
             # Fallback 采用 scikit-learn HistGradientBoosting
@@ -209,6 +236,7 @@ class LightGBMQuantModel:
 
         imp_df = pd.DataFrame({
             "feature": self.feature_names,
+            "importance": gain_imp,
             "importance_gain": gain_imp,
             "importance_split": split_imp
         })

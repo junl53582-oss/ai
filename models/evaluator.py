@@ -28,10 +28,28 @@ class ModelEvaluator:
         - classification: AUC/Accuracy/Precision/Recall/F1/混淆矩阵/Brier/对数损失 + 分层单调性
         - regression: IC/RankIC/ICIR/RankICIR/滚动 RankIC/IC 胜率 + 分层单调性
         """
+        if label_col is None:
+            # 自动探测在 oos_df 中实际存在的有效标签列
+            clf_cands = [c for c in oos_df.columns if c.startswith("label_up_down_")]
+            reg_cands = [c for c in oos_df.columns if c.startswith("label_excess_")]
+            if task_type == "classification":
+                if settings.LABEL_COLUMN_CLF in oos_df.columns:
+                    label_col = settings.LABEL_COLUMN_CLF
+                elif clf_cands:
+                    label_col = clf_cands[0]
+                else:
+                    label_col = settings.LABEL_COLUMN_CLF
+            else:
+                if settings.LABEL_COLUMN in oos_df.columns:
+                    label_col = settings.LABEL_COLUMN
+                elif reg_cands:
+                    label_col = reg_cands[0]
+                else:
+                    label_col = settings.LABEL_COLUMN
+
         if task_type == "classification":
-            clf_label = label_col or settings.LABEL_COLUMN_CLF
-            return self._evaluate_classification(oos_df, label_col=clf_label)
-        return self._evaluate_regression(oos_df, label_col=label_col or settings.LABEL_COLUMN)
+            return self._evaluate_classification(oos_df, label_col=label_col)
+        return self._evaluate_regression(oos_df, label_col=label_col)
 
     def _evaluate_classification(self, oos_df: pd.DataFrame, label_col: str = settings.LABEL_COLUMN_CLF) -> Dict[str, Any]:
         """
@@ -108,7 +126,32 @@ class ModelEvaluator:
         positive_rate = float(y_true.mean())
 
         # 分层单调性 (按概率排序，用连续超额收益标签衡量真实分层收益)
-        quantile_info = self._compute_quantile_returns(df, label_col=settings.LABEL_COLUMN, n_groups=5)
+        cont_col = settings.LABEL_COLUMN if settings.LABEL_COLUMN in df.columns else None
+        if cont_col is None:
+            cand_cols = [c for c in df.columns if "excess" in c and c != label_col]
+            cont_col = cand_cols[0] if cand_cols else None
+
+        quantile_info = self._compute_quantile_returns(df, label_col=cont_col or label_col, n_groups=5)
+
+        # 计算每日横截面 RankIC 与 RankICIR
+        daily_rank_ic_list = []
+        rank_ic_dates = []
+        if cont_col is not None:
+            for dt, group in df.groupby("date"):
+                valid_g = group[group[cont_col].notna() & group["pred_score"].notna()]
+                if len(valid_g) >= 3:
+                    s_ic = stats.spearmanr(valid_g["pred_score"], valid_g[cont_col])[0]
+                    if not np.isnan(s_ic):
+                        daily_rank_ic_list.append(s_ic)
+                        rank_ic_dates.append(dt)
+
+        rank_ic_series = pd.Series(daily_rank_ic_list, index=rank_ic_dates)
+        rank_ic_mean = float(rank_ic_series.mean()) if len(rank_ic_series) > 0 else 0.0
+        rank_ic_std = float(rank_ic_series.std()) if len(rank_ic_series) > 0 else 1.0
+        annual_factor = np.sqrt(242.0 / settings.LABEL_HORIZON)
+        rank_icir = (rank_ic_mean / (rank_ic_std + 1e-8)) * annual_factor
+        std_nw = self._compute_newey_west_std(rank_ic_series, max_lag=5)
+        rank_icir_newey_west = (rank_ic_mean / (std_nw + 1e-8)) * annual_factor
 
         metrics = {
             "task_type": "classification",
@@ -130,11 +173,16 @@ class ModelEvaluator:
             "Q5_minus_Q1": quantile_info["Q5_minus_Q1"],
             "monotonicity_score": quantile_info["monotonicity_score"],
             "quantile_observation_count": quantile_info["quantile_observation_count"],
-            "rank_ic_series": pd.Series(dtype=float)
+            "mean_rank_ic": round(rank_ic_mean, 4),
+            "rank_ic_std": round(rank_ic_std, 4),
+            "rank_icir": round(rank_icir, 4),
+            "rank_icir_newey_west": round(rank_icir_newey_west, 4),
+            "rank_ic_series": rank_ic_series
         }
 
         logger.info(
-            f"分类 OOS 评估: AUC={metrics['auc']} | Accuracy={metrics['accuracy']} | "
+            f"分类 OOS 评估: AUC={metrics['auc']} | RankIC={metrics['mean_rank_ic']} | "
+            f"RankICIR(NW)={metrics['rank_icir_newey_west']} | Accuracy={metrics['accuracy']} | "
             f"F1={metrics['f1']} | Brier={metrics['brier_score']} | "
             f"上涨样本占比={positive_rate*100:.1f}% | 评估行数={evaluated_member_rows}/{oos_total_rows}"
         )
@@ -211,7 +259,9 @@ class ModelEvaluator:
         metrics = {
             "task_type": "regression",
             "ic_mean": round(ic_mean, 4),
+            "mean_ic": round(ic_mean, 4),
             "rank_ic_mean": round(rank_ic_mean, 4),
+            "mean_rank_ic": round(rank_ic_mean, 4),
             "ic_std": round(ic_std, 4),
             "rank_ic_std": round(rank_ic_std, 4),
             "icir": round(float(icir), 4),

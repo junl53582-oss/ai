@@ -1,0 +1,5 @@
+﻿model_id,model_name,task_type,feature_selection,weighting_mode,oos_samples,mean_daily_rank_ic,rank_icir,rank_icir_newey_west,auc,brier_score,q5_minus_q1,monotonicity_score,cum_strategy_return,cagr,excess_return,alpha,sharpe_ratio,max_drawdown,win_rate,total_trades,total_costs
+lightgbm_ranker,LightGBM Ranker (LambdaRank),ranking,rank_ic_pruned,recency_magnitude,2340,0.0152,0.1097,0.0596,0.5,0.0,-10.46,-0.1,2.73,1.35,20.64,-0.46,-0.13,-7.74,57.26,196,22791.76
+lightgbm_reg_baseline,LightGBM Regression,regression,all,recency_magnitude,2340,0.0027,0.0191,0.0105,0.5,0.0,-3.28,-0.1,2.73,1.35,20.64,-0.46,-0.13,-7.74,57.26,196,22791.76
+lightgbm_clf_baseline,LightGBM Classification (Baseline),classification,all,none,1404,-0.0508,-0.2496,-0.136,0.4849,0.2236,-28.45,0.0,2.73,1.35,20.64,-0.46,-0.13,-7.74,57.26,196,22791.76
+double_ensemble,DoubleEnsemble (Sample Reweight + Subspacing),classification,top_20,recency_magnitude,1404,-0.1109,-0.5538,-0.3204,0.4194,0.2238,-28.45,0.0,2.73,1.35,20.64,-0.46,-0.13,-7.74,57.26,196,22791.76

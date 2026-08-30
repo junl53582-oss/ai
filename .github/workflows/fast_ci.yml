@@ -49,6 +49,7 @@ jobs:
             tests/test_execution_safety.py \
             tests/test_no_leakage.py \
             tests/test_neutralization_parity.py \
+            tests/test_model_research_integrity.py \
             -m "not slow and not integration and not production"
 
       - name: Dataset Schema Gate

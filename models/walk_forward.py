@@ -21,20 +21,26 @@ class WalkForwardTrainer:
 
     def __init__(
         self,
-        train_years: int = settings.TRAIN_WINDOW_YEARS,
+        train_years: float = settings.TRAIN_WINDOW_YEARS,
         val_months: int = settings.VAL_WINDOW_MONTHS,
         test_months: int = settings.TEST_WINDOW_MONTHS,
         purge_gap_days: int = settings.PURGE_GAP_DAYS,
         label_col: Optional[str] = None,
         task_type: str = settings.TASK_TYPE,
-        model_type: str = "lightgbm"
+        model_type: str = "lightgbm",
+        feature_selection_method: str = "all",
+        top_k_features: int = 20,
+        weighting_mode: str = "recency_magnitude"
     ):
-        self.train_years = train_years
-        self.val_months = val_months
-        self.test_months = test_months
+        self.train_years = float(train_years)
+        self.val_months = int(val_months)
+        self.test_months = int(test_months)
         self.purge_gap_days = max(purge_gap_days, settings.LABEL_HORIZON)
         self.task_type = task_type
         self.model_type = model_type
+        self.feature_selection_method = feature_selection_method
+        self.top_k_features = top_k_features
+        self.weighting_mode = weighting_mode
         # 默认使用当前任务类型对应的标签列
         self.label_col = label_col or (settings.LABEL_COLUMN_CLF if task_type == "classification" else settings.LABEL_COLUMN)
         self.models: List[Dict[str, Any]] = []
@@ -45,8 +51,42 @@ class WalkForwardTrainer:
         train_df: pd.DataFrame,
         label_col: str,
         half_life_days: int = 120,
-        magnitude_boost: float = 1.5
-    ) -> np.ndarray:
+        magnitude_boost: float = 1.5,
+        mode: str = "recency_magnitude"
+    ) -> Optional[np.ndarray]:
+        """
+        样本加权引擎：
+        - "none": 不做样本加权 (等权)
+        - "recency": 仅做时间半衰期衰减
+        - "recency_magnitude": 复合加权 (时间衰减 + 连续超额收益幅度提升)
+        """
+        if train_df is None or len(train_df) == 0 or mode == "none":
+            return None
+        max_date = train_df["date"].max()
+        time_delta = (max_date - train_df["date"]).dt.days.values.astype(float)
+        weights = np.power(0.5, time_delta / half_life_days)
+
+        if mode == "recency_magnitude":
+            # 优先使用连续超额收益列衡量"幅度"；仅在确实不存在时才回退到传入标签
+            mag_col = None
+            for cand in (settings.LABEL_COLUMN, label_col):
+                if cand in train_df.columns:
+                    col_vals = train_df[cand].values.astype(float)
+                    uniq = np.unique(col_vals[np.isfinite(col_vals)])
+                    if len(uniq) <= 2 and set(np.nan_to_num(uniq)).issubset({0.0, 1.0}):
+                        continue
+                    mag_col = col_vals
+                    break
+
+            if mag_col is not None:
+                valid_mask = np.isfinite(mag_col)
+                if valid_mask.any():
+                    std_val = np.nanstd(mag_col) or 0.05
+                    mag_factor = 1.0 + np.clip(np.abs(mag_col) / (std_val + 1e-6), 0.0, magnitude_boost)
+                    weights = weights * mag_factor
+
+        weights = weights / (np.nanmean(weights) + 1e-8)
+        return weights
         """
         复合样本加权引擎：
         1. 时间衰减权重 (Recency Weighting): 距离训练集末尾越近权重越高 (半衰期 120 交易日)
@@ -113,6 +153,17 @@ class WalkForwardTrainer:
         df = df.copy()
         df["date"] = pd.to_datetime(df["date"])
         df.sort_values(by=["date", "symbol"], inplace=True)
+
+        # 自适应探测 df 中的有效标签列
+        if self.label_col not in df.columns:
+            clf_cands = [c for c in df.columns if c.startswith("label_up_down_")]
+            reg_cands = [c for c in df.columns if c.startswith("label_excess_")]
+            cands = clf_cands if self.task_type == "classification" else reg_cands
+            if not cands:
+                cands = [c for c in df.columns if "label" in c]
+            if cands:
+                logger.info(f"指定的标签列 '{self.label_col}' 不在数据集中，自适应选用有效标签列 '{cands[0]}'")
+                self.label_col = cands[0]
 
         all_dates = pd.Series(df["date"].unique()).sort_values().reset_index(drop=True)
         total_days = len(all_dates)
@@ -193,10 +244,28 @@ class WalkForwardTrainer:
                 f"({len(train_df)}条) | 样本外测试: {test_dates.min().strftime('%Y%m%d')}~{test_dates.max().strftime('%Y%m%d')}"
             )
 
-            # 训练模型
-            # 样本复合加权: 距离验证集越近 + 收益率波动越显著的样本权重越高
-            train_weights = self._compute_sample_weights(train_df, label_col=self.label_col)
+            # 严格基于 Train 窗口做特征选择 (Train-Only Feature Selection)
+            if self.feature_selection_method != "all":
+                from .fold_feature_selector import FoldFeatureSelector
+                sel_method = "top_n" if "top" in self.feature_selection_method else "rank_ic_pruned"
+                selector = FoldFeatureSelector(top_n=self.top_k_features)
+                fold_feats, feat_df = selector.select_features(
+                    train_df=train_df,
+                    candidate_features=feature_cols,
+                    label_col=self.label_col,
+                    method=sel_method
+                )
+            else:
+                fold_feats = feature_cols
 
+            # 样本加权计算
+            train_weights = self._compute_sample_weights(
+                train_df,
+                label_col=self.label_col,
+                mode=self.weighting_mode
+            )
+
+            # 实例化预测模型
             if self.model_type == "ensemble":
                 from .ensemble_model import EnsembleQuantModel
                 model = EnsembleQuantModel(task_type=self.task_type)
@@ -206,22 +275,42 @@ class WalkForwardTrainer:
             elif self.model_type == "mlp":
                 from .deep_tabular import TabularMLPQuantModel
                 model = TabularMLPQuantModel(task_type=self.task_type)
+            elif self.model_type in ("lightgbm_ranker", "ranking"):
+                model = LightGBMQuantModel(task_type="ranking")
+            elif self.model_type in ("lightgbm_reg", "regression"):
+                model = LightGBMQuantModel(task_type="regression")
             else:
                 model = LightGBMQuantModel(task_type=self.task_type)
 
+            # 准备训练特征矩阵 (确保包含 date 供 ranker 截面分组)
+            X_tr = train_df[fold_feats].copy()
+            if "date" in train_df.columns:
+                X_tr["date"] = train_df["date"]
+
+            X_v = val_df[fold_feats].copy() if not val_df.empty else None
+            if X_v is not None and "date" in val_df.columns:
+                X_v["date"] = val_df["date"]
+
+            # 目标标签处理 (Ranker 将超额收益转换为每日整数等级 0~4)
+            if self.model_type in ("lightgbm_ranker", "ranking"):
+                y_tr = (train_df.groupby("date")[self.label_col].rank(pct=True) * 4.999).astype(int)
+                y_v = (val_df.groupby("date")[self.label_col].rank(pct=True) * 4.999).astype(int) if not val_df.empty else None
+            else:
+                y_tr = train_df[self.label_col]
+                y_v = val_df[self.label_col] if not val_df.empty else None
+
             model.fit(
-                X_train=train_df[feature_cols],
-                y_train=train_df[self.label_col],
-                X_val=val_df[feature_cols] if not val_df.empty else None,
-                y_val=val_df[self.label_col] if not val_df.empty else None,
-                feature_names=feature_cols,
+                X_train=X_tr,
+                y_train=y_tr,
+                X_val=X_v,
+                y_val=y_v,
+                feature_names=fold_feats,
                 sample_weight=train_weights
             )
             latest_model = model
 
             # 样本外打分与截面排名 (P0-5 仅在 in_universe == True 内排名)
-            # 分类模式: pred_score 为上涨概率；回归模式: 为连续超额收益
-            test_df["pred_score"] = model.predict(test_df[feature_cols])
+            test_df["pred_score"] = model.predict(test_df[fold_feats])
             
             if "in_universe" in test_df.columns:
                 in_univ_mask = test_df["in_universe"].fillna(False).astype(bool)
@@ -236,9 +325,14 @@ class WalkForwardTrainer:
             
             self.models.append({
                 "fold": fold,
+                "train_start": purged_train_dates.min(),
                 "train_end": purged_train_dates.max(),
+                "val_start": purged_val_dates.min() if not purged_val_dates.empty else None,
+                "val_end": purged_val_dates.max() if not purged_val_dates.empty else None,
                 "test_start": test_dates.min(),
                 "test_end": test_dates.max(),
+                "feature_count": len(fold_feats),
+                "selected_features": fold_feats,
                 "model": model
             })
 

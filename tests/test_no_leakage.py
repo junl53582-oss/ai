@@ -121,8 +121,8 @@ def test_3_label_lookahead_boundary():
     l1 = labeler.compute_excess_return_label(df1)
     l2 = labeler.compute_excess_return_label(df2)
 
-    val1 = l1.iloc[t_idx][settings.LABEL_COLUMN]
-    val2 = l2.iloc[t_idx][settings.LABEL_COLUMN]
+    val1 = l1.iloc[t_idx][labeler.label_col]
+    val2 = l2.iloc[t_idx][labeler.label_col]
 
     assert np.isclose(val1, val2, rtol=1e-5), f"修改5天之外的价格导致当前5日Label异常改变: {val1} vs {val2}"
 

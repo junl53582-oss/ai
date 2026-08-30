@@ -64,7 +64,7 @@ class DoubleEnsembleQuantModel(BaseQuantModel):
         """
         self.feature_names = feature_names or list(X_train.columns)
         n_features = len(self.feature_names)
-        n_sub_feats = max(int(n_features * self.feature_subsample_ratio), 5)
+        n_sub_feats = min(n_features, max(int(n_features * self.feature_subsample_ratio), 1))
 
         rng = np.random.RandomState(self.random_state)
         current_sample_weight = (
@@ -154,8 +154,12 @@ class DoubleEnsembleQuantModel(BaseQuantModel):
         for sub_m, w in zip(self.sub_models, self.sub_weights):
             imp = sub_m.get_feature_importance(top_n=top_n * 2)
             if not imp.empty:
-                imp["weighted_imp"] = imp["importance"] * w
-                imp_dfs.append(imp)
+                imp_val = imp["importance"] if "importance" in imp.columns else imp["importance_gain"]
+                sub_df = pd.DataFrame({
+                    "feature": imp["feature"],
+                    "weighted_imp": imp_val * w
+                })
+                imp_dfs.append(sub_df)
 
         if not imp_dfs:
             return pd.DataFrame(columns=["feature", "importance", "importance_pct"])
@@ -167,17 +171,53 @@ class DoubleEnsembleQuantModel(BaseQuantModel):
         agg["importance_pct"] = agg["importance"] / tot * 100
         return agg.sort_values(by="importance", ascending=False).head(top_n).reset_index(drop=True)
 
-    def save(self, model_dir: Optional[Path] = None):
-        """保存所有子模型"""
-        target_dir = model_dir or settings.MODEL_DIR
-        target_dir.mkdir(parents=True, exist_ok=True)
-        for i, sub_model in enumerate(self.sub_models):
-            sub_model.save(target_dir / f"double_ensemble_sub_{i}.txt")
+    def save(self, filepath_or_dir: Optional[Path] = None) -> Path:
+        """保存 DoubleEnsemble 模型"""
+        import joblib
+        target = filepath_or_dir or settings.MODELS_DIR
+        if target.is_dir() or target.suffix == "":
+            target.mkdir(parents=True, exist_ok=True)
+            save_path = target / "double_ensemble_latest.pkl"
+        else:
+            target.parent.mkdir(parents=True, exist_ok=True)
+            save_path = target
 
-    def load(self, model_dir: Optional[Path] = None):
-        """加载子模型"""
-        target_dir = model_dir or settings.MODEL_DIR
-        for i, sub_model in enumerate(self.sub_models):
-            p = target_dir / f"double_ensemble_sub_{i}.txt"
-            if p.exists():
-                sub_model.load(p)
+        bundle = {
+            "sub_models": self.sub_models,
+            "sub_features": self.sub_features,
+            "sub_weights": self.sub_weights,
+            "feature_names": self.feature_names,
+            "task_type": self.task_type,
+            "n_sub_models": self.n_sub_models,
+            "feature_subsample_ratio": self.feature_subsample_ratio,
+            "decay_rate": self.decay_rate,
+            "random_state": self.random_state
+        }
+        joblib.dump(bundle, save_path)
+        logger.info(f"DoubleEnsemble 模型已保存至: {save_path}")
+        return save_path
+
+    def load(self, filepath_or_dir: Optional[Path] = None) -> "DoubleEnsembleQuantModel":
+        """加载 DoubleEnsemble 模型"""
+        import joblib
+        target = filepath_or_dir or settings.MODELS_DIR
+        if target.is_dir() or target.suffix == "":
+            load_path = target / "double_ensemble_latest.pkl"
+        else:
+            load_path = target
+
+        if not load_path.exists():
+            raise FileNotFoundError(f"未找到 DoubleEnsemble 模型文件: {load_path}")
+
+        bundle = joblib.load(load_path)
+        self.sub_models = bundle["sub_models"]
+        self.sub_features = bundle["sub_features"]
+        self.sub_weights = bundle["sub_weights"]
+        self.feature_names = bundle["feature_names"]
+        self.task_type = bundle.get("task_type", self.task_type)
+        self.n_sub_models = bundle.get("n_sub_models", self.n_sub_models)
+        self.feature_subsample_ratio = bundle.get("feature_subsample_ratio", self.feature_subsample_ratio)
+        self.decay_rate = bundle.get("decay_rate", self.decay_rate)
+        self.random_state = bundle.get("random_state", self.random_state)
+        logger.info(f"成功从 {load_path} 加载 DoubleEnsemble 模型 (包含 {len(self.sub_models)} 个子模型)")
+        return self

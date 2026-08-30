@@ -87,12 +87,12 @@ class QuantConfig:
     # 对 2 日涨跌 IC≈0，必须在更长持有期 (20 日) 才能释放预测力。更长持有期同时
     # 显著降低量价噪声，是提升 OOS AUC 的关键杠杆。
     LABEL_HORIZON: int = 20            # 预测未来 20 个交易日的涨跌方向 (跑赢/跑输基准)
-    # 任务类型: "classification" (涨跌二分类) | "regression" (连续收益回归)
+    # 任务类型: "classification" (涨跌二分类) | "regression" (连续收益回归) | "ranking" (排序学习)
     TASK_TYPE: str = "classification"
     # 回归模式标签列名 (连续超额收益率)
-    LABEL_COLUMN: str = "label_excess_2d"
+    LABEL_COLUMN: str = "label_excess_20d"
     # 分类模式标签列名 (1=涨/跑赢基准, 0=跌/跑输基准)
-    LABEL_COLUMN_CLF: str = "label_up_down_2d"
+    LABEL_COLUMN_CLF: str = "label_up_down_20d"
     # 二分类阈值: 未来超额收益 > 此值判定为 1 (上涨/跑赢基准)
     LABEL_THRESHOLD: float = 0.0
     # 阈值模式: "fixed" (固定阈值 LABEL_THRESHOLD) | "cross_sectional_median" (每日截面中位数，市场中性)
@@ -215,6 +215,7 @@ class QuantConfig:
         self.FACTOR_DIR = self.DATA_DIR / "factors"
         self.FACTORS_DIR = self.FACTOR_DIR
         self.MODELS_DIR = self.BASE_DIR / "saved_models"
+        self.MODEL_DIR = self.MODELS_DIR
         self.REPORTS_DIR = self.BASE_DIR / "reports"
 
         # 自动创建目录

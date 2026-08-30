@@ -76,7 +76,14 @@ class EnsembleQuantModel(BaseQuantModel):
         if "lightgbm" in self.model_types:
             logger.info("  -> 训练集成子模型 [1]: LightGBM...")
             lgb_model = LightGBMQuantModel(task_type=self.task_type)
-            lgb_model.fit(X_train=X_tr, y_train=y_train, X_val=X_v, y_val=y_val, feature_names=self.feature_names)
+            lgb_model.fit(
+                X_train=X_tr,
+                y_train=y_train,
+                X_val=X_v,
+                y_val=y_val,
+                feature_names=self.feature_names,
+                sample_weight=sample_weight
+            )
             self.models["lightgbm"] = lgb_model
 
             if X_v is not None and y_val is not None:
@@ -96,7 +103,7 @@ class EnsembleQuantModel(BaseQuantModel):
                     n_jobs=-1,
                     random_state=42
                 )
-                rf.fit(X_tr_imp, y_train)
+                rf.fit(X_tr_imp, y_train, sample_weight=sample_weight)
                 if X_v_imp is not None and y_val is not None:
                     preds = rf.predict_proba(X_v_imp)[:, 1]
                     val_scores["random_forest"] = self._calc_val_metric(y_val, preds)
@@ -110,7 +117,7 @@ class EnsembleQuantModel(BaseQuantModel):
                     n_jobs=-1,
                     random_state=42
                 )
-                rf.fit(X_tr_imp, y_train)
+                rf.fit(X_tr_imp, y_train, sample_weight=sample_weight)
                 if X_v_imp is not None and y_val is not None:
                     preds = rf.predict(X_v_imp)
                     val_scores["random_forest"] = self._calc_val_metric(y_val, preds)
