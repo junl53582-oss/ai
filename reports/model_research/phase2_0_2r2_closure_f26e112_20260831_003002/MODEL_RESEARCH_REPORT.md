@@ -5,12 +5,12 @@
 
 ## 1. Git 溯源与血缘分层 (Git Provenance Hierarchy)
 
-- **Run ID**: `phase2_0_2r2_closure_c8ce24a_20260831_003859`
+- **Run ID**: `phase2_0_2r2_closure_f26e112_20260831_003002`
 - **MODEL_EVIDENCE_SOURCE_COMMIT**: `e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48`
-- **CERTIFICATION_LOGIC_SOURCE_COMMIT**: `c8ce24a8bd275153934169a8d1e989cf78d1c5e5`
+- **CERTIFICATION_LOGIC_SOURCE_COMMIT**: `f26e112f99a4665b71c31b253864546ff6c568c3`
 - **Previous Experiment Commit**: `fd01da829e9802804b7c5026b32d3e26a382c377`
-- **Git Worktree Clean Before Formal Run**: `TRUE`
-- **报告生成时点**: 2026-08-31 00:39:01
+- **Git Worktree Clean Before Formal Run**: `FALSE`
+- **报告生成时点**: 2026-08-31 00:30:03
 
 ---
 
@@ -127,7 +127,7 @@
 
 | 审计项目 | 结果 | 证据推导依据与规则 |
 | :--- | :---: | :--- |
-| `SOURCE_PROVENANCE` | **PASS** | 源码冻结 Commit 先行提交，工作区干净无未暂存变更，Commit 对象在 Git 库真实存在 |
+| `SOURCE_PROVENANCE` | **FAIL** | 源码冻结 Commit 先行提交，工作区干净无未暂存变更，Commit 对象在 Git 库真实存在 |
 | `RESEARCH_PROTOCOL_CONFIG_HASH_VALIDITY` | **PASS** | 从 settings 构建研究协议 SHA256，且与历史 source commit 严格匹配 |
 | `MODEL_FULL_CONFIG_HASH_VALIDITY` | **PASS** | 包含全部超参数字典与种子的完整模型哈希与历史 source commit 严格匹配 |
 | `ARTIFACT_REUSE_COMPATIBILITY` | **PASS** | dataset, feature schema, label horizon 及历史模型配置全要素无漂移 |
@@ -142,7 +142,7 @@
 | `TRADING_FOLD_EVIDENCE_VALIDITY`| **PASS** | 20 Fold 交易指标独立回测计算，差值与胜负逻辑严格自洽 |
 | `TURNOVER_EVIDENCE_VALIDITY` | **PASS** | 20 Fold 真实年化换手率、成交笔数与总费用 100% 逻辑自洽 |
 | `PYTEST` | **PASS** | 全量单元测试套件 100% 通过 (test_status.json exit_code == 0, Fail-Closed) |
-| `LOCAL_PHASE_2_1_READY` | **TRUE** | 本地前置门禁全部就绪 |
+| `LOCAL_PHASE_2_1_READY` | **FALSE** | 本地前置门禁全部就绪 |
 | `FAST_CI` | **PENDING_POST_PUSH** | 等待 push 后外部 GitHub Actions 执行 |
 
 ---
@@ -150,7 +150,7 @@
 ## 10. 最终判定状态 (Final Status)
 
 - **PHASE_2_0_2_STATUS**: `CLOSED`
-- **LOCAL_PHASE_2_1_READY**: `TRUE`
+- **LOCAL_PHASE_2_1_READY**: `FALSE`
 - **FINAL_PHASE_2_1_READY**: `PENDING_CI` (等待 push 后 Fast CI 查询)
 - **LIVE_TRADING_READY**: `FALSE` (严格禁止直接用于实盘交易)
 - **NO_PHASE_2_0_2R3**: `TRUE` (本阶段认证闭环完成，无须进入 r3，直接推进 Phase 2.1)

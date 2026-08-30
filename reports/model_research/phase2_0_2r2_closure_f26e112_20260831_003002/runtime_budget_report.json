@@ -1,5 +1,5 @@
 {
-  "certification_script_runtime_seconds": 1.121,
+  "certification_script_runtime_seconds": 1.015,
   "task_wall_clock_runtime_seconds": null,
   "task_wall_clock_runtime_note": "not measured by certification runner",
   "full_model_research_runs": 0,

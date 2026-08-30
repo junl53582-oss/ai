@@ -1,9 +1,14 @@
 {
-  "latest_run_id": "phase2_0_2r2_closure_c8cd81e_20260830_235447",
-  "source_commit_sha": "c8cd81e9ac2b78edaf0376638b2cb9e7aafd8b2c",
-  "updated_at": "2026-08-30T23:54:48.578834",
-  "model_research_status": "BASELINE_REMAINS_CHAMPION",
+  "latest_run_id": "phase2_0_2r2_closure_c8ce24a_20260831_003859",
+  "artifact_commit": null,
+  "model_evidence_source_commit": "e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48",
+  "certification_logic_source_commit": "c8ce24a8bd275153934169a8d1e989cf78d1c5e5",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "research_protocol_config_hash": "62fa73390fe72a939a847f9ac84120634df07bf12f04a867eeb062b15300c608",
+  "model_full_config_hash": "d72b74dd2353dbb623444cc8bf72cf5eb4154d11604839b844b781913e5e9f53",
   "local_phase_2_1_ready": true,
+  "ci_certification_status": "PENDING_POST_PUSH",
   "final_phase_2_1_ready": "PENDING_CI",
+  "live_trading_ready": false,
   "no_phase_2_0_2r3": true
 }

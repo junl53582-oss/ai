@@ -1,7 +1,7 @@
 {
   "model_evidence_source_commit": "e6da4a2320ad4cbd5ef9cf8b9f772baf89602a48",
-  "certification_logic_source_commit": "c8ce24a8bd275153934169a8d1e989cf78d1c5e5",
-  "git_worktree_clean_before_run": true,
+  "certification_logic_source_commit": "f26e112f99a4665b71c31b253864546ff6c568c3",
+  "git_worktree_clean_before_run": false,
   "previous_phase2_experiment_commit": "fd01da829e9802804b7c5026b32d3e26a382c377",
   "previous_phase2_0_1_hotfix": "d32269bdbde8f883c2fe4509ee55a935d9b4d710",
   "dataset_path": "data_storage\\research\\factor_matrix_300.parquet",
