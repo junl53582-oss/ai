@@ -578,6 +578,13 @@ class FactorResearchEngine:
         if req_file.exists():
             req_hash = hashlib.sha256(req_file.read_bytes().replace(b"\r\n", b"\n")).hexdigest()
 
+        # 截面与样本规模统计
+        sym_count = int(df["symbol"].nunique()) if "symbol" in df.columns else 0
+        cs_counts = df.groupby("date")["symbol"].count() if "date" in df.columns and "symbol" in df.columns else pd.Series()
+        med_cs = float(cs_counts.median()) if not cs_counts.empty else 0.0
+        min_cs = int(cs_counts.min()) if not cs_counts.empty else 0
+        max_cs = int(cs_counts.max()) if not cs_counts.empty else 0
+
         # 计算因子矩阵与输入数据集哈希 (生产数据集绑定物理 SHA256，测试数据集使用规范 Dataframe 哈希)
         is_prod = (sym_count >= cfg.MIN_RESEARCH_SYMBOLS and len(df) > 10000)
         prod_f_p = Path("data_storage/research/factor_matrix_300.parquet")
@@ -605,12 +612,6 @@ class FactorResearchEngine:
             input_dataset_hash = hashlib.sha256(h_input.values.tobytes()).hexdigest()
 
         cols_hash = hashlib.sha256(",".join(sorted(factor_cols)).encode("utf-8")).hexdigest()
-
-        sym_count = int(df["symbol"].nunique()) if "symbol" in df.columns else 0
-        cs_counts = df.groupby("date")["symbol"].count()
-        med_cs = float(cs_counts.median()) if not cs_counts.empty else 0.0
-        min_cs = int(cs_counts.min()) if not cs_counts.empty else 0
-        max_cs = int(cs_counts.max()) if not cs_counts.empty else 0
 
         # 真实父链哈希提取 (P1-1: 绝不伪造 None_manifest)
         is_prod = (sym_count >= cfg.MIN_RESEARCH_SYMBOLS and len(df) > 10000)
