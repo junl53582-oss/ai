@@ -128,7 +128,7 @@ def test_outer_test_never_used_for_calibration(synthetic_panel_df):
 
 # 7. Purge gap >= label horizon
 def test_purge_gap_ge_label_horizon():
-    trainer = WalkForwardTrainer(purge_gap_days=5)
+    trainer = WalkForwardTrainer()
     assert trainer.purge_gap_days >= settings.LABEL_HORIZON
 
 
