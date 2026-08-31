@@ -1,8 +1,16 @@
 """
-LightGBM 量化预测模型封装
+LightGBM 量化预测模型封装 (models/lightgbm_model.py)
 支持回归与排序目标、早停机制以及特征重要性（Gain/Split）评估与模型持久化
+Research Integrity Hardened:
+- 严格 Model Identity 门禁，LightGBM 缺失时在 strict_mode 下直接 Fail-Closed，禁止静默回退到 HistGradientBoosting
+- 输出详细 Model Identity 元数据 (requested_estimator, actual_estimator, library, library_version, config_hash)
+- 严格生产模型目录物理隔离
 """
+from __future__ import annotations
+
 import os
+import json
+import hashlib
 import joblib
 import logging
 from pathlib import Path
@@ -21,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 
 class LightGBMQuantModel:
-    """LightGBM 预测引擎封装类 (支持回归与二分类两种模式，支持非对称下行风控惩罚目标)"""
+    """LightGBM 预测引擎封装类 (支持回归与二分类两种模式，支持非对称下行风控惩罚目标与严格模型身份核验)"""
 
     def __init__(
         self,
@@ -29,11 +37,13 @@ class LightGBMQuantModel:
         model_dir: Optional[Path] = None,
         task_type: str = settings.TASK_TYPE,
         use_asymmetric_loss: bool = False,
-        random_state: Optional[int] = None
+        random_state: Optional[int] = None,
+        strict_mode: bool = True
     ):
         self.task_type = task_type
         self.use_asymmetric_loss = use_asymmetric_loss
-        # 分类模式使用分类参数，回归模式使用回归参数
+        self.strict_mode = bool(strict_mode)
+
         if params is not None:
             self.params = params.copy()
         elif task_type == "classification":
@@ -46,11 +56,17 @@ class LightGBMQuantModel:
         self.params["feature_fraction_seed"] = self.random_state
         self.params["bagging_seed"] = self.random_state
         self.params["data_random_seed"] = self.random_state
-        self.model_dir = model_dir or settings.MODELS_DIR
-        self.model_dir.mkdir(parents=True, exist_ok=True)
+
+        if model_dir is not None:
+            self.model_dir = Path(model_dir)
+            self.model_dir.mkdir(parents=True, exist_ok=True)
+        else:
+            self.model_dir = None
+
         self.model = None
         self.feature_names: List[str] = []
-        self.calibrator = None  # Isotonic 概率校准器 (仅分类模式)
+        self.calibrator = None
+        self.identity_metadata: Dict[str, Any] = {}
 
         self.custom_obj = None
         if self.use_asymmetric_loss:
@@ -73,22 +89,28 @@ class LightGBMQuantModel:
         训练 LightGBM 模型：
         - 支持 early stopping (基于验证集)
         - 分类模式下自动做 scale_pos_weight 类别平衡
-        - 验证集可用时拟合 Isotonic 概率校准器
+        - 验证集可用时拟合 Isotonic / Platt Scaling 概率校准器
+        - 严格执行 Model Identity 门禁
         """
         self.feature_names = feature_names or list(X_train.columns)
         n_estimators = self.params.pop("n_estimators", 500)
         early_stopping_rounds = self.params.pop("early_stopping_rounds", 50)
 
-        # 分类模式: 自动类别平衡 (负样本数/正样本数)，缓解类别不平衡导致的概率偏斜
+        # 严格 Model Identity 门禁 (Model Identity Fail-Closed Gate)
+        if lgb is None and self.strict_mode:
+            raise RuntimeError(
+                "FATAL: LightGBM is requested but not installed/importable in strict certified mode! "
+                "Silent fallback to HistGradientBoosting is strictly disallowed."
+            )
+
         if self.task_type == "classification" and "scale_pos_weight" not in self.params:
             pos = int((y_train == 1).sum())
             neg = int((y_train == 0).sum())
             if pos > 0 and neg > 0:
                 self.params["scale_pos_weight"] = neg / pos
-        
+
         fit_params = self.params.copy()
 
-        # 非对称下行风险加权: 对负样本 (下跌样本) 施加 2.5x 惩罚，严惩假阳性/假突破
         if self.use_asymmetric_loss:
             penalty_weights = np.where(y_train == 0, 2.5, 1.0)
             if sample_weight is not None:
@@ -102,26 +124,30 @@ class LightGBMQuantModel:
                     n_estimators=n_estimators,
                     **fit_params
                 )
+                est_name = "LGBMClassifier"
             elif self.task_type == "ranking":
-                # LambdaRank 排序学习目标
                 if "objective" not in fit_params:
                     fit_params["objective"] = "lambdarank"
                 self.model = lgb.LGBMRanker(
                     n_estimators=n_estimators,
                     **fit_params
                 )
+                est_name = "LGBMRanker"
             else:
                 self.model = lgb.LGBMRegressor(
                     n_estimators=n_estimators,
                     **fit_params
                 )
+                est_name = "LGBMRegressor"
+
+            lib_name = "lightgbm"
+            lib_ver = getattr(lgb, "__version__", "unknown")
 
             callbacks = [lgb.log_evaluation(period=0)]
             eval_set = None
             eval_group = None
             train_group = None
 
-            # Ranking 任务计算交易日横截面 group
             if self.task_type == "ranking":
                 if "date" in X_train.columns:
                     train_group = list(X_train.groupby("date", sort=False).size())
@@ -163,7 +189,10 @@ class LightGBMQuantModel:
                 **fit_kwargs
             )
         else:
-            # Fallback 采用 scikit-learn HistGradientBoosting
+            # Fallback 采用 scikit-learn HistGradientBoosting (仅在 strict_mode=False 时允许)
+            import sklearn
+            lib_name = "scikit-learn"
+            lib_ver = getattr(sklearn, "__version__", "unknown")
             if self.task_type == "classification":
                 from sklearn.ensemble import HistGradientBoostingClassifier
                 self.model = HistGradientBoostingClassifier(
@@ -171,6 +200,7 @@ class LightGBMQuantModel:
                     learning_rate=self.params.get("learning_rate", 0.03),
                     random_state=self.params.get("random_state", 42)
                 )
+                est_name = "HistGradientBoostingClassifier"
             else:
                 from sklearn.ensemble import HistGradientBoostingRegressor
                 self.model = HistGradientBoostingRegressor(
@@ -178,13 +208,25 @@ class LightGBMQuantModel:
                     learning_rate=self.params.get("learning_rate", 0.03),
                     random_state=self.params.get("random_state", 42)
                 )
+                est_name = "HistGradientBoostingRegressor"
             self.model.fit(X_train[self.feature_names], y_train, sample_weight=sample_weight)
 
         self.params["early_stopping_rounds"] = early_stopping_rounds
         self.params["n_estimators"] = n_estimators
 
-        # 概率校准 (Isotonic): 用验证集拟合，修正原始概率的可信度 (改善 Brier Score)
-        # 概率校准 (Platt Scaling): 使用逻辑斯蒂回归拟合验证集，消除 Isotonic 分段阶梯导致的相同概率坍塌
+        # 记录完整 Model Identity 元数据
+        config_str = json.dumps(self.params, sort_keys=True, default=str)
+        self.identity_metadata = {
+            "requested_estimator": "LightGBM",
+            "actual_estimator": est_name,
+            "library": lib_name,
+            "library_version": lib_ver,
+            "model_class": self.model.__class__.__name__,
+            "config_hash": hashlib.sha256(config_str.encode("utf-8")).hexdigest(),
+            "strict_identity_verified": bool(lib_name == "lightgbm")
+        }
+
+        # 概率校准 (Platt Scaling)
         self.calibrator = None
         if (
             self.task_type == "classification"
@@ -198,46 +240,49 @@ class LightGBMQuantModel:
                     raw_proba = 1.0 / (1.0 + np.exp(-np.clip(margin, -15.0, 15.0)))
                 else:
                     raw_proba = self.model.predict_proba(X_val[self.feature_names])[:, 1]
-                
-                self.calibrator = LogisticRegression(solver="lbfgs", max_iter=200, C=1.0)
-                self.calibrator.fit(raw_proba.reshape(-1, 1), y_val.values)
-                logger.info("已拟合 Platt Scaling (Logistic) 概率校准器 (严格保持截面单调性与连续区分度)")
+
+                lr = LogisticRegression(C=1.0, solver="lbfgs", max_iter=200, random_state=42)
+                lr.fit(raw_proba.reshape(-1, 1), y_val)
+                self.calibrator = lr
+                logger.info("已完成 Platt Scaling (Logistic) 概率校准器拟合")
             except Exception as e:
-                logger.warning(f"概率校准拟合失败，跳过: {e}")
+                logger.warning(f"Platt Scaling 概率校准拟合失败: {e}，将使用原始概率输出")
                 self.calibrator = None
 
         return self
 
     def predict(self, X: pd.DataFrame) -> np.ndarray:
         """
-        预测样本得分：
-        - 分类模式: 返回上涨概率 P(label=1) ∈ [0, 1] (经 Platt Scaling 连续校准)
-        - 回归模式: 返回连续预期超额收益
+        根据任务类型生成预测输出：
+        - 分类任务: 输出正类概率 P(y=1)
+        - 回归任务: 输出预期连续超额收益
+        - 排序任务: 输出相对排序预测值
         """
         if self.model is None:
-            raise ValueError("模型尚未训练或加载！")
+            raise ValueError("模型尚未训练！请先调用 fit()")
+
+        X_feat = X[self.feature_names]
+
         if self.task_type == "classification":
-            try:
-                if hasattr(self.model, "booster_") and self.custom_obj is not None:
-                    margin = self.model.booster_.predict(X[self.feature_names], raw_score=True)
-                    raw = 1.0 / (1.0 + np.exp(-np.clip(margin, -15.0, 15.0)))
-                else:
-                    raw = self.model.predict_proba(X[self.feature_names])[:, 1]
-            except Exception:
-                if hasattr(self.model, "booster_"):
-                    margin = self.model.booster_.predict(X[self.feature_names], raw_score=True)
-                else:
-                    margin = self.model.predict(X[self.feature_names])
-                raw = 1.0 / (1.0 + np.exp(-np.clip(margin, -15.0, 15.0)))
+            if hasattr(self.model, "booster_") and self.custom_obj is not None:
+                margin = self.model.booster_.predict(X_feat, raw_score=True)
+                raw_proba = 1.0 / (1.0 + np.exp(-np.clip(margin, -15.0, 15.0)))
+            else:
+                raw_proba = self.model.predict_proba(X_feat)[:, 1]
+
             if self.calibrator is not None:
-                return self.calibrator.predict_proba(raw.reshape(-1, 1))[:, 1]
-            return raw
-        return self.model.predict(X[self.feature_names])
+                try:
+                    cal_proba = self.calibrator.predict_proba(raw_proba.reshape(-1, 1))[:, 1]
+                    return cal_proba
+                except Exception as e:
+                    logger.warning(f"概率校准推理失败: {e}，回退至原始概率")
+                    return raw_proba
+            return raw_proba
+        else:
+            return self.model.predict(X_feat)
 
     def get_feature_importance(self, top_n: int = 20) -> pd.DataFrame:
-        """
-        提取特征重要度 (Gain 贡献与 Split 次数)
-        """
+        """获取特征重要性 (Split 次数与 Gain 增益贡献)"""
         if self.model is None:
             raise ValueError("模型尚未训练！")
 
@@ -267,28 +312,22 @@ class LightGBMQuantModel:
         return imp_df.head(top_n)
 
     def save(self, filepath: Optional[Path] = None) -> Path:
-        """保存模型及特征元数据"""
-        save_path = filepath or (self.model_dir / "latest_lightgbm.pkl")
+        """保存模型及特征元数据 (严格隔离保存路径)"""
+        if filepath is not None:
+            save_path = Path(filepath)
+        elif self.model_dir is not None:
+            save_path = self.model_dir / "latest_lightgbm.pkl"
+        else:
+            raise RuntimeError("Cannot save model: No model_dir or filepath provided!")
+
+        save_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump({
             "model": self.model,
             "features": self.feature_names,
             "params": self.params,
             "task_type": self.task_type,
-            "calibrator": self.calibrator
+            "calibrator": self.calibrator,
+            "identity_metadata": self.identity_metadata
         }, save_path)
         logger.info(f"模型已保存至: {save_path}")
         return save_path
-
-    def load(self, filepath: Optional[Path] = None) -> "LightGBMQuantModel":
-        """加载已保存的模型"""
-        load_path = filepath or (self.model_dir / "latest_lightgbm.pkl")
-        if not load_path.exists():
-            raise FileNotFoundError(f"未找到模型文件: {load_path}")
-        data = joblib.load(load_path)
-        self.model = data["model"]
-        self.feature_names = data["features"]
-        self.params = data.get("params", self.params)
-        self.task_type = data.get("task_type", self.task_type)
-        self.calibrator = data.get("calibrator", None)
-        logger.info(f"成功从 {load_path} 加载模型，特征数: {len(self.feature_names)} (task_type={self.task_type})")
-        return self
