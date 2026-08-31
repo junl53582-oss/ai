@@ -1,0 +1,177 @@
+{
+  "OVERALL_STATUS": "FAILED",
+  "SCIENTIFIC_VERDICT": "INTEGRITY_AUDIT_FAILED",
+  "RESEARCH_INTEGRITY_VERIFIED": false,
+  "FINAL_HOLDOUT_AVAILABLE": false,
+  "LIVE_TRADING_READY": false,
+  "GATES": {
+    "FORMAL_RESEARCH_RUNNER_EXECUTABLE": {
+      "gate_id": "FORMAL_RESEARCH_RUNNER_EXECUTABLE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "fold_stability_records_count > 0 and real_backtest_executed",
+      "threshold": "> 0 folds executed",
+      "actual_value": 20,
+      "reason": "Formal research runner executed successfully with real BacktestEngine.",
+      "evidence_artifacts": [
+        "trading_fold_stability.csv"
+      ],
+      "evidence_sha256": {}
+    },
+    "REAL_FOLD_BACKTEST_EXECUTION": {
+      "gate_id": "REAL_FOLD_BACKTEST_EXECUTION",
+      "status": "FAIL",
+      "passed": false,
+      "condition": "fold_excess_returns are heterogeneous and derived from real fold OOS",
+      "threshold": "excess_return_std > 0.0",
+      "actual_value": {
+        "fold_count": 20,
+        "excess_return_std": 0.0
+      },
+      "reason": "Fold metrics are identical constants or empty.",
+      "evidence_artifacts": [
+        "trading_fold_stability.csv"
+      ],
+      "evidence_sha256": {}
+    },
+    "PRODUCTION_MODEL_ISOLATION": {
+      "gate_id": "PRODUCTION_MODEL_ISOLATION",
+      "status": "PASS",
+      "passed": true,
+      "condition": "prod_directory_snapshot_before == prod_directory_snapshot_after and sha_before == sha_after",
+      "threshold": "exact_hash_and_file_manifest_equality",
+      "actual_value": {
+        "prod_file_sha_before": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900",
+        "prod_file_sha_after": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900",
+        "snapshot_files_count_before": 3,
+        "snapshot_files_count_after": 3
+      },
+      "reason": "Production model directory remained completely untouched during research execution.",
+      "evidence_artifacts": [
+        "production_snapshot_before.json",
+        "production_snapshot_after.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "WALKFORWARD_PURGE_GATE": {
+      "gate_id": "WALKFORWARD_PURGE_GATE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "all folds have actual trading day purge gap >= purge_gap_days",
+      "threshold": "gap >= purge_gap_days",
+      "actual_value": {
+        "inspected_folds": 60,
+        "purge_clean": true
+      },
+      "reason": "All walk-forward folds satisfied trading day purge constraints without leakage.",
+      "evidence_artifacts": [
+        "walk_forward_purge_audit.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "CANONICAL_CALENDAR_PROVENANCE": {
+      "gate_id": "CANONICAL_CALENDAR_PROVENANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "canonical_calendar derived from verified exchange schedule with non-zero dataset overlap",
+      "threshold": "calendar_provenance_verified == True",
+      "actual_value": {
+        "calendar_source": "SSE_SZSE_CANONICAL_CALENDAR",
+        "calendar_provenance_verified": true,
+        "calendar_date_start": "2021-09-29",
+        "calendar_date_end": "2026-08-24",
+        "calendar_row_count": 1187,
+        "calendar_sha256": "db9050660b8b93ad8770c40a1ea586dd6313ccb5aa628b18514c2cd3c22af21e"
+      },
+      "reason": "Canonical exchange trading calendar provenance verified.",
+      "evidence_artifacts": [
+        "calendar_metadata.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "STRICT_FUNDAMENTAL_PIT": {
+      "gate_id": "STRICT_FUNDAMENTAL_PIT",
+      "status": "PASS",
+      "passed": true,
+      "condition": "only OFFICIAL_ANNOUNCEMENT_DATE within legal window granted pit_certified=True",
+      "threshold": "strict_pit_enforced == True",
+      "actual_value": {
+        "strict_pit_enforced": true,
+        "fundamental_provenance_preserved": true
+      },
+      "reason": "Strict Point-In-Time disclosure enforcement active; synthetic delays rejected.",
+      "evidence_artifacts": [
+        "fundamental_provenance_manifest.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "QUANTILE_EVALUATION_INTEGRITY": {
+      "gate_id": "QUANTILE_EVALUATION_INTEGRITY",
+      "status": "PASS",
+      "passed": true,
+      "condition": "tie-safe ranking method='average' with invalid date rejection on low score diversity and daily equal-weighted spread aggregation",
+      "threshold": "tie_safe_ranking == True and daily_equal_weighted == True",
+      "actual_value": {
+        "tie_safe_ranking": true,
+        "daily_equal_weighted": true
+      },
+      "reason": "Quantile evaluation is deterministic, tie-safe, and daily equal-weighted.",
+      "evidence_artifacts": [
+        "quantile_evaluation_summary.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "MULTI_SEED_ROBUSTNESS": {
+      "gate_id": "MULTI_SEED_ROBUSTNESS",
+      "status": "FAIL",
+      "passed": false,
+      "condition": "seeds [42, 100, 2024] evaluated and seed_rankic_std <= 0.0050",
+      "threshold": "std <= 0.0050 across 3 fixed seeds",
+      "actual_value": {
+        "seeds_evaluated": [
+          "42",
+          "100",
+          "2024"
+        ],
+        "std": 0.007994
+      },
+      "reason": "Seed variance 0.007994 exceeds threshold or runs incomplete.",
+      "evidence_artifacts": [
+        "multi_seed_robustness.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "ROBUST_MODEL_IMPROVEMENT": {
+      "gate_id": "ROBUST_MODEL_IMPROVEMENT",
+      "status": "MIXED_EVIDENCE_NOT_ROBUST",
+      "passed": false,
+      "condition": "paired 20-day block bootstrap 95% lower CI > 0 vs certified baseline without self-comparison",
+      "threshold": "ci_lower > 0.0",
+      "actual_value": {
+        "ci_lower": -0.03723,
+        "comparison_pair": "lightgbm_reg_baseline_vs_lightgbm_clf_baseline"
+      },
+      "reason": "Candidate does not achieve statistically significant outperformance over baseline at 95% CI.",
+      "evidence_artifacts": [
+        "bootstrap_comparison.json"
+      ],
+      "evidence_sha256": {}
+    },
+    "FINAL_HOLDOUT_GOVERNANCE": {
+      "gate_id": "FINAL_HOLDOUT_GOVERNANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "FINAL_HOLDOUT_AVAILABLE accurately declared as FALSE for historical research dataset",
+      "threshold": "FINAL_HOLDOUT_AVAILABLE == False",
+      "actual_value": {
+        "FINAL_HOLDOUT_AVAILABLE": false,
+        "status": "HISTORICAL_RESEARCH_OOS_EVIDENCE"
+      },
+      "reason": "Historical dataset correctly categorized as research OOS; no false claim of untouched prospective holdout.",
+      "evidence_artifacts": [
+        "holdout_manifest.json"
+      ],
+      "evidence_sha256": {}
+    }
+  }
+}
