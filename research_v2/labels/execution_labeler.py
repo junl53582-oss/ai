@@ -82,6 +82,8 @@ class ExecutionAlignedLabeler:
             if len(dates):
                 lo, hi = pd.to_datetime(df["date"]).min(), pd.to_datetime(df["date"]).max()
                 dates = dates[(dates >= lo) & (dates <= hi)]
+                if len(dates) == 0:
+                    raise RuntimeError("FATAL: Canonical calendar has zero overlap with research dataset!")
         return pd.DatetimeIndex(sorted(pd.unique(dates)))
 
     @staticmethod

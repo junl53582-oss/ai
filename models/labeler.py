@@ -67,11 +67,17 @@ class TargetLabeler:
         df["date"] = pd.to_datetime(df["date"])
         df.sort_values(by=["date", "symbol"], inplace=True)
 
+        must_require_cal = self.require_canonical_calendar if require_canonical_calendar is None else bool(require_canonical_calendar)
+        if must_require_cal and (canonical_dates is None or len(canonical_dates) == 0):
+            raise RuntimeError("FATAL: require_canonical_calendar=True but canonical_dates was not provided!")
+
         if canonical_dates is not None and len(canonical_dates) > 0:
             s_ts = df["date"].min()
             e_ts = df["date"].max()
             cal_filtered = [pd.to_datetime(d) for d in canonical_dates if s_ts <= pd.to_datetime(d) <= e_ts]
-            market_dates = sorted(list(set(cal_filtered))) if cal_filtered else sorted(df["date"].unique())
+            if not cal_filtered:
+                raise RuntimeError("FATAL: Canonical calendar has zero overlap with research dataset!")
+            market_dates = sorted(list(set(cal_filtered)))
         else:
             market_dates = sorted(df["date"].unique())
 

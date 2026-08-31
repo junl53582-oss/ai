@@ -48,7 +48,7 @@ class WalkForwardTrainer:
         self.train_years = float(train_years)
         self.val_months = int(val_months)
         self.test_months = int(test_months)
-        self.purge_gap_days = max(int(purge_gap_days), settings.LABEL_HORIZON)
+        self.purge_gap_days = int(purge_gap_days) if purge_gap_days is not None else settings.PURGE_GAP_DAYS
         self.task_type = task_type
         self.model_type = model_type
         self.feature_selection_method = feature_selection_method
@@ -62,7 +62,7 @@ class WalkForwardTrainer:
         prod_dir_resolved = Path(settings.MODELS_DIR).resolve()
         if model_dir is not None:
             resolved_model_dir = Path(model_dir).resolve()
-            if self.strict_mode and resolved_model_dir == prod_dir_resolved and not getattr(self, "_allow_production_promotion", False):
+            if self.strict_mode and (resolved_model_dir == prod_dir_resolved or prod_dir_resolved in resolved_model_dir.parents) and not getattr(self, "_allow_production_promotion", False):
                 raise RuntimeError(
                     f"FATAL: Research runner attempted to configure model_dir directly to production settings.MODELS_DIR ({prod_dir_resolved})! "
                     "Research runners must use run-scoped isolated directories."
@@ -151,7 +151,7 @@ class WalkForwardTrainer:
         df["date"] = pd.to_datetime(df["date"])
         df.sort_values(by=["date", "symbol"], inplace=True)
 
-        # 标签检查与严格 Fail-Closed (Label Fail-Closed Gate)
+        # 标签检查与严格 Fail-Closed (Strict Label Resolution Gate)
         if self.label_col not in df.columns:
             available_labels = [c for c in df.columns if "label" in c or "target" in c or "ab_label" in c]
             if self._label_col_explicitly_set and self.strict_mode:
@@ -186,7 +186,7 @@ class WalkForwardTrainer:
                 )
             logger.warning(f"数据总交易日数 ({total_days}) 较少，自适应调整走步窗口...")
             train_days = max(int(total_days * 0.5), 60)
-            val_days = max(int(total_days * 0.15), 15)
+            val_days = max(int(total_days * 0.15), self.purge_gap_days + 5) if self.val_months > 0 else 0
             test_days = max(int(total_days * 0.1), 10)
 
         out_of_sample_preds = []
@@ -225,6 +225,10 @@ class WalkForwardTrainer:
                 purge_train_passed = True
 
             if len(raw_val_dates) <= self.purge_gap_days:
+                if self.strict_mode and len(raw_val_dates) > 0:
+                    raise RuntimeError(
+                        f"FATAL: Fold {fold} raw val dates ({len(raw_val_dates)}) <= purge gap ({self.purge_gap_days})!"
+                    )
                 purged_val_dates = pd.Series(dtype=all_dates.dtype)
                 purge_val_passed = bool(len(raw_val_dates) == 0)
             else:
@@ -266,6 +270,24 @@ class WalkForwardTrainer:
                     f"FATAL: Fold {fold} temporal overlap detected between train max ({train_max_date}) and test min ({test_min_date})!"
                 )
 
+            actual_train_val_gap_trading_days = 0
+            if not purged_val_dates.empty and not purged_train_dates.empty:
+                t_max = purged_train_dates.max()
+                v_min = purged_val_dates.min()
+                actual_train_val_gap_trading_days = int(all_dates[(all_dates > t_max) & (all_dates < v_min)].count())
+
+            actual_val_test_gap_trading_days = 0
+            if not purged_val_dates.empty:
+                v_max = purged_val_dates.max()
+                t_min = test_dates.min()
+                actual_val_test_gap_trading_days = int(all_dates[(all_dates > v_max) & (all_dates < t_min)].count())
+
+            actual_train_test_gap_trading_days = 0
+            if not purged_train_dates.empty:
+                t_max = purged_train_dates.max()
+                t_min = test_dates.min()
+                actual_train_test_gap_trading_days = int(all_dates[(all_dates > t_max) & (all_dates < t_min)].count())
+
             actual_train_test_gap = int((test_min_date - train_max_date).days)
             actual_val_test_gap = int((test_min_date - val_max_date).days) if val_max_date is not None else None
 
@@ -281,8 +303,12 @@ class WalkForwardTrainer:
                 "purged_val_end": str(purged_val_dates.max().date()) if not purged_val_dates.empty else None,
                 "test_start": str(test_dates.min().date()),
                 "test_end": str(test_dates.max().date()),
-                "actual_train_test_gap_days": actual_train_test_gap,
-                "actual_val_test_gap_days": actual_val_test_gap,
+                "purge_gap_days": self.purge_gap_days,
+                "actual_train_val_gap_trading_days": actual_train_val_gap_trading_days,
+                "actual_val_test_gap_trading_days": actual_val_test_gap_trading_days,
+                "actual_train_test_gap_trading_days": actual_train_test_gap_trading_days,
+                "actual_train_test_gap_calendar_days": actual_train_test_gap,
+                "actual_val_test_gap_calendar_days": actual_val_test_gap,
                 "purge_gate_passed": bool(purge_train_passed and purge_val_passed),
                 "train_rows": len(train_df),
                 "val_rows": len(val_df),

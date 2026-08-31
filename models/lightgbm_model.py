@@ -59,6 +59,12 @@ class LightGBMQuantModel:
 
         if model_dir is not None:
             self.model_dir = Path(model_dir)
+            prod_root = Path(settings.MODELS_DIR).resolve()
+            resolved_md = self.model_dir.resolve()
+            if self.strict_mode and (resolved_md == prod_root or prod_root in resolved_md.parents):
+                raise RuntimeError(
+                    f"FATAL: Research runner attempted to configure model_dir directly to production directory {settings.MODELS_DIR}!"
+                )
             self.model_dir.mkdir(parents=True, exist_ok=True)
         else:
             self.model_dir = None
@@ -311,14 +317,22 @@ class LightGBMQuantModel:
         imp_df.reset_index(drop=True, inplace=True)
         return imp_df.head(top_n)
 
-    def save(self, filepath: Optional[Path] = None) -> Path:
-        """保存模型及特征元数据 (严格隔离保存路径)"""
+    def save(self, filepath: Optional[Path] = None, allow_production_write: bool = False) -> Path:
+        """保存模型及特征元数据 (严格隔离保存路径，杜绝非授权写入生产目录)"""
         if filepath is not None:
             save_path = Path(filepath)
         elif self.model_dir is not None:
             save_path = self.model_dir / "latest_lightgbm.pkl"
         else:
             raise RuntimeError("Cannot save model: No model_dir or filepath provided!")
+
+        prod_root = Path(settings.MODELS_DIR).resolve()
+        resolved_save = save_path.resolve()
+        if (resolved_save == prod_root or prod_root in resolved_save.parents) and not allow_production_write:
+            raise RuntimeError(
+                f"FATAL: Direct LightGBMQuantModel.save attempted to write into production directory {settings.MODELS_DIR}! "
+                f"Production models must be upgraded only through formal promotion workflows."
+            )
 
         save_path.parent.mkdir(parents=True, exist_ok=True)
         joblib.dump({
