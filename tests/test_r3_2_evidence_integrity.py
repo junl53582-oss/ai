@@ -21,7 +21,7 @@ def _write_evidence(root: Path, *, seed_std=0.008, holdout=False):
         "production_isolation.json": {"before": {}, "after": {}, "file_sha_before": "", "file_sha_after": ""},
         "walk_forward_purge_audit.json": [{"purge_gap_days": 2, "actual_train_val_gap_trading_days": 2, "actual_val_test_gap_trading_days": 2}],
         "calendar_metadata.json": {"calendar_source": "exchange", "dates": dates, "dataset_overlap_count": 3, "calendar_sha256": hashlib.sha256("\n".join(dates).encode()).hexdigest(), "source_code_sha": source},
-        "fundamental_provenance_manifest.json": {"synthetic_delay_certified_count": 0, "invalid_chronology_count": 0, "source_code_sha": source},
+        "fundamental_provenance_manifest.json": {"synthetic_delay_certified_count": 0, "invalid_chronology_count": 0, "official_announcement_rows": 1, "source_code_sha": source},
         "quantile_evaluation_summary.json": {"ranking_method": "average", "daily_equal_weighted": True, "all_equal_dates_invalid": True, "row_shuffle_invariant": True},
         "multi_seed_robustness.json": {"seed_rankic_each": {"42": .01, "100": .02, "2024": .03}, "seed_rankic_std": seed_std},
         "bootstrap_comparison.json": [{"comparison_pair": "candidate_vs_baseline", "bootstrap_ci_95_lower": .01}],

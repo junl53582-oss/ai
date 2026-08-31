@@ -75,7 +75,9 @@ def evaluate_research_gates(prod_snap_before: Dict[str, Any], prod_snap_after: D
     cal_ok = not issue and bool(calendar.get("calendar_source")) and bool(dates) and dates == sorted(dates) and len(dates) == len(set(dates)) and _finite(calendar.get("dataset_overlap_count")) and calendar["dataset_overlap_count"] > 0 and calendar.get("calendar_sha256") == cal_hash and bool(calendar.get("source_code_sha"))
     gates.append(_gate("CANONICAL_CALENDAR_PROVENANCE", cal_ok, "unique ascending canonical dates overlap dataset", "valid source, SHA, source SHA and overlap > 0", {"dates":len(dates),"issue":issue}, "Calendar facts verified." if cal_ok else issue or "calendar validation failed", "calendar_metadata.json", sha, "INSUFFICIENT_EVIDENCE"))
     pit, sha, issue = _json(evidence_dir, "fundamental_provenance_manifest.json")
-    pit_ok = not issue and isinstance(pit,dict) and pit.get("synthetic_delay_certified_count",1) == 0 and pit.get("invalid_chronology_count",1) == 0 and bool(pit.get("source_code_sha"))
+    pit_ok = (not issue and isinstance(pit,dict) and pit.get("synthetic_delay_certified_count",1) == 0 and
+              pit.get("invalid_chronology_count",1) == 0 and _finite(pit.get("official_announcement_rows")) and
+              pit["official_announcement_rows"] > 0 and bool(pit.get("source_code_sha")))
     gates.append(_gate("STRICT_FUNDAMENTAL_PIT", pit_ok, "official PIT chronology is independently recorded", "zero synthetic-certified and chronology violations", pit or {"issue":issue}, "PIT facts verified." if pit_ok else issue or "PIT provenance incomplete", "fundamental_provenance_manifest.json", sha, "INSUFFICIENT_EVIDENCE"))
     quant, sha, issue = _json(evidence_dir, "quantile_evaluation_summary.json")
     quant_ok = not issue and isinstance(quant,dict) and quant.get("ranking_method") == "average" and quant.get("daily_equal_weighted") is True and quant.get("all_equal_dates_invalid") is True and quant.get("row_shuffle_invariant") is True
