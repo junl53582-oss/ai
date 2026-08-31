@@ -198,7 +198,7 @@ def verify_all_routes():
     print("   -> 路线四 (券商调仓执行中枢) 验证 100% 通过！")
 
     print("\n" + "=" * 80)
-    print(">>> [SUCCESS] 全链路测试结论: 路线一、二、三、四、五 均已 100% 实现且严密验证通过！")
+    print(">>> [SYNTHETIC_ENGINEERING_E2E_PASS] 全链路工程集成测试: 路线一、二、三、四、五 均已通过！")
     print("=" * 80)
 
 

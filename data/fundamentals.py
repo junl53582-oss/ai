@@ -234,7 +234,20 @@ class FundamentalsProvider:
             .reset_index(drop=True)
             .copy()
         )
-        keep = ["symbol", "effective_date"] + [c for c in FUNDAMENTAL_FACTOR_NAMES if c in eff.columns]
+        prov_cols = {
+            "source": "fundamental_source",
+            "source_file_hash": "fundamental_source_file_hash",
+            "report_date": "fundamental_report_date",
+            "announcement_date": "fundamental_announcement_date",
+            "effective_date": "fundamental_effective_date",
+            "effective_date_source": "fundamental_effective_date_source",
+            "pit_certified": "fundamental_pit_certified"
+        }
+        for old_c, new_c in prov_cols.items():
+            if old_c in eff.columns:
+                eff[new_c] = eff[old_c]
+
+        keep = ["symbol", "effective_date"] + [c for c in FUNDAMENTAL_FACTOR_NAMES if c in eff.columns] + [new_c for new_c in prov_cols.values() if new_c in eff.columns]
         eff_keep = (
             eff[keep]
             .dropna(subset=["effective_date"])

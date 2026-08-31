@@ -11,7 +11,7 @@
   "selection_history": {
     "feature_selection_exposure": "ENABLE_REGISTRY_FACTORS=False was chosen after inspecting OOS AUC and Alpha drop",
     "hyperparameter_exposure": "LightGBM learning_rate and num_leaves were selected based on historical cross-validation",
-    "portfolio_parameter_exposure": "TOP_K_HOLD=10 and REBALANCE_FREQ=20 were reverted to optimal settings after testing alternatives",
+    "portfolio_parameter_exposure": "current TOP_K_HOLD=24 (historical comments show 40/32 tested worse and reverted) and REBALANCE_FREQ=20 were maintained after testing alternatives",
     "model_selection_exposure": "Evaluated on 2023-2026 walk-forward test folds across multiple research phases"
   },
   "ever_used_for_feature_selection": true,
