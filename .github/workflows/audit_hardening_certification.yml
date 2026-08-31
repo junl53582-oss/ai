@@ -27,9 +27,13 @@ jobs:
           pip install -r requirements.txt
           pip install pytest pytest-cov
 
-      - name: Run Integrity Hardening Test Suite (17 Gates)
+      - name: Run Integrity Hardening Attack Test Suite (32 Gates)
         run: |
           python -m pytest -v tests/test_audit_hardening.py
+
+      - name: Run Formal Research Runner E2E Smoke Test
+        run: |
+          python -m pytest -v tests/test_formal_research_runner_e2e.py
 
       - name: Run Full Pytest Regression Suite
         run: |
