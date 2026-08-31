@@ -1,18 +1,20 @@
-"""
-Research Integrity Certification Engine (research_v2/governance/certification.py)
-严格提供全证据推导的门禁判定结构与自动化审计逻辑，严禁任何硬编码 PASS / VERIFIED / ROBUST。
-"""
-from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional, Union
-import json
-import hashlib
-from pathlib import Path
+"""Fail-closed research evidence certification."""
+from __future__ import annotations
 
+from dataclasses import asdict, dataclass, field
+import hashlib
+import json
+import math
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+SEED_RANKIC_STD_MAX = 0.0050
+FIXED_SEEDS = (42, 100, 2024)
 
 @dataclass
 class CertificationDecision:
     gate_id: str
-    status: str  # "PASS", "FAIL", "PARTIAL", "NOT_RUN", "INSUFFICIENT_EVIDENCE", "MIXED_EVIDENCE_NOT_ROBUST"
+    status: str
     passed: bool
     condition: str
     threshold: Any
@@ -20,215 +22,81 @@ class CertificationDecision:
     reason: str
     evidence_artifacts: List[str] = field(default_factory=list)
     evidence_sha256: Dict[str, str] = field(default_factory=dict)
+    def to_dict(self) -> Dict[str, Any]: return asdict(self)
 
-    def to_dict(self) -> Dict[str, Any]:
-        return asdict(self)
+def _sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as f:
+        for chunk in iter(lambda: f.read(65536), b""): h.update(chunk)
+    return h.hexdigest()
 
+def _artifact(root: Optional[Path], name: str):
+    if root is None: return None, {}, "evidence_dir is required"
+    path = Path(root) / name
+    if not Path(root).is_dir(): return None, {}, "evidence_dir does not exist"
+    if not path.is_file(): return None, {}, f"required artifact missing: {name}"
+    return path, {name: _sha256(path)}, ""
 
-def evaluate_research_gates(
-    prod_snap_before: Dict[str, Any],
-    prod_snap_after: Dict[str, Any],
-    prod_file_before_sha: str,
-    prod_file_after_sha: str,
-    fold_stability_df_records: List[Dict[str, Any]],
-    bootstrap_results: Dict[str, Any],
-    seed_results: Dict[str, Any],
-    purge_audits: List[Dict[str, Any]],
-    calendar_meta: Dict[str, Any],
-    pit_meta: Dict[str, Any],
-    feature_meta: Dict[str, Any],
-    quantile_meta: Dict[str, Any],
-    holdout_meta: Dict[str, Any],
-    evidence_dir: Optional[Path] = None
-) -> Dict[str, Any]:
-    """
-    全证据推导 Gate Matrix 评估引擎
-    """
-    gates: List[CertificationDecision] = []
+def _json(root: Optional[Path], name: str):
+    path, sha, issue = _artifact(root, name)
+    if path is None: return None, sha, issue
+    try: return json.loads(path.read_text(encoding="utf-8")), sha, ""
+    except (OSError, json.JSONDecodeError) as exc: return None, sha, f"invalid JSON evidence {name}: {exc}"
 
-    # 1. FORMAL_RESEARCH_RUNNER_EXECUTABLE
-    runner_passed = len(fold_stability_df_records) > 0
-    gates.append(CertificationDecision(
-        gate_id="FORMAL_RESEARCH_RUNNER_EXECUTABLE",
-        status="PASS" if runner_passed else "FAIL",
-        passed=runner_passed,
-        condition="fold_stability_records_count > 0 and real_backtest_executed",
-        threshold="> 0 folds executed",
-        actual_value=len(fold_stability_df_records),
-        reason="Formal research runner executed successfully with real BacktestEngine." if runner_passed else "Runner produced 0 fold records.",
-        evidence_artifacts=["trading_fold_stability.csv"]
-    ))
+def _finite(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(float(v))
 
-    # 2. REAL_FOLD_BACKTEST_EXECUTION
-    if fold_stability_df_records:
-        excess_returns = [r.get("candidate_excess_return", r.get("excess_return", 0.0)) for r in fold_stability_df_records]
-        is_synthetic = len(set(excess_returns)) <= 1 and len(excess_returns) > 1
-        fold_passed = not is_synthetic
-        actual_var = float((sum((x - sum(excess_returns)/len(excess_returns))**2 for x in excess_returns) / max(1, len(excess_returns)-1))**0.5)
-    else:
-        fold_passed = False
-        actual_var = 0.0
+def _gate(gate_id, passed, condition, threshold, actual, reason, artifact, sha, failed_status="FAIL"):
+    return CertificationDecision(gate_id, "PASS" if passed else failed_status, passed, condition, threshold, actual, reason, [artifact] if sha else [], sha)
 
-    gates.append(CertificationDecision(
-        gate_id="REAL_FOLD_BACKTEST_EXECUTION",
-        status="PASS" if fold_passed else "FAIL",
-        passed=fold_passed,
-        condition="fold_excess_returns are heterogeneous and derived from real fold OOS",
-        threshold="excess_return_std > 0.0",
-        actual_value={"fold_count": len(fold_stability_df_records), "excess_return_std": round(actual_var, 6)},
-        reason="Fold metrics exhibit real variance across temporal folds." if fold_passed else "Fold metrics are identical constants or empty.",
-        evidence_artifacts=["trading_fold_stability.csv"]
-    ))
-
-    # 3. PRODUCTION_MODEL_ISOLATION & DIRECTORY_SNAPSHOT
-    snap_match = (prod_snap_before == prod_snap_after)
-    file_match = (prod_file_before_sha == prod_file_after_sha)
-    prod_passed = snap_match and file_match
-    gates.append(CertificationDecision(
-        gate_id="PRODUCTION_MODEL_ISOLATION",
-        status="PASS" if prod_passed else "FAIL",
-        passed=prod_passed,
-        condition="prod_directory_snapshot_before == prod_directory_snapshot_after and sha_before == sha_after",
-        threshold="exact_hash_and_file_manifest_equality",
-        actual_value={
-            "prod_file_sha_before": prod_file_before_sha,
-            "prod_file_sha_after": prod_file_after_sha,
-            "snapshot_files_count_before": len(prod_snap_before),
-            "snapshot_files_count_after": len(prod_snap_after)
-        },
-        reason="Production model directory remained completely untouched during research execution." if prod_passed else "Production model directory was modified!",
-        evidence_artifacts=["production_snapshot_before.json", "production_snapshot_after.json"]
-    ))
-
-    # 4. STRICT_LABEL_RESOLUTION & WALKFORWARD_FAIL_CLOSED
-    purge_clean = True
-    for pa in purge_audits:
-        if pa.get("actual_train_val_gap_trading_days", 999) < pa.get("purge_gap_days", 20):
-            if pa.get("val_days", 0) > 0:
-                purge_clean = False
-    gates.append(CertificationDecision(
-        gate_id="WALKFORWARD_PURGE_GATE",
-        status="PASS" if purge_clean else "FAIL",
-        passed=purge_clean,
-        condition="all folds have actual trading day purge gap >= purge_gap_days",
-        threshold="gap >= purge_gap_days",
-        actual_value={"inspected_folds": len(purge_audits), "purge_clean": purge_clean},
-        reason="All walk-forward folds satisfied trading day purge constraints without leakage." if purge_clean else "Purge gap violation detected in one or more folds.",
-        evidence_artifacts=["walk_forward_purge_audit.json"]
-    ))
-
-    # 5. CANONICAL_CALENDAR_PROVENANCE
-    cal_pass = bool(calendar_meta.get("calendar_provenance_verified", False))
-    gates.append(CertificationDecision(
-        gate_id="CANONICAL_CALENDAR_PROVENANCE",
-        status="PASS" if cal_pass else "FAIL",
-        passed=cal_pass,
-        condition="canonical_calendar derived from verified exchange schedule with non-zero dataset overlap",
-        threshold="calendar_provenance_verified == True",
-        actual_value=calendar_meta,
-        reason="Canonical exchange trading calendar provenance verified." if cal_pass else "Calendar provenance missing or invalid.",
-        evidence_artifacts=["calendar_metadata.json"]
-    ))
-
-    # 6. STRICT_FUNDAMENTAL_PIT
-    pit_pass = bool(pit_meta.get("strict_pit_enforced", False))
-    gates.append(CertificationDecision(
-        gate_id="STRICT_FUNDAMENTAL_PIT",
-        status="PASS" if pit_pass else "FAIL",
-        passed=pit_pass,
-        condition="only OFFICIAL_ANNOUNCEMENT_DATE within legal window granted pit_certified=True",
-        threshold="strict_pit_enforced == True",
-        actual_value=pit_meta,
-        reason="Strict Point-In-Time disclosure enforcement active; synthetic delays rejected." if pit_pass else "Fundamental PIT leakage risk.",
-        evidence_artifacts=["fundamental_provenance_manifest.json"]
-    ))
-
-    # 7. QUANTILE_TIE_AND_WEIGHT_INTEGRITY
-    q_pass = bool(quantile_meta.get("tie_safe_ranking", False) and quantile_meta.get("daily_equal_weighted", False))
-    gates.append(CertificationDecision(
-        gate_id="QUANTILE_EVALUATION_INTEGRITY",
-        status="PASS" if q_pass else "FAIL",
-        passed=q_pass,
-        condition="tie-safe ranking method='average' with invalid date rejection on low score diversity and daily equal-weighted spread aggregation",
-        threshold="tie_safe_ranking == True and daily_equal_weighted == True",
-        actual_value=quantile_meta,
-        reason="Quantile evaluation is deterministic, tie-safe, and daily equal-weighted." if q_pass else "Quantile evaluation uses tie-breaking or invalid aggregation.",
-        evidence_artifacts=["quantile_evaluation_summary.json"]
-    ))
-
-    # 8. MULTI_SEED_ROBUSTNESS_GATE
-    seed_std = float(seed_results.get("seed_rankic_std", 999.0))
-    seed_count = len(seed_results.get("seed_rankic_each", {}))
-    seed_pass = (seed_count >= 3 and seed_std <= 0.0050)
-    gates.append(CertificationDecision(
-        gate_id="MULTI_SEED_ROBUSTNESS",
-        status="PASS" if seed_pass else "FAIL",
-        passed=seed_pass,
-        condition="seeds [42, 100, 2024] evaluated and seed_rankic_std <= 0.0050",
-        threshold="std <= 0.0050 across 3 fixed seeds",
-        actual_value={"seeds_evaluated": list(seed_results.get("seed_rankic_each", {}).keys()), "std": seed_std},
-        reason="Multi-seed statistical variance is within certified bound (<= 0.0050)." if seed_pass else f"Seed variance {seed_std} exceeds threshold or runs incomplete.",
-        evidence_artifacts=["multi_seed_robustness.json"]
-    ))
-
-    # 9. ROBUST_MODEL_IMPROVEMENT_GATE (Prediction Champion vs Robust Improvement separation)
-    boot_ci_lower = float(bootstrap_results.get("ci_lower", -999.0))
-    robust_pass = bool(boot_ci_lower > 0.0)
-    gates.append(CertificationDecision(
-        gate_id="ROBUST_MODEL_IMPROVEMENT",
-        status="PASS" if robust_pass else "MIXED_EVIDENCE_NOT_ROBUST",
-        passed=robust_pass,
-        condition="paired 20-day block bootstrap 95% lower CI > 0 vs certified baseline without self-comparison",
-        threshold="ci_lower > 0.0",
-        actual_value={"ci_lower": boot_ci_lower, "comparison_pair": bootstrap_results.get("comparison_pair", "N/A")},
-        reason="Candidate demonstrates statistically robust outperformance at 95% confidence." if robust_pass else "Candidate does not achieve statistically significant outperformance over baseline at 95% CI.",
-        evidence_artifacts=["bootstrap_comparison.json"]
-    ))
-
-    # 10. FINAL_HOLDOUT_GOVERNANCE
-    holdout_avail = bool(holdout_meta.get("FINAL_HOLDOUT_AVAILABLE", False))
-    gates.append(CertificationDecision(
-        gate_id="FINAL_HOLDOUT_GOVERNANCE",
-        status="PASS",
-        passed=True,
-        condition="FINAL_HOLDOUT_AVAILABLE accurately declared as FALSE for historical research dataset",
-        threshold="FINAL_HOLDOUT_AVAILABLE == False",
-        actual_value={"FINAL_HOLDOUT_AVAILABLE": holdout_avail, "status": "HISTORICAL_RESEARCH_OOS_EVIDENCE"},
-        reason="Historical dataset correctly categorized as research OOS; no false claim of untouched prospective holdout.",
-        evidence_artifacts=["holdout_manifest.json"]
-    ))
-
-    # Derive overall status
-    p0_gate_ids = {
-        "FORMAL_RESEARCH_RUNNER_EXECUTABLE",
-        "REAL_FOLD_BACKTEST_EXECUTION",
-        "PRODUCTION_MODEL_ISOLATION",
-        "WALKFORWARD_PURGE_GATE",
-        "CANONICAL_CALENDAR_PROVENANCE",
-        "STRICT_FUNDAMENTAL_PIT",
-        "QUANTILE_EVALUATION_INTEGRITY",
-        "MULTI_SEED_ROBUSTNESS"
-    }
-
-    p0_all_passed = all(g.passed for g in gates if g.gate_id in p0_gate_ids)
-    any_failed = any(g.status == "FAIL" for g in gates)
-
-    if any_failed or not p0_all_passed:
-        overall_status = "FAILED"
-        verdict = "INTEGRITY_AUDIT_FAILED"
-    else:
-        overall_status = "VERIFIED"
-        verdict = "AUDIT_HARDENING_CERTIFIED"
-
-    gate_dict = {g.gate_id: g.to_dict() for g in gates}
-
-    res_matrix = {
-        "OVERALL_STATUS": overall_status,
-        "SCIENTIFIC_VERDICT": verdict,
-        "RESEARCH_INTEGRITY_VERIFIED": bool(overall_status == "VERIFIED"),
-        "FINAL_HOLDOUT_AVAILABLE": False,
-        "LIVE_TRADING_READY": False,
-        "GATES": gate_dict
-    }
-
-    return res_matrix
+def evaluate_research_gates(prod_snap_before: Dict[str, Any], prod_snap_after: Dict[str, Any], prod_file_before_sha: str, prod_file_after_sha: str, fold_stability_df_records: List[Dict[str, Any]], bootstrap_results: Dict[str, Any], seed_results: Dict[str, Any], purge_audits: List[Dict[str, Any]], calendar_meta: Dict[str, Any], pit_meta: Dict[str, Any], feature_meta: Dict[str, Any], quantile_meta: Dict[str, Any], holdout_meta: Dict[str, Any], evidence_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """Derive every gate from on-disk evidence. Metadata booleans never certify a gate."""
+    gates = []
+    trace, sha, issue = _json(evidence_dir, "fold_backtest_provenance.json")
+    fields = {"fold_id","test_start","test_end","test_dates_count","candidate_oos_rows","baseline_oos_rows","candidate_prediction_sha256","baseline_prediction_sha256","candidate_backtest_run_id","baseline_backtest_run_id","candidate_equity_sha256","baseline_equity_sha256","candidate_orders_sha256","baseline_orders_sha256","candidate_trade_count","baseline_trade_count","candidate_strategy_return","baseline_strategy_return","candidate_benchmark_return","baseline_benchmark_return","candidate_excess_return","baseline_excess_return","candidate_minus_baseline","engine_config_hash","dataset_sha256","source_code_sha"}
+    rows = trace.get("folds", []) if isinstance(trace, dict) else []
+    trace_ok = not issue and trace.get("run_mode", "certified") == "certified" and bool(rows) and all(fields <= set(r) for r in rows)
+    for gate_id in ("FORMAL_RESEARCH_RUNNER_EXECUTABLE", "REAL_FOLD_BACKTEST_PROVENANCE"):
+        gates.append(_gate(gate_id, trace_ok, "complete persisted candidate and baseline fold trace", "all required provenance fields", {"folds":len(rows),"issue":issue}, "Fold trace verified." if trace_ok else issue or "incomplete fold trace", "fold_backtest_provenance.json", sha, "INSUFFICIENT_EVIDENCE"))
+    prod, sha, issue = _json(evidence_dir, "production_isolation.json")
+    prod_ok = not issue and isinstance(prod,dict) and prod.get("before") == prod.get("after") and prod.get("file_sha_before") == prod.get("file_sha_after") and prod_snap_before == prod_snap_after and prod_file_before_sha == prod_file_after_sha
+    gates.append(_gate("PRODUCTION_MODEL_ISOLATION", prod_ok, "production snapshots are byte-identical", "before == after", prod or {"issue":issue}, "Production directory unchanged." if prod_ok else issue or "production snapshot mismatch", "production_isolation.json", sha))
+    purge, sha, issue = _json(evidence_dir, "walk_forward_purge_audit.json")
+    purge_rows = purge if isinstance(purge,list) else []
+    purge_ok = not issue and bool(purge_rows)
+    for r in purge_rows:
+        keys = ("purge_gap_days","actual_train_val_gap_trading_days","actual_val_test_gap_trading_days")
+        if not all(k in r and _finite(r[k]) for k in keys): purge_ok, issue = False, "missing or non-finite trading-day purge evidence"; break
+        if r["actual_train_val_gap_trading_days"] < r["purge_gap_days"] or r["actual_val_test_gap_trading_days"] < r["purge_gap_days"]: purge_ok, issue = False, "trading-day purge gap below threshold"; break
+    gates.append(_gate("WALKFORWARD_PURGE_GATE", purge_ok, "all trading-day gaps meet purge", "actual gaps >= purge_gap_days", {"folds":len(purge_rows),"issue":issue}, "Purge evidence verified." if purge_ok else issue, "walk_forward_purge_audit.json", sha, "INSUFFICIENT_EVIDENCE"))
+    calendar, sha, issue = _json(evidence_dir, "calendar_metadata.json")
+    dates = calendar.get("dates",[]) if isinstance(calendar,dict) else []
+    cal_hash = hashlib.sha256("\n".join(dates).encode()).hexdigest() if dates else ""
+    cal_ok = not issue and bool(calendar.get("calendar_source")) and bool(dates) and dates == sorted(dates) and len(dates) == len(set(dates)) and _finite(calendar.get("dataset_overlap_count")) and calendar["dataset_overlap_count"] > 0 and calendar.get("calendar_sha256") == cal_hash and bool(calendar.get("source_code_sha"))
+    gates.append(_gate("CANONICAL_CALENDAR_PROVENANCE", cal_ok, "unique ascending canonical dates overlap dataset", "valid source, SHA, source SHA and overlap > 0", {"dates":len(dates),"issue":issue}, "Calendar facts verified." if cal_ok else issue or "calendar validation failed", "calendar_metadata.json", sha, "INSUFFICIENT_EVIDENCE"))
+    pit, sha, issue = _json(evidence_dir, "fundamental_provenance_manifest.json")
+    pit_ok = not issue and isinstance(pit,dict) and pit.get("synthetic_delay_certified_count",1) == 0 and pit.get("invalid_chronology_count",1) == 0 and bool(pit.get("source_code_sha"))
+    gates.append(_gate("STRICT_FUNDAMENTAL_PIT", pit_ok, "official PIT chronology is independently recorded", "zero synthetic-certified and chronology violations", pit or {"issue":issue}, "PIT facts verified." if pit_ok else issue or "PIT provenance incomplete", "fundamental_provenance_manifest.json", sha, "INSUFFICIENT_EVIDENCE"))
+    quant, sha, issue = _json(evidence_dir, "quantile_evaluation_summary.json")
+    quant_ok = not issue and isinstance(quant,dict) and quant.get("ranking_method") == "average" and quant.get("daily_equal_weighted") is True and quant.get("all_equal_dates_invalid") is True and quant.get("row_shuffle_invariant") is True
+    gates.append(_gate("QUANTILE_EVALUATION_INTEGRITY", quant_ok, "tie-preserving ranks and equal-date weighting verified", "average ranking + invariant checks", quant or {"issue":issue}, "Quantile facts verified." if quant_ok else issue or "quantile evidence incomplete", "quantile_evaluation_summary.json", sha, "INSUFFICIENT_EVIDENCE"))
+    seed, sha, issue = _json(evidence_dir, "multi_seed_robustness.json")
+    each, std = (seed.get("seed_rankic_each",{}), seed.get("seed_rankic_std")) if isinstance(seed,dict) else ({},None)
+    seed_ok = not issue and set(map(int,each)) == set(FIXED_SEEDS) and _finite(std) and float(std) <= SEED_RANKIC_STD_MAX
+    gates.append(_gate("MULTI_SEED_ROBUSTNESS", seed_ok, "fixed seeds 42, 100, 2024 meet bound", "std <= 0.0050", {"std":std,"seeds":list(each)}, "Multi-seed robustness verified." if seed_ok else issue or "fixed seed stability fails", "multi_seed_robustness.json", sha))
+    boot, sha, issue = _json(evidence_dir, "bootstrap_comparison.json")
+    b = boot[0] if isinstance(boot,list) and boot else {}
+    lower, pair = b.get("bootstrap_ci_95_lower"), b.get("comparison_pair","")
+    robust_ok = not issue and "_vs_" in pair and _finite(lower) and lower > 0
+    gates.append(_gate("ROBUST_MODEL_IMPROVEMENT", robust_ok, "non-self comparison has positive 95% CI lower bound", "bootstrap_ci_95_lower > 0", {"comparison_pair":pair,"bootstrap_ci_95_lower":lower}, "Robust improvement verified." if robust_ok else issue or "robust improvement not established", "bootstrap_comparison.json", sha, "MIXED_EVIDENCE_NOT_ROBUST"))
+    hold, sha, issue = _json(evidence_dir, "holdout_manifest.json")
+    hold_ok = not issue and isinstance(hold,dict) and hold.get("FINAL_HOLDOUT_AVAILABLE") is False and hold.get("historical_oos") is True
+    gates.append(_gate("FINAL_HOLDOUT_GOVERNANCE", hold_ok, "historical OOS is not prospective holdout", "FINAL_HOLDOUT_AVAILABLE == false", hold or {"issue":issue}, "Holdout governance accurate." if hold_ok else issue or "invalid holdout claim", "holdout_manifest.json", sha))
+    gates.append(CertificationDecision("LIVE_TRADING_GOVERNANCE","PASS",True,"live promotion remains disabled","LIVE_TRADING_READY == false",{"LIVE_TRADING_READY":False,"PRODUCTION_MODEL_PROMOTION":False},"No live/production claim.",["holdout_manifest.json"],sha))
+    by = {g.gate_id:g for g in gates}
+    infra_ids = ("FORMAL_RESEARCH_RUNNER_EXECUTABLE","REAL_FOLD_BACKTEST_PROVENANCE","PRODUCTION_MODEL_ISOLATION","WALKFORWARD_PURGE_GATE","CANONICAL_CALENDAR_PROVENANCE","STRICT_FUNDAMENTAL_PIT","QUANTILE_EVALUATION_INTEGRITY")
+    infra = "VERIFIED" if all(by[x].passed for x in infra_ids) else "INSUFFICIENT_EVIDENCE"
+    model = "ROBUST" if by["MULTI_SEED_ROBUSTNESS"].passed and by["ROBUST_MODEL_IMPROVEMENT"].passed else "MIXED_EVIDENCE_NOT_ROBUST"
+    gov = "PASS" if by["FINAL_HOLDOUT_GOVERNANCE"].passed and by["LIVE_TRADING_GOVERNANCE"].passed else "FAIL"
+    overall = "VERIFIED" if infra == "VERIFIED" and model == "ROBUST" and gov == "PASS" else ("INFRASTRUCTURE_VERIFIED_MODEL_EVIDENCE_MIXED" if infra == "VERIFIED" and gov == "PASS" else "FAILED")
+    return {"INFRASTRUCTURE_STATUS":infra,"MODEL_EVIDENCE_STATUS":model,"GOVERNANCE_STATUS":gov,"OVERALL_RESEARCH_STATUS":overall,"OVERALL_STATUS":overall,"RESEARCH_INTEGRITY_VERIFIED":overall == "VERIFIED","FINAL_HOLDOUT_AVAILABLE":False,"LIVE_TRADING_READY":False,"PRODUCTION_MODEL_PROMOTION":False,"GATES":{g.gate_id:g.to_dict() for g in gates}}

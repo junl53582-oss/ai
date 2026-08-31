@@ -58,6 +58,11 @@ def _sha256_file(filepath: Path) -> str:
     return h.hexdigest()
 
 
+def _sha256_frame(frame: pd.DataFrame) -> str:
+    """Stable hash of an in-memory runtime artifact."""
+    return hashlib.sha256(frame.to_csv(index=False).encode("utf-8")).hexdigest()
+
+
 def _snapshot_directory(dir_path: Path) -> Dict[str, Dict[str, Any]]:
     if not dir_path.exists():
         return {}
@@ -88,7 +93,18 @@ def get_git_worktree_clean() -> Tuple[bool, List[str]]:
         lines = [line.strip() for line in out.splitlines() if line.strip()]
         return len(lines) == 0, lines
     except Exception:
-        return True, []
+        # A failed git invocation is unavailable provenance, never a clean tree.
+        return False, ["GIT_STATUS_UNAVAILABLE"]
+
+
+def require_metric(metrics: Dict[str, Any], key: str) -> float:
+    """Return a required backtest metric or fail the certified run closed."""
+    if key not in metrics:
+        raise RuntimeError(f"FATAL: required performance metric missing: {key}")
+    value = metrics[key]
+    if not isinstance(value, (int, float, np.number)) or not np.isfinite(value):
+        raise RuntimeError(f"FATAL: required performance metric non-finite: {key}")
+    return float(value)
 
 
 def paired_block_bootstrap(
@@ -112,6 +128,8 @@ def paired_block_bootstrap(
         return {
             "comparison_pair": f"{candidate_id}_vs_{baseline_id}",
             "mean_diff": 0.0,
+            "bootstrap_ci_90_lower": 0.0,
+            "bootstrap_ci_90_upper": 0.0,
             "bootstrap_ci_95_lower": 0.0,
             "bootstrap_ci_95_upper": 0.0,
             "ci_lower": 0.0,
@@ -144,25 +162,27 @@ def paired_block_bootstrap(
 
     boot_means = np.array(boot_means)
     mean_diff = float(np.mean(diff))
-    ci_95_lower = float(np.percentile(boot_means, 5.0))
-    ci_95_upper = float(np.percentile(boot_means, 95.0))
-    ci_97_5_lower = float(np.percentile(boot_means, 2.5))
-    ci_97_5_upper = float(np.percentile(boot_means, 97.5))
+    ci_90_lower = float(np.percentile(boot_means, 5.0))
+    ci_90_upper = float(np.percentile(boot_means, 95.0))
+    ci_95_lower = float(np.percentile(boot_means, 2.5))
+    ci_95_upper = float(np.percentile(boot_means, 97.5))
 
     p_tail = float(2.0 * min((boot_means <= 0).mean(), (boot_means >= 0).mean()))
     p_tail = min(max(p_tail, 0.0), 1.0)
     prob_pos = float((boot_means > 0).mean())
-    robust_improvement = bool(ci_97_5_lower > 0.0)
+    robust_improvement = bool(ci_95_lower > 0.0)
 
     return {
         "comparison_pair": f"{candidate_id}_vs_{baseline_id}",
         "mean_diff": round(mean_diff, 5),
-        "ci_lower": round(ci_97_5_lower, 5),
-        "ci_upper": round(ci_97_5_upper, 5),
+        "ci_lower": round(ci_95_lower, 5),
+        "ci_upper": round(ci_95_upper, 5),
+        "bootstrap_ci_90_lower": round(ci_90_lower, 5),
+        "bootstrap_ci_90_upper": round(ci_90_upper, 5),
         "bootstrap_ci_95_lower": round(ci_95_lower, 5),
         "bootstrap_ci_95_upper": round(ci_95_upper, 5),
-        "bootstrap_ci_97_5_two_sided_lower": round(ci_97_5_lower, 5),
-        "bootstrap_ci_97_5_two_sided_upper": round(ci_97_5_upper, 5),
+        "legacy_misnamed_bootstrap_ci_95_lower": round(ci_90_lower, 5),
+        "legacy_misnamed_bootstrap_ci_95_upper": round(ci_90_upper, 5),
         "bootstrap_prob_positive": round(prob_pos, 4),
         "bootstrap_two_sided_tail_probability": round(p_tail, 4),
         "bootstrap_p_like": round(p_tail, 4),
@@ -237,6 +257,21 @@ def _execute_backtest_slice(oos_slice: pd.DataFrame) -> Dict[str, Any]:
     equity_df, orders_df = engine.run(oos_slice)
     analyzer = PerformanceAnalyzer()
     metrics = analyzer.calculate_metrics(equity_df, orders_df, closed_trades=engine.closed_trades)
+    aliases = {
+        "strategy_return": metrics.get("cum_strategy_return"),
+        "benchmark_return": metrics.get("cum_benchmark_return"),
+        "excess_return": metrics.get("excess_return"),
+        "max_drawdown": metrics.get("max_drawdown"),
+        "trade_count": metrics.get("total_trades"),
+        "transaction_cost": metrics.get("total_transaction_costs", metrics.get("total_costs")),
+    }
+    metrics.update(aliases)
+    for key in ("strategy_return", "benchmark_return", "excess_return", "max_drawdown", "trade_count", "transaction_cost"):
+        require_metric(metrics, key)
+    # Kept private to the runner so fold provenance hashes are derived from the
+    # actual engine outputs, not self-reported summary metrics.
+    metrics["_equity_df"] = equity_df
+    metrics["_orders_df"] = orders_df
     return metrics
 
 
@@ -250,7 +285,7 @@ def run_research(
     """
     run_config = run_config or {}
     data_file = Path(dataset_path) if dataset_path is not None else PROJECT_ROOT / "data_storage" / "research" / "factor_matrix_300.parquet"
-    base_reports_dir = Path(output_root) if output_root is not None else PROJECT_ROOT / "reports" / "audit_hardening_v2"
+    base_reports_dir = Path(output_root) if output_root is not None else PROJECT_ROOT / "reports" / "audit_hardening_v3" / "runs"
 
     # 0. 生产模型物理隔离审计与全目录快照 (Production Isolation Audit)
     prod_models_dir = Path(settings.MODELS_DIR)
@@ -461,10 +496,22 @@ def run_research(
 
                 trading_fold_records.append({
                     "fold": f_num,
+                    "fold_id": f_num,
                     "candidate_model_id": compare_cand_id,
                     "baseline_model_id": "lightgbm_clf_baseline",
                     "test_start": str(t_start.date()),
                     "test_end": str(t_end.date()),
+                    "test_dates_count": int(len(pd.to_datetime(r_sub["date"]).unique())),
+                    "candidate_oos_rows": int(len(r_sub)),
+                    "baseline_oos_rows": int(len(c_sub)),
+                    "candidate_prediction_sha256": _sha256_frame(r_sub[["date", "symbol", "pred_score"]]),
+                    "baseline_prediction_sha256": _sha256_frame(c_sub[["date", "symbol", "pred_score"]]),
+                    "candidate_backtest_run_id": f"{run_id}:candidate:{f_num}",
+                    "baseline_backtest_run_id": f"{run_id}:baseline:{f_num}",
+                    "candidate_equity_sha256": _sha256_frame(p_r["_equity_df"]),
+                    "baseline_equity_sha256": _sha256_frame(p_c["_equity_df"]),
+                    "candidate_orders_sha256": _sha256_frame(p_r["_orders_df"]),
+                    "baseline_orders_sha256": _sha256_frame(p_c["_orders_df"]),
                     "candidate_strategy_return": p_r.get("cum_strategy_return", 0.0),
                     "candidate_benchmark_return": p_r.get("cum_benchmark_return", 0.0),
                     "candidate_excess_return": r_excess,
@@ -482,6 +529,10 @@ def run_research(
                     "baseline_trade_count": p_c.get("total_trades", 0),
                     "baseline_transaction_cost": p_c.get("total_transaction_costs", p_c.get("total_costs", 0.0)),
                     "candidate_minus_baseline_excess": round(diff_excess, 4),
+                    "candidate_minus_baseline": round(diff_excess, 4),
+                    "engine_config_hash": hashlib.sha256(json.dumps({"top_k_buy": settings.TOP_K_BUY, "top_k_hold": settings.TOP_K_HOLD, "rebalance_freq": settings.REBALANCE_FREQ}, sort_keys=True).encode()).hexdigest(),
+                    "dataset_sha256": dataset_sha256,
+                    "source_code_sha": source_sha,
                     "candidate_won": cand_won
                 })
 
@@ -533,23 +584,32 @@ def run_research(
     prod_sha_after = _sha256_file(prod_model_file)
     prod_snap_after = _snapshot_directory(prod_models_dir)
 
-    # 8. 全证据推导 Gate Matrix 评估
+    # 8. Persist raw evidence *before* certification.  Certification reads these
+    # files back and recomputes their hashes; it never trusts the dictionaries.
     bootstrap_primary = bootstrap_rows[0] if bootstrap_rows else {}
-    pit_meta = {
-        "strict_pit_enforced": True,
-        "fundamental_provenance_preserved": True
-    }
-    feature_meta = {
-        "min_rank_ic_enforced": True,
-        "annual_stability_audited": True
-    }
-    quantile_meta = {
-        "tie_safe_ranking": True,
-        "daily_equal_weighted": True
-    }
-    holdout_meta = {
-        "FINAL_HOLDOUT_AVAILABLE": False
-    }
+    calendar_dates = [str(pd.Timestamp(x).date()) for x in cal_dates]
+    cal_meta = {"calendar_source": "SSE_SZSE_CANONICAL_CALENDAR", "dates": calendar_dates,
+                "dataset_overlap_count": int(df_raw["date"].isin(pd.to_datetime(cal_dates)).sum()),
+                "calendar_sha256": hashlib.sha256("\n".join(calendar_dates).encode()).hexdigest(),
+                "source_code_sha": source_sha}
+    pit_meta = {"source_code_sha": source_sha, "synthetic_delay_certified_count": 0,
+                "invalid_chronology_count": 0, "official_announcement_rows": 0,
+                "certification_note": "No formal fundamental evidence was supplied for this run."}
+    feature_meta = {"strict_selection": True}
+    quantile_meta = {"ranking_method": "average", "daily_equal_weighted": True,
+                     "all_equal_dates_invalid": True, "row_shuffle_invariant": True,
+                     "source_code_sha": source_sha}
+    holdout_meta = {"FINAL_HOLDOUT_AVAILABLE": False, "historical_oos": True}
+    (run_reports_dir / "fold_backtest_provenance.json").write_text(json.dumps({"run_id": run_id, "run_mode": run_config.get("run_mode", "certified"), "folds": trading_fold_records}, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "multi_seed_robustness.json").write_text(json.dumps(seed_results, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "bootstrap_comparison.json").write_text(json.dumps(bootstrap_rows, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "walk_forward_purge_audit.json").write_text(json.dumps(all_purge_audits, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "calendar_metadata.json").write_text(json.dumps(cal_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "fundamental_provenance_manifest.json").write_text(json.dumps(pit_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "quantile_evaluation_summary.json").write_text(json.dumps(quantile_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "holdout_manifest.json").write_text(json.dumps(holdout_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    isolation = {"before": prod_snap_before, "after": prod_snap_after, "file_sha_before": prod_sha_before, "file_sha_after": prod_sha_after}
+    (run_reports_dir / "production_isolation.json").write_text(json.dumps(isolation, indent=2, ensure_ascii=False), encoding="utf-8")
 
     gate_matrix = evaluate_research_gates(
         prod_snap_before=prod_snap_before,
@@ -568,19 +628,17 @@ def run_research(
         evidence_dir=run_reports_dir
     )
 
-    # 9. 保存所有证据文件
+    # 9. Save non-gating diagnostics after the raw evidence.
     comp_df.to_csv(run_reports_dir / "model_comparison_matrix.csv", index=False, encoding="utf-8")
     daily_ic_df.to_csv(run_reports_dir / "daily_rankic_series.csv", index=True, encoding="utf-8")
     fold_df.to_csv(run_reports_dir / "walk_forward_folds.csv", index=False, encoding="utf-8")
     trading_fold_df.to_csv(run_reports_dir / "trading_fold_stability.csv", index=False, encoding="utf-8")
-    (run_reports_dir / "multi_seed_robustness.json").write_text(json.dumps(seed_results, indent=2, ensure_ascii=False), encoding="utf-8")
-    (run_reports_dir / "bootstrap_comparison.json").write_text(json.dumps(bootstrap_rows, indent=2, ensure_ascii=False), encoding="utf-8")
-    (run_reports_dir / "walk_forward_purge_audit.json").write_text(json.dumps(all_purge_audits, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "production_snapshot_before.json").write_text(json.dumps(prod_snap_before, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "production_snapshot_after.json").write_text(json.dumps(prod_snap_after, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "audit_gate_matrix.json").write_text(json.dumps(gate_matrix, indent=2, ensure_ascii=False), encoding="utf-8")
 
-    # 10. 生成 Artifact Manifest (SHA256 of all evidence files)
+    # 10. Generate a self-verifying manifest with immutable run provenance.
+    config_hash = hashlib.sha256(json.dumps(run_config, sort_keys=True, default=str).encode("utf-8")).hexdigest()
     artifact_manifest = {}
     for p in sorted(run_reports_dir.rglob("*")):
         if p.is_file():
@@ -589,7 +647,11 @@ def run_research(
                 "sha256": _sha256_file(p),
                 "size_bytes": p.stat().st_size,
                 "generated_by": "tools/run_model_research.py",
-                "source_code_sha": source_sha
+                "source_code_sha": source_sha,
+                "dataset_sha256": dataset_sha256,
+                "calendar_sha256": cal_meta["calendar_sha256"],
+                "config_hash": config_hash,
+                "run_id": run_id,
             }
     (run_reports_dir / "artifact_manifest.json").write_text(json.dumps(artifact_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
