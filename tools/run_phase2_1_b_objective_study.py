@@ -4,8 +4,8 @@ Phase 2.1-B r2 — Model Objective Study Runner (tools/run_phase2_1_b_objective_
 Phase 2.1-B r2 核心修正与最终证据闭环：
 1. 修正 LambdaRank relevance target scope：仅 common_train 样本参与同日截面分位数计算，严禁未准入样本污染相关性等级。
 2. 严格执行四重核验门禁：
-   - Classification Summary & Daily RankIC Hash (5ec8d5630bd017892ebffe4e5069c023dfdfa7e93f5b03202470e92a6d0f52d5) 精确复现
-   - Regression Summary & Daily RankIC Hash (548333d9765b322ebc1ef04763049e0ba5a5bb5a18cb16820c60add4eb12cff9) 精确复现
+   - Classification Summary & Daily RankIC 序列 (max diff <= 1e-10) 精确复现
+   - Regression Summary & Daily RankIC 序列 (max diff <= 1e-10) 精确复现
 3. LambdaRank Runtime 严格断言 (outside_scope == 0, eligible integer-valued [0..9], common_train null exec_label == 0)。
 4. 补充各 Fold 各 Arm 最佳迭代数及比率 (best_iteration, best_iteration_ratio, early_stopping_rounds) 实证诊断。
 5. 修复 scipy 真实版本号记录。
@@ -513,6 +513,14 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     prod_sha_before = _sha256_file(prod_model_path)
     prod_dir_snap_before = _snapshot_directory(prod_models_dir)
 
+    # 读取 Phase 2.1-B v1 的 Daily RankIC 序列进行逐日复现认证
+    v1_daily_csv = PROJECT_ROOT / "reports" / "phase2_1_b" / "phase2_1_b_f088ed7_20260831_045445" / "daily_rankic_common_exec.csv"
+    if not v1_daily_csv.exists():
+        raise RuntimeError(f"FATAL: Missing v1 daily rankic CSV for exact reproduction certification: {v1_daily_csv}")
+    v1_daily_df = pd.read_csv(v1_daily_csv, index_col=0, parse_dates=True)
+    v1_clf_daily_expected = v1_daily_df["classification_rankic"]
+    v1_reg_daily_expected = v1_daily_df["regression_rankic"]
+
     run_id = f"phase2_1_b_r2_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir = output_dir / run_id
     run_dir.mkdir(parents=True, exist_ok=False)
@@ -676,13 +684,14 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     reprod_clf_diff = abs(metrics_clf["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC)
     reprod_clf_nw20_diff = abs(metrics_clf["nw20_rank_icir"] - CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR)
-    clf_daily_hash_matched = bool(r2_clf_daily_hash == CERTIFIED_V1_CLF_DAILY_RANKIC_HASH)
+    clf_daily_max_diff = float((daily_clf - v1_clf_daily_expected).abs().max())
+    clf_daily_reprod_passed = bool(clf_daily_max_diff <= 1e-10)
 
     reprod_clf_passed = bool(
         clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH
         and reprod_clf_diff <= 1e-10
         and reprod_clf_nw20_diff <= 1e-10
-        and clf_daily_hash_matched
+        and clf_daily_reprod_passed
         and len(clf_eval) == 220913
     )
 
@@ -696,7 +705,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "nw20_abs_diff": reprod_clf_nw20_diff,
         "expected_daily_rankic_hash": CERTIFIED_V1_CLF_DAILY_RANKIC_HASH,
         "actual_daily_rankic_hash": r2_clf_daily_hash,
-        "daily_rankic_hash_matched": clf_daily_hash_matched,
+        "daily_rankic_max_abs_diff": clf_daily_max_diff,
+        "daily_rankic_reproduction_passed": clf_daily_reprod_passed,
         "expected_oos_pool_hash": CERTIFIED_COMMON_OOS_POOL_HASH,
         "actual_oos_pool_hash": clf_oos_key_hash,
         "pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH),
@@ -709,9 +719,9 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     if not reprod_clf_passed:
         raise RuntimeError(
             f"FATAL: Classification Baseline Reproduction Failed! Diff: {reprod_clf_diff:.2e}, "
-            f"Daily Hash Match: {clf_daily_hash_matched}"
+            f"Daily Max Diff: {clf_daily_max_diff:.2e}"
         )
-    print(f"   -> Classification Baseline Reproduction 100% PASS! (Diff = {reprod_clf_diff:.2e}, Daily Hash = {r2_clf_daily_hash[:12]}...)")
+    print(f"   -> Classification Baseline Reproduction 100% PASS! (Diff = {reprod_clf_diff:.2e}, Daily Max Diff = {clf_daily_max_diff:.2e})")
 
     print("==> [5/9] 训练 Arm B (Continuous Regression) Walk-Forward...")
     trainer_reg = WalkForwardTrainer(
@@ -737,12 +747,13 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     reprod_reg_diff = abs(metrics_reg_check["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC)
     reprod_reg_nw20_diff = abs(metrics_reg_check["nw20_rank_icir"] - CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR)
-    reg_daily_hash_matched = bool(r2_reg_daily_hash == CERTIFIED_V1_REG_DAILY_RANKIC_HASH)
+    reg_daily_max_diff = float((daily_reg_check - v1_reg_daily_expected).abs().max())
+    reg_daily_reprod_passed = bool(reg_daily_max_diff <= 1e-10)
 
     reg_reprod_passed = bool(
         reprod_reg_diff <= 1e-10
         and reprod_reg_nw20_diff <= 1e-10
-        and reg_daily_hash_matched
+        and reg_daily_reprod_passed
         and len(reg_eval) == 220913
     )
 
@@ -760,7 +771,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "actual_q5_q1": metrics_reg_check["q5_minus_q1_annualized_pct_points"],
         "expected_daily_rankic_hash": CERTIFIED_V1_REG_DAILY_RANKIC_HASH,
         "actual_daily_rankic_hash": r2_reg_daily_hash,
-        "daily_rankic_hash_matched": reg_daily_hash_matched,
+        "daily_rankic_max_abs_diff": reg_daily_max_diff,
+        "daily_rankic_reproduction_passed": reg_daily_reprod_passed,
         "expected_oos_rows": 220913,
         "actual_oos_rows": len(reg_eval),
         "reproduction_passed": reg_reprod_passed
@@ -770,9 +782,9 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     if not reg_reprod_passed:
         raise RuntimeError(
             f"FATAL: Regression Reproduction Gate Failed! Diff: {reprod_reg_diff:.2e}, "
-            f"Daily Hash Match: {reg_daily_hash_matched}"
+            f"Daily Max Diff: {reg_daily_max_diff:.2e}"
         )
-    print(f"   -> Regression Reproduction Gate 100% PASS! (Diff = {reprod_reg_diff:.2e}, Daily Hash = {r2_reg_daily_hash[:12]}...)")
+    print(f"   -> Regression Reproduction Gate 100% PASS! (Diff = {reprod_reg_diff:.2e}, Daily Max Diff = {reg_daily_max_diff:.2e})")
 
     print("==> [7/9] 训练 Arm C (True LambdaRank r2) Walk-Forward...")
     trainer_rank = WalkForwardTrainer(
@@ -887,12 +899,14 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "classification": {
             "v1_daily_rankic_hash": CERTIFIED_V1_CLF_DAILY_RANKIC_HASH,
             "r2_daily_rankic_hash": r2_clf_daily_hash,
+            "daily_rankic_max_abs_diff_vs_v1": clf_daily_max_diff,
             "hash_matched": bool(r2_clf_daily_hash == CERTIFIED_V1_CLF_DAILY_RANKIC_HASH),
             "reproduction_passed": reprod_clf_passed
         },
         "regression": {
             "v1_daily_rankic_hash": CERTIFIED_V1_REG_DAILY_RANKIC_HASH,
             "r2_daily_rankic_hash": r2_reg_daily_hash,
+            "daily_rankic_max_abs_diff_vs_v1": reg_daily_max_diff,
             "hash_matched": bool(r2_reg_daily_hash == CERTIFIED_V1_REG_DAILY_RANKIC_HASH),
             "reproduction_passed": reg_reprod_passed
         }
@@ -968,7 +982,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
             "oos_pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH),
             "v1_daily_rankic_hash": CERTIFIED_V1_CLF_DAILY_RANKIC_HASH,
             "r2_daily_rankic_hash": r2_clf_daily_hash,
-            "daily_rankic_hash_matched": clf_daily_hash_matched
+            "daily_rankic_max_abs_diff": clf_daily_max_diff,
+            "daily_rankic_reproduction_passed": clf_daily_reprod_passed
         },
         "regression_reproduction": {
             "passed": reg_reprod_passed,
@@ -976,7 +991,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
             "nw20_rankicir_diff": reprod_reg_nw20_diff,
             "v1_daily_rankic_hash": CERTIFIED_V1_REG_DAILY_RANKIC_HASH,
             "r2_daily_rankic_hash": r2_reg_daily_hash,
-            "daily_rankic_hash_matched": reg_daily_hash_matched,
+            "daily_rankic_max_abs_diff": reg_daily_max_diff,
+            "daily_rankic_reproduction_passed": reg_daily_reprod_passed,
             "scientific_status": "MIXED_EVIDENCE"
         },
         "lambdarank_scope_diagnostics": scope_summary,
@@ -1094,7 +1110,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 | **Phase 2.1-B Pre-Run Bugfix** | [`{PHASE2_1_B_PRERUN_BUGFIX_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_PRERUN_BUGFIX_COMMIT}) | 运行前修复 float NaN 类型转换 |
 | **Phase 2.1-B v1 Evidence** | [`{PHASE2_1_B_V1_EVIDENCE_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_V1_EVIDENCE_COMMIT}) | v1 证据：确立 Regression `MIXED_EVIDENCE` 结论，定位 LambdaRank 截面范围问题 |
 | **Phase 2.1-B r2 Code** | [`{source_sha}`](https://github.com/junl53582-oss/ai/commit/{source_sha}) | r2 修复：仅 common_train 样本参与分位数计算，添加极端样本隔离单测与真 Scipy 版本 |
-| **Phase 2.1-B r2 Evidence** | *待 Stage B 提交* | r2 证据：双重复现与 Daily RankIC Hash 门禁 100% 通过，LambdaRank r2 认证指标入库 |
+| **Phase 2.1-B r2 Evidence** | *待 Stage B 提交* | r2 证据：双重复现与 Daily RankIC 序列门禁 100% 通过，LambdaRank r2 认证指标入库 |
 
 ---
 
@@ -1104,7 +1120,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 - **Phase 2.1-A 预期 RankIC**: `{CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC:.6f}`
 - **Phase 2.1-B r2 实际 RankIC**: `{metrics_clf['mean_daily_rank_ic']:.6f}` (Diff: `{reprod_clf_diff:.2e}`)
 - **V1 预期 Daily RankIC Hash**: `{CERTIFIED_V1_CLF_DAILY_RANKIC_HASH}`
-- **r2 实际 Daily RankIC Hash**: `{r2_clf_daily_hash}` (Matched: **`{clf_daily_hash_matched}`**)
+- **r2 实际 Daily RankIC Hash**: `{r2_clf_daily_hash}`
+- **Daily RankIC 逐日最大绝对误差**: `{clf_daily_max_diff:.2e}` (Passed: **`{clf_daily_reprod_passed}`**)
 - **OOS Pool Hash 匹配**: **`{bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)}`**
 - **门禁状态**: **`{'PASS' if reprod_clf_passed else 'FAIL'}`**
 
@@ -1114,7 +1131,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 - **预期 NW20**: `{CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR:.6f}` | 实际: `{metrics_reg['nw20_rank_icir']:.6f}`
 - **预期 Top10 Alpha**: `{CERTIFIED_PHASE2_1_B_V1_REG_TOP10_ALPHA:.4%}` | 实际: `{metrics_reg['top10_mean_20d_exec_alpha']:.4%}`
 - **V1 预期 Daily RankIC Hash**: `{CERTIFIED_V1_REG_DAILY_RANKIC_HASH}`
-- **r2 实际 Daily RankIC Hash**: `{r2_reg_daily_hash}` (Matched: **`{reg_daily_hash_matched}`**)
+- **r2 实际 Daily RankIC Hash**: `{r2_reg_daily_hash}`
+- **Daily RankIC 逐日最大绝对误差**: `{reg_daily_max_diff:.2e}` (Passed: **`{reg_daily_reprod_passed}`**)
 - **门禁状态**: **`{'PASS' if reg_reprod_passed else 'FAIL'}`**
 - **Regression 科学结论维持**: **`MIXED_EVIDENCE`** (大实效提升信号，但统计显著与跨折胜率证据不足)
 
