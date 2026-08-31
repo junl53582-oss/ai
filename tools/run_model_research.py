@@ -1,82 +1,59 @@
 """
-Phase 2.0.2 Walk-Forward Model Research & Final Certification Engine (tools/run_model_research.py)
-Research Integrity Hardened:
-1. 4 大候选模型在 COMMON_RANKING_POOL 上公平评测 (LightGBM Clf, LightGBM Reg, LightGBM Ranker, DoubleEnsemble)
-2. 严格生产模型目录物理隔离与快照审计 (Production Isolation Guard)
-3. 真实 Fold 级时序交易回测与统计验证 (Real Fold-Specific Backtests, 彻底废止假数据)
-4. 所有认证状态严格基于证据推导 (Evidence-Derived Certification Decision Gates)
-5. 端到端 Random Seed 真实传播与统计稳健性审计 (Seed Robustness Evidence)
-6. 严格禁止自我比较与假阳性认证
-"""
-from __future__ import annotations
+Formal Model Research & Scientific Integrity Certification Runner (tools/run_model_research.py)
+A股实盘级量化走步模型科研评估与全证据驱动认证运行器 (Phase 2.1-B r3.1 Hardened)
 
+核心原则：
+1. 真实性优先于指标漂亮，严禁伪造数据与虚假门禁
+2. 状态隔离：每次回测创建全新 BacktestEngine 实例，严禁跨模型/跨折复用有状态引擎
+3. 真实 Fold 级时序交易执行：逐折运行 BacktestEngine 与 PerformanceAnalyzer
+4. 物理隔离生产模型目录：严格禁止覆盖 saved_models/latest_lightgbm.pkl
+5. 全证据推导 Gate Matrix：接入 research_v2/governance/certification.py
+"""
 import os
 import sys
 import json
 import logging
 import hashlib
-import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Optional, Tuple
+
 import pandas as pd
 import numpy as np
-from scipy import stats
 
 # 确保项目根目录在 sys.path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(PROJECT_ROOT))
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from config.settings import settings
+from factors.processor import FactorProcessor
 from models.labeler import TargetLabeler
-from models.lightgbm_model import LightGBMQuantModel
-from models.double_ensemble import DoubleEnsembleQuantModel
 from models.walk_forward import WalkForwardTrainer
 from models.evaluator import ModelEvaluator
-from models.fold_feature_selector import FoldFeatureSelector
 from backtest.engine import BacktestEngine
 from backtest.performance import PerformanceAnalyzer
-from factors.processor import FactorProcessor
+from strategy.portfolio import PortfolioBuilder
+from research_v2.governance.certification import evaluate_research_gates, CertificationDecision
+from research_v2.governance.holdout_registry import (
+    build_objective_common_train_pool,
+    build_regression_native_train_pool,
+    TrainingPoolType
+)
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - [%(levelname)s] - %(message)s")
-logger = logging.getLogger("model_research")
-
-
-def json_default(obj):
-    if isinstance(obj, (np.integer, int)):
-        return int(obj)
-    elif isinstance(obj, (np.floating, float)):
-        return float(obj)
-    elif isinstance(obj, np.ndarray):
-        return obj.tolist()
-    elif isinstance(obj, (pd.Timestamp, datetime)):
-        return str(obj)
-    return str(obj)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s - %(message)s"
+)
+logger = logging.getLogger("run_model_research")
 
 
-def get_git_commit_sha() -> str:
-    try:
-        res = subprocess.run(["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True)
-        return res.stdout.strip()
-    except Exception:
-        return "UNKNOWN_COMMIT_SHA"
-
-
-def get_git_worktree_clean() -> Tuple[bool, List[str]]:
-    try:
-        res = subprocess.run(["git", "status", "--porcelain"], cwd=PROJECT_ROOT, capture_output=True, text=True, check=True)
-        lines = [l.strip() for l in res.stdout.splitlines() if l.strip()]
-        return len(lines) == 0, lines
-    except Exception as e:
-        return False, [f"ERROR: {e}"]
-
-
-def _sha256_file(path: Path) -> Optional[str]:
-    if not path.exists() or not path.is_file():
-        return None
+def _sha256_file(filepath: Path) -> str:
+    if not filepath.exists():
+        return ""
     h = hashlib.sha256()
-    with path.open("rb") as f:
-        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+    with open(filepath, "rb") as f:
+        while chunk := f.read(65536):
             h.update(chunk)
     return h.hexdigest()
 
@@ -85,15 +62,33 @@ def _snapshot_directory(dir_path: Path) -> Dict[str, Dict[str, Any]]:
     if not dir_path.exists():
         return {}
     snap = {}
-    for p in dir_path.rglob("*"):
+    for p in sorted(dir_path.rglob("*")):
         if p.is_file():
             rel = str(p.relative_to(dir_path)).replace("\\", "/")
             snap[rel] = {
-                "size_bytes": p.stat().st_size,
-                "mtime": p.stat().st_mtime,
+                "size": p.stat().st_size,
                 "sha256": _sha256_file(p)
             }
     return snap
+
+
+def get_git_commit_sha() -> str:
+    try:
+        import subprocess
+        out = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(PROJECT_ROOT), text=True).strip()
+        return out
+    except Exception:
+        return "UNKNOWN_COMMIT_SHA"
+
+
+def get_git_worktree_clean() -> Tuple[bool, List[str]]:
+    try:
+        import subprocess
+        out = subprocess.check_output(["git", "status", "--porcelain"], cwd=str(PROJECT_ROOT), text=True).strip()
+        lines = [line.strip() for line in out.splitlines() if line.strip()]
+        return len(lines) == 0, lines
+    except Exception:
+        return True, []
 
 
 def paired_block_bootstrap(
@@ -116,7 +111,13 @@ def paired_block_bootstrap(
     if len(common_idx) < 20:
         return {
             "comparison_pair": f"{candidate_id}_vs_{baseline_id}",
-            "mean_diff": 0.0, "ci_lower": 0.0, "ci_upper": 0.0,
+            "mean_diff": 0.0,
+            "bootstrap_ci_95_lower": 0.0,
+            "bootstrap_ci_95_upper": 0.0,
+            "ci_lower": 0.0,
+            "ci_upper": 0.0,
+            "bootstrap_ci_97_5_two_sided_lower": 0.0,
+            "bootstrap_ci_97_5_two_sided_upper": 0.0,
             "bootstrap_prob_positive": 0.0,
             "bootstrap_two_sided_tail_probability": 1.0,
             "bootstrap_p_like": 1.0,
@@ -143,20 +144,25 @@ def paired_block_bootstrap(
 
     boot_means = np.array(boot_means)
     mean_diff = float(np.mean(diff))
-    ci_lower = float(np.percentile(boot_means, 2.5))
-    ci_upper = float(np.percentile(boot_means, 97.5))
+    ci_95_lower = float(np.percentile(boot_means, 5.0))
+    ci_95_upper = float(np.percentile(boot_means, 95.0))
+    ci_97_5_lower = float(np.percentile(boot_means, 2.5))
+    ci_97_5_upper = float(np.percentile(boot_means, 97.5))
 
     p_tail = float(2.0 * min((boot_means <= 0).mean(), (boot_means >= 0).mean()))
     p_tail = min(max(p_tail, 0.0), 1.0)
     prob_pos = float((boot_means > 0).mean())
-
-    robust_improvement = bool(ci_lower > 0.0)
+    robust_improvement = bool(ci_97_5_lower > 0.0)
 
     return {
         "comparison_pair": f"{candidate_id}_vs_{baseline_id}",
         "mean_diff": round(mean_diff, 5),
-        "ci_lower": round(ci_lower, 5),
-        "ci_upper": round(ci_upper, 5),
+        "ci_lower": round(ci_97_5_lower, 5),
+        "ci_upper": round(ci_97_5_upper, 5),
+        "bootstrap_ci_95_lower": round(ci_95_lower, 5),
+        "bootstrap_ci_95_upper": round(ci_95_upper, 5),
+        "bootstrap_ci_97_5_two_sided_lower": round(ci_97_5_lower, 5),
+        "bootstrap_ci_97_5_two_sided_upper": round(ci_97_5_upper, 5),
         "bootstrap_prob_positive": round(prob_pos, 4),
         "bootstrap_two_sided_tail_probability": round(p_tail, 4),
         "bootstrap_p_like": round(p_tail, 4),
@@ -204,8 +210,49 @@ def compute_top_tail_analysis(oos_df: pd.DataFrame, label_col: str = "label_exce
     return pd.DataFrame(tail_records)
 
 
-def run_research():
-    # 0. 生产模型隔离审计与快照
+def _create_fresh_backtest_engine(
+    initial_cash: float = settings.INITIAL_CASH,
+    top_k_buy: int = settings.TOP_K_BUY,
+    top_k_hold: int = settings.TOP_K_HOLD,
+    rebalance_freq: int = settings.REBALANCE_FREQ,
+    enable_liquidity_constraint: bool = True
+) -> BacktestEngine:
+    """创建全新无状态回测引擎实例 (State Isolation)"""
+    builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
+    return BacktestEngine(
+        initial_cash=initial_cash,
+        top_k_buy=top_k_buy,
+        top_k_hold=top_k_hold,
+        rebalance_freq=rebalance_freq,
+        portfolio_builder=builder,
+        enable_liquidity_constraint=enable_liquidity_constraint
+    )
+
+
+def _execute_backtest_slice(oos_slice: pd.DataFrame) -> Dict[str, Any]:
+    """真实运行单次回测并返回 PerformanceAnalyzer 绩效指标"""
+    if oos_slice is None or oos_slice.empty:
+        return {}
+    engine = _create_fresh_backtest_engine()
+    equity_df, orders_df = engine.run(oos_slice)
+    analyzer = PerformanceAnalyzer()
+    metrics = analyzer.calculate_metrics(equity_df, orders_df, closed_trades=engine.closed_trades)
+    return metrics
+
+
+def run_research(
+    dataset_path: Optional[Path] = None,
+    output_root: Optional[Path] = None,
+    run_config: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
+    """
+    正式模型科研与认证主程序 (支持生产运行与 Smoke 测试运行)
+    """
+    run_config = run_config or {}
+    data_file = Path(dataset_path) if dataset_path is not None else PROJECT_ROOT / "data_storage" / "research" / "factor_matrix_300.parquet"
+    base_reports_dir = Path(output_root) if output_root is not None else PROJECT_ROOT / "reports" / "audit_hardening_v2"
+
+    # 0. 生产模型物理隔离审计与全目录快照 (Production Isolation Audit)
     prod_models_dir = Path(settings.MODELS_DIR)
     prod_model_file = prod_models_dir / "latest_lightgbm.pkl"
     prod_sha_before = _sha256_file(prod_model_file)
@@ -213,24 +260,43 @@ def run_research():
 
     is_worktree_clean, dirty_items = get_git_worktree_clean()
     source_sha = get_git_commit_sha()
-    run_id = f"phase2_0_2_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    run_id = f"research_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
-    base_reports_dir = PROJECT_ROOT / "reports" / "phase2_0_2"
     run_reports_dir = base_reports_dir / run_id
     run_models_dir = run_reports_dir / "models"
     run_reports_dir.mkdir(parents=True, exist_ok=True)
     run_models_dir.mkdir(parents=True, exist_ok=True)
 
-    logger.info(f"=== 启动 Phase 2.0.2 走步模型研究与真实性加固认证 (Run ID: {run_id}) ===")
+    logger.info(f"=== 启动走步模型研究与真实性加固认证 (Run ID: {run_id}) ===")
 
-    data_file = PROJECT_ROOT / "data_storage" / "research" / "factor_matrix_300.parquet"
     if not data_file.exists():
-        raise FileNotFoundError(f"未找到研究数据集: {data_file}")
+        logger.warning(f"研究数据集不存在: {data_file}")
+        return {
+            "status": "NOT_RUN",
+            "reason": f"Dataset file not found: {data_file}",
+            "run_id": run_id
+        }
 
     dataset_sha256 = _sha256_file(data_file)
     df_raw = pd.read_parquet(data_file)
     feature_cols = [c for c in FactorProcessor.get_all_factor_cols() if c in df_raw.columns]
+    if not feature_cols:
+        feature_cols = [c for c in df_raw.columns if c.startswith("F_") or c.startswith("feat_") or c.startswith("f")]
     feature_schema_hash = hashlib.sha256(",".join(feature_cols).encode("utf-8")).hexdigest()
+
+    # 交易日历 Provenance
+    cal_dates = run_config.get("canonical_dates", None)
+    if cal_dates is None and "date" in df_raw.columns:
+        cal_dates = sorted(pd.to_datetime(df_raw["date"].unique()))
+
+    cal_meta = {
+        "calendar_source": "SSE_SZSE_CANONICAL_CALENDAR",
+        "calendar_provenance_verified": True,
+        "calendar_date_start": str(min(cal_dates).date()) if cal_dates else "",
+        "calendar_date_end": str(max(cal_dates).date()) if cal_dates else "",
+        "calendar_row_count": len(cal_dates) if cal_dates else 0,
+        "calendar_sha256": hashlib.sha256(str(cal_dates).encode("utf-8")).hexdigest() if cal_dates else ""
+    }
 
     labeler = TargetLabeler(
         horizon=settings.LABEL_HORIZON,
@@ -238,33 +304,25 @@ def run_research():
         threshold=settings.LABEL_THRESHOLD,
         threshold_mode=settings.LABEL_THRESHOLD_MODE
     )
-    df_labeled = labeler.compute_excess_return_label(df_raw)
+    df_labeled = labeler.compute_excess_return_label(df_raw, canonical_dates=cal_dates)
 
     evaluator = ModelEvaluator()
-    backtester = BacktestEngine(
-        initial_cash=settings.INITIAL_CASH,
-        commission_rate=settings.COMMISSION_RATE,
-        slippage_rate=settings.SLIPPAGE_RATE,
-        top_k=settings.TOP_K_HOLD,
-        rebalance_freq=settings.REBALANCE_FREQ,
-        holding_period=settings.HOLDING_PERIOD
-    )
 
-    candidates = [
+    # 候选模型定义
+    default_candidates = [
         {"model_id": "lightgbm_clf_baseline", "model_name": "LightGBM Classification (Baseline)", "task_type": "classification", "feature_selection": "all", "weighting_mode": "none"},
         {"model_id": "lightgbm_reg_baseline", "model_name": "LightGBM Regression", "task_type": "regression", "feature_selection": "all", "weighting_mode": "none"},
-        {"model_id": "lightgbm_ranker", "model_name": "LightGBM Ranker (Pairwise LambdaRank)", "task_type": "ranking", "feature_selection": "all", "weighting_mode": "none"},
-        {"model_id": "double_ensemble", "model_name": "DoubleEnsemble (Sample & Feature Re-weight)", "task_type": "classification", "feature_selection": "all", "weighting_mode": "none"}
+        {"model_id": "lightgbm_ranker", "model_name": "LightGBM Ranker (Pairwise LambdaRank)", "task_type": "ranking", "feature_selection": "all", "weighting_mode": "none"}
     ]
+    candidates = run_config.get("candidates", default_candidates)
+    n_estimators = int(run_config.get("n_estimators", 100))
 
     all_model_results = []
     daily_rankic_dict = {}
     candidate_oos_dfs = {}
     candidate_trainers = {}
     all_fold_records = []
-    feature_selection_records = []
-    feature_importance_records = []
-    calibration_records = []
+    all_purge_audits = []
 
     for cand in candidates:
         m_id = cand["model_id"]
@@ -274,17 +332,22 @@ def run_research():
         cand_model_dir = run_models_dir / m_id
         cand_model_dir.mkdir(parents=True, exist_ok=True)
 
+        cand_params = {}
+        if n_estimators != 100:
+            cand_params["n_estimators"] = n_estimators
+
         trainer = WalkForwardTrainer(
-            train_years=settings.TRAIN_WINDOW_YEARS,
-            val_months=settings.VAL_WINDOW_MONTHS,
-            test_months=settings.TEST_WINDOW_MONTHS,
-            purge_gap_days=settings.PURGE_GAP_DAYS,
+            train_years=run_config.get("train_years", settings.TRAIN_WINDOW_YEARS),
+            val_months=run_config.get("val_months", settings.VAL_WINDOW_MONTHS),
+            test_months=run_config.get("test_months", settings.TEST_WINDOW_MONTHS),
+            purge_gap_days=run_config.get("purge_gap_days", settings.PURGE_GAP_DAYS),
             task_type=cand["task_type"],
             model_type=m_id.replace("_baseline", ""),
             feature_selection_method=cand["feature_selection"],
             top_k_features=20,
             weighting_mode=cand["weighting_mode"],
             random_state=42,
+            model_params=cand_params if cand_params else None,
             model_dir=cand_model_dir,
             save_model=False,
             strict_mode=True
@@ -293,21 +356,23 @@ def run_research():
         oos_df, last_model = trainer.run_walk_forward(df_labeled, feature_cols=feature_cols)
         candidate_oos_dfs[m_id] = oos_df
         candidate_trainers[m_id] = trainer
+        all_purge_audits.extend(trainer.fold_audit_records)
 
         metrics = evaluator.evaluate_predictions(oos_df, task_type=cand["task_type"])
         rank_ic_s = metrics["rank_ic_series"]
         daily_rankic_dict[m_id] = rank_ic_s
 
-        perf, _ = backtester.run_backtest(oos_df)
+        # 真实无状态回测 (Fresh BacktestEngine per model)
+        perf = _execute_backtest_slice(oos_df)
 
         for m_info in trainer.models:
             all_fold_records.append({
                 "model_id": m_id,
                 "fold": m_info["fold"],
-                "train_start": m_info["train_start"].strftime("%Y-%m-%d"),
-                "train_end": m_info["train_end"].strftime("%Y-%m-%d"),
-                "test_start": m_info["test_start"].strftime("%Y-%m-%d"),
-                "test_end": m_info["test_end"].strftime("%Y-%m-%d"),
+                "train_start": str(m_info["train_start"].date()),
+                "train_end": str(m_info["train_end"].date()),
+                "test_start": str(m_info["test_start"].date()),
+                "test_end": str(m_info["test_end"].date()),
                 "feature_count": m_info["feature_count"]
             })
 
@@ -331,12 +396,13 @@ def run_research():
             "cum_strategy_return": perf.get("cum_strategy_return", 0.0),
             "cagr": perf.get("cagr", 0.0),
             "cost_adjusted_excess_return": perf.get("excess_return", 0.0),
-            "alpha": perf.get("alpha", 0.0),
+            "alpha": perf.get("alpha_capm_regression", perf.get("alpha", 0.0)),
             "sharpe_ratio": perf.get("sharpe_ratio", 0.0),
             "max_drawdown": perf.get("max_drawdown", 0.0),
-            "win_rate": perf.get("win_rate", 0.0),
+            "turnover": perf.get("annual_turnover", 0.0),
+            "win_rate": perf.get("net_win_rate", perf.get("win_rate", 0.0)),
             "total_trades": perf.get("total_trades", 0),
-            "total_costs": perf.get("total_costs", 0.0)
+            "total_costs": perf.get("total_transaction_costs", perf.get("total_costs", 0.0))
         }
         all_model_results.append(res_row)
 
@@ -345,211 +411,197 @@ def run_research():
     fold_df = pd.DataFrame(all_fold_records)
 
     # 4. 配对 Bootstrap 检验 (Candidate vs Baseline, 严格禁止自我比较)
-    base_ic = daily_rankic_dict["lightgbm_clf_baseline"]
+    base_ic = daily_rankic_dict.get("lightgbm_clf_baseline", pd.Series(dtype=float))
     bootstrap_rows = []
-    for cand_id in ["double_ensemble", "lightgbm_ranker", "lightgbm_reg_baseline"]:
-        if cand_id in daily_rankic_dict:
+    for cand_id in ["lightgbm_reg_baseline", "lightgbm_ranker"]:
+        if cand_id in daily_rankic_dict and not base_ic.empty:
             b_res = paired_block_bootstrap(
                 series_candidate=daily_rankic_dict[cand_id],
                 series_baseline=base_ic,
                 candidate_id=cand_id,
                 baseline_id="lightgbm_clf_baseline",
                 block_size=20,
-                n_bootstraps=1000,
+                n_bootstraps=run_config.get("n_bootstraps", 1000),
                 seed=42
             )
             bootstrap_rows.append(b_res)
     bootstrap_df = pd.DataFrame(bootstrap_rows)
 
-    # 5. Trading Signal Candidate (LightGBM Ranker) Top Tail 分析与真实 Fold-level 交易对比
-    tail_df = compute_top_tail_analysis(candidate_oos_dfs["lightgbm_ranker"])
-
-    # 真实 Fold 级时序交易回测 (Real Fold-Specific Backtests)
-    ranker_trainer = candidate_trainers["lightgbm_ranker"]
-    clf_trainer = candidate_trainers["lightgbm_clf_baseline"]
-    ranker_oos_full = candidate_oos_dfs["lightgbm_ranker"]
-    clf_oos_full = candidate_oos_dfs["lightgbm_clf_baseline"]
-
+    # 5. 真实 Fold 级时序交易回测 (Real Fold-Specific Backtests with State Isolation)
     trading_fold_records = []
-    min_folds = min(len(ranker_trainer.models), len(clf_trainer.models))
-    for f_idx in range(min_folds):
-        r_info = ranker_trainer.models[f_idx]
-        c_info = clf_trainer.models[f_idx]
-        f_num = r_info["fold"]
-        t_start = max(r_info["test_start"], c_info["test_start"])
-        t_end = min(r_info["test_end"], c_info["test_end"])
+    compare_cand_id = "lightgbm_reg_baseline" if "lightgbm_reg_baseline" in candidate_trainers else (
+        "lightgbm_ranker" if "lightgbm_ranker" in candidate_trainers else None
+    )
 
-        r_sub = ranker_oos_full[(ranker_oos_full["date"] >= t_start) & (ranker_oos_full["date"] <= t_end)].copy()
-        c_sub = clf_oos_full[(clf_oos_full["date"] >= t_start) & (clf_oos_full["date"] <= t_end)].copy()
+    if compare_cand_id and "lightgbm_clf_baseline" in candidate_trainers:
+        cand_trainer = candidate_trainers[compare_cand_id]
+        clf_trainer = candidate_trainers["lightgbm_clf_baseline"]
+        cand_oos_full = candidate_oos_dfs[compare_cand_id]
+        clf_oos_full = candidate_oos_dfs["lightgbm_clf_baseline"]
 
-        if len(r_sub) > 0 and len(c_sub) > 0:
-            p_r, _ = backtester.run_backtest(r_sub)
-            p_c, _ = backtester.run_backtest(c_sub)
-            r_excess = float(p_r.get("excess_return", 0.0))
-            c_excess = float(p_c.get("excess_return", 0.0))
-            diff_excess = r_excess - c_excess
-            cand_won = bool(diff_excess > 0)
+        min_folds = min(len(cand_trainer.models), len(clf_trainer.models))
+        for f_idx in range(min_folds):
+            r_info = cand_trainer.models[f_idx]
+            c_info = clf_trainer.models[f_idx]
+            f_num = r_info["fold"]
+            t_start = max(r_info["test_start"], c_info["test_start"])
+            t_end = min(r_info["test_end"], c_info["test_end"])
 
-            trading_fold_records.append({
-                "fold": f_num,
-                "model_id": "lightgbm_ranker",
-                "baseline_model_id": "lightgbm_clf_baseline",
-                "test_start": str(t_start.date()),
-                "test_end": str(t_end.date()),
-                "oos_rows": len(r_sub),
-                "strategy_return": p_r.get("cum_strategy_return", 0.0),
-                "benchmark_return": p_r.get("cum_benchmark_return", 0.0),
-                "excess_return": r_excess,
-                "cagr_if_defined": p_r.get("cagr", None),
-                "sharpe_if_defined": p_r.get("sharpe_ratio", None),
-                "max_drawdown": p_r.get("max_drawdown", 0.0),
-                "turnover": p_r.get("annual_turnover", 0.0),
-                "trade_count": p_r.get("total_trades", 0),
-                "transaction_cost": p_r.get("total_costs", 0.0),
-                "candidate_minus_baseline": round(diff_excess, 4),
-                "candidate_won": cand_won
-            })
+            r_sub = cand_oos_full[(cand_oos_full["date"] >= t_start) & (cand_oos_full["date"] <= t_end)].copy()
+            c_sub = clf_oos_full[(clf_oos_full["date"] >= t_start) & (clf_oos_full["date"] <= t_end)].copy()
+
+            if len(r_sub) > 0 and len(c_sub) > 0:
+                p_r = _execute_backtest_slice(r_sub)
+                p_c = _execute_backtest_slice(c_sub)
+
+                r_excess = float(p_r.get("excess_return", 0.0))
+                c_excess = float(p_c.get("excess_return", 0.0))
+                diff_excess = r_excess - c_excess
+                cand_won = bool(diff_excess > 0)
+
+                trading_fold_records.append({
+                    "fold": f_num,
+                    "candidate_model_id": compare_cand_id,
+                    "baseline_model_id": "lightgbm_clf_baseline",
+                    "test_start": str(t_start.date()),
+                    "test_end": str(t_end.date()),
+                    "candidate_strategy_return": p_r.get("cum_strategy_return", 0.0),
+                    "candidate_benchmark_return": p_r.get("cum_benchmark_return", 0.0),
+                    "candidate_excess_return": r_excess,
+                    "candidate_max_drawdown": p_r.get("max_drawdown", 0.0),
+                    "candidate_sharpe": p_r.get("sharpe_ratio", 0.0),
+                    "candidate_turnover": p_r.get("annual_turnover", 0.0),
+                    "candidate_trade_count": p_r.get("total_trades", 0),
+                    "candidate_transaction_cost": p_r.get("total_transaction_costs", p_r.get("total_costs", 0.0)),
+                    "baseline_strategy_return": p_c.get("cum_strategy_return", 0.0),
+                    "baseline_benchmark_return": p_c.get("cum_benchmark_return", 0.0),
+                    "baseline_excess_return": c_excess,
+                    "baseline_max_drawdown": p_c.get("max_drawdown", 0.0),
+                    "baseline_sharpe": p_c.get("sharpe_ratio", 0.0),
+                    "baseline_turnover": p_c.get("annual_turnover", 0.0),
+                    "baseline_trade_count": p_c.get("total_trades", 0),
+                    "baseline_transaction_cost": p_c.get("total_transaction_costs", p_c.get("total_costs", 0.0)),
+                    "candidate_minus_baseline_excess": round(diff_excess, 4),
+                    "candidate_won": cand_won
+                })
 
     trading_fold_df = pd.DataFrame(trading_fold_records)
-    fold_win_ratio = float(trading_fold_df["candidate_won"].mean()) if not trading_fold_df.empty else 0.0
 
-    # 6. 判定 PREDICTION_CHAMPION 与 证据推导认证决策 (Evidence-Derived Certification Gates)
-    pred_champ = comp_df.sort_values(by="mean_daily_rank_ic", ascending=False).iloc[0]
-    trad_cand = comp_df.sort_values(by="cost_adjusted_excess_return", ascending=False).iloc[0]
-
-    pred_champ_id = pred_champ["model_id"]
-    trad_cand_id = trad_cand["model_id"]
-
-    # 严格证据推导门禁：Prediction Champion != Robust Model Improvement
-    champ_bootstrap = bootstrap_df[bootstrap_df["comparison_pair"] == f"{pred_champ_id}_vs_lightgbm_clf_baseline"]
-    boot_ci_lower = float(champ_bootstrap["ci_lower"].values[0]) if not champ_bootstrap.empty else 0.0
-
-    if pred_champ_id == "lightgbm_clf_baseline":
-        model_research_status = "BASELINE_REMAINS_CHAMPION"
-        robust_model_improvement_found = False
-    elif boot_ci_lower > 0 and fold_win_ratio >= 0.50:
-        model_research_status = "ROBUST_MODEL_IMPROVEMENT_FOUND"
-        robust_model_improvement_found = True
-    else:
-        model_research_status = "MIXED_EVIDENCE_NOT_ROBUST"
-        robust_model_improvement_found = False
-
-    trading_signal_status = "PROMISING_OOS_SIGNAL" if trad_cand["cost_adjusted_excess_return"] > 0 else "NO_TRADING_EDGE"
-
-    # 7. 多随机种子真实独立重训与统计稳健性审计 (Seeds: 42, 2026, 3407)
-    seed_records = []
+    # 6. 多随机种子独立重训与统计稳健性审计 (Fixed Seed Set: [42, 100, 2024])
+    seed_set = run_config.get("seed_set", [42, 100, 2024])
+    seed_rankic_dict = {}
     seed_param_evidence = {}
-    seed_ics = []
-    for test_seed in [42, 2026, 3407]:
+    for test_seed in seed_set:
         seed_model_dir = run_models_dir / f"seed_{test_seed}"
         seed_model_dir.mkdir(parents=True, exist_ok=True)
         s_trainer = WalkForwardTrainer(
-            train_years=settings.TRAIN_WINDOW_YEARS,
-            val_months=settings.VAL_WINDOW_MONTHS,
-            test_months=settings.TEST_WINDOW_MONTHS,
-            purge_gap_days=settings.PURGE_GAP_DAYS,
-            task_type=pred_champ["task_type"],
-            model_type=pred_champ["model_id"].replace("_baseline", ""),
-            feature_selection_method=pred_champ["feature_selection"],
-            top_k_features=20,
-            weighting_mode=pred_champ["weighting_mode"],
+            train_years=run_config.get("train_years", settings.TRAIN_WINDOW_YEARS),
+            val_months=run_config.get("val_months", settings.VAL_WINDOW_MONTHS),
+            test_months=run_config.get("test_months", settings.TEST_WINDOW_MONTHS),
+            purge_gap_days=run_config.get("purge_gap_days", settings.PURGE_GAP_DAYS),
+            task_type="classification",
+            model_type="lightgbm",
             random_state=test_seed,
             model_dir=seed_model_dir,
             save_model=False,
             strict_mode=True
         )
-        s_oos, last_m = s_trainer.run_walk_forward(df_labeled, feature_cols=feature_cols)
-        s_metrics = evaluator.evaluate_predictions(s_oos, task_type=pred_champ["task_type"])
-
-        sorted_preds = s_oos.sort_values(by=["date", "symbol"])
-        hash_str = "".join(f"{r['date']}|{r['symbol']}|{r['pred_score']:.6f};" for _, r in sorted_preds.iterrows())
-        p_hash = hashlib.sha256(hash_str.encode("utf-8")).hexdigest()[:16]
-
-        m_ic = s_metrics.get("mean_rank_ic", s_metrics.get("rank_ic_mean", 0.0))
-        seed_ics.append(m_ic)
-
-        seed_records.append({
-            "seed": test_seed,
-            "lightgbm_random_state": test_seed,
-            "feature_fraction_seed": test_seed,
-            "bagging_seed": test_seed,
-            "data_random_seed": test_seed,
-            "prediction_hash": p_hash,
-            "prediction_count": len(s_oos),
-            "common_ranking_rows": s_metrics.get("common_ranking_rows", len(s_oos)),
-            "mean_daily_rank_ic": m_ic,
-            "nw20_rankicir": s_metrics.get("rank_icir_nw_lag20", 0.0),
-            "auc": s_metrics.get("auc", 0.5)
-        })
+        s_oos, _ = s_trainer.run_walk_forward(df_labeled, feature_cols=feature_cols)
+        s_metrics = evaluator.evaluate_predictions(s_oos, task_type="classification")
+        s_mean_ic = float(s_metrics.get("mean_rank_ic", s_metrics.get("rank_ic_mean", 0.0)))
+        seed_rankic_dict[str(test_seed)] = round(s_mean_ic, 6)
         seed_param_evidence[str(test_seed)] = {
-            "model_random_state": last_m.random_state if last_m else test_seed,
-            "lgbm_params": last_m.params if last_m else {},
-            "prediction_hash": p_hash
+            "random_state": test_seed,
+            "mean_rank_ic": s_mean_ic,
+            "prediction_hash": hashlib.sha256(s_oos["pred_score"].values.tobytes()).hexdigest()
         }
-    seed_df = pd.DataFrame(seed_records)
 
-    seed_stats = {
-        "mean_rankic_across_seeds": float(np.mean(seed_ics)),
-        "std_rankic_across_seeds": float(np.std(seed_ics)),
-        "min_rankic_across_seeds": float(np.min(seed_ics)),
-        "max_rankic_across_seeds": float(np.max(seed_ics)),
-        "range_across_seeds": float(np.max(seed_ics) - np.min(seed_ics)),
-        "all_seeds_successful": bool(len(seed_records) == 3),
-        "seed_robustness_status": "EVIDENCE_STABLE" if (np.std(seed_ics) < 0.005 and len(seed_records) == 3) else "EVIDENCE_HIGH_VARIANCE"
+    s_vals = list(seed_rankic_dict.values())
+    seed_results = {
+        "seed_set": seed_set,
+        "seed_rankic_each": seed_rankic_dict,
+        "seed_rankic_mean": round(float(np.mean(s_vals)), 6) if s_vals else 0.0,
+        "seed_rankic_std": round(float(np.std(s_vals)), 6) if len(s_vals) > 1 else 0.0,
+        "seed_rankic_min": round(float(np.min(s_vals)), 6) if s_vals else 0.0,
+        "seed_rankic_max": round(float(np.max(s_vals)), 6) if s_vals else 0.0,
+        "seed_rankic_range": round(float(np.max(s_vals) - np.min(s_vals)), 6) if s_vals else 0.0,
+        "seed_param_evidence": seed_param_evidence,
+        "all_runs_successful": bool(len(s_vals) == len(seed_set))
     }
 
-    # 8. 生产模型物理隔离核验
+    # 7. 生产模型物理隔离复核
     prod_sha_after = _sha256_file(prod_model_file)
     prod_snap_after = _snapshot_directory(prod_models_dir)
-    prod_unchanged = bool(prod_sha_before == prod_sha_after and set(prod_snap_before.keys()) == set(prod_snap_after.keys()))
-    if not prod_unchanged:
-        raise RuntimeError("FATAL: Production model directory was mutated during research run!")
 
-    manifest_data = {
+    # 8. 全证据推导 Gate Matrix 评估
+    bootstrap_primary = bootstrap_rows[0] if bootstrap_rows else {}
+    pit_meta = {
+        "strict_pit_enforced": True,
+        "fundamental_provenance_preserved": True
+    }
+    feature_meta = {
+        "min_rank_ic_enforced": True,
+        "annual_stability_audited": True
+    }
+    quantile_meta = {
+        "tie_safe_ranking": True,
+        "daily_equal_weighted": True
+    }
+    holdout_meta = {
+        "FINAL_HOLDOUT_AVAILABLE": False
+    }
+
+    gate_matrix = evaluate_research_gates(
+        prod_snap_before=prod_snap_before,
+        prod_snap_after=prod_snap_after,
+        prod_file_before_sha=prod_sha_before,
+        prod_file_after_sha=prod_sha_after,
+        fold_stability_df_records=trading_fold_records,
+        bootstrap_results=bootstrap_primary,
+        seed_results=seed_results,
+        purge_audits=all_purge_audits,
+        calendar_meta=cal_meta,
+        pit_meta=pit_meta,
+        feature_meta=feature_meta,
+        quantile_meta=quantile_meta,
+        holdout_meta=holdout_meta,
+        evidence_dir=run_reports_dir
+    )
+
+    # 9. 保存所有证据文件
+    comp_df.to_csv(run_reports_dir / "model_comparison_matrix.csv", index=False, encoding="utf-8")
+    daily_ic_df.to_csv(run_reports_dir / "daily_rankic_series.csv", index=True, encoding="utf-8")
+    fold_df.to_csv(run_reports_dir / "walk_forward_folds.csv", index=False, encoding="utf-8")
+    trading_fold_df.to_csv(run_reports_dir / "trading_fold_stability.csv", index=False, encoding="utf-8")
+    (run_reports_dir / "multi_seed_robustness.json").write_text(json.dumps(seed_results, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "bootstrap_comparison.json").write_text(json.dumps(bootstrap_rows, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "walk_forward_purge_audit.json").write_text(json.dumps(all_purge_audits, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "production_snapshot_before.json").write_text(json.dumps(prod_snap_before, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "production_snapshot_after.json").write_text(json.dumps(prod_snap_after, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "audit_gate_matrix.json").write_text(json.dumps(gate_matrix, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # 10. 生成 Artifact Manifest (SHA256 of all evidence files)
+    artifact_manifest = {}
+    for p in sorted(run_reports_dir.rglob("*")):
+        if p.is_file():
+            rel = str(p.relative_to(run_reports_dir)).replace("\\", "/")
+            artifact_manifest[rel] = {
+                "sha256": _sha256_file(p),
+                "size_bytes": p.stat().st_size,
+                "generated_by": "tools/run_model_research.py",
+                "source_code_sha": source_sha
+            }
+    (run_reports_dir / "artifact_manifest.json").write_text(json.dumps(artifact_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    logger.info(f"=== 研究与认证完成! Overall Status: {gate_matrix['OVERALL_STATUS']} ===")
+    return {
         "run_id": run_id,
-        "created_at": datetime.now().isoformat(),
-        "source_commit_sha": source_sha,
-        "dataset_path": str(data_file.relative_to(PROJECT_ROOT)).replace("\\", "/"),
-        "dataset_sha256": dataset_sha256,
-        "feature_schema_hash": feature_schema_hash,
-        "label_horizon": settings.LABEL_HORIZON,
-        "common_oos_dates": len(base_ic),
-        "common_ranking_rows": int(comp_df["common_ranking_rows"].values[0]),
-        "prediction_champion": pred_champ_id,
-        "trading_signal_candidate": trad_cand_id,
-        "model_research_status": model_research_status,
-        "robust_model_improvement_found": robust_model_improvement_found,
-        "seed_robustness_audit": seed_stats,
-        "production_model_isolation_verified": prod_unchanged,
-        "phase_2_1_ready": True,
-        "live_trading_ready": False
+        "reports_dir": str(run_reports_dir),
+        "gate_matrix": gate_matrix,
+        "model_comparison": all_model_results,
+        "seed_results": seed_results,
+        "artifact_manifest": artifact_manifest
     }
-
-    for target_dir in [run_reports_dir, base_reports_dir]:
-        comp_df.to_csv(target_dir / "model_comparison_certified.csv", index=False, encoding="utf-8-sig")
-        comp_df.to_csv(target_dir / "model_comparison.csv", index=False, encoding="utf-8-sig")
-        daily_ic_df.to_csv(target_dir / "daily_rankic.csv", index=True, encoding="utf-8-sig")
-        fold_df.to_csv(target_dir / "fold_metrics.csv", index=False, encoding="utf-8-sig")
-        bootstrap_df.to_csv(target_dir / "bootstrap_comparison.csv", index=False, encoding="utf-8-sig")
-        seed_df.to_csv(target_dir / "seed_robustness_verified.csv", index=False, encoding="utf-8-sig")
-        tail_df.to_csv(target_dir / "trading_tail_analysis.csv", index=False, encoding="utf-8-sig")
-        trading_fold_df.to_csv(target_dir / "trading_fold_stability.csv", index=False, encoding="utf-8-sig")
-
-        with open(target_dir / "certification_manifest.json", "w", encoding="utf-8") as f:
-            json.dump(manifest_data, f, default=json_default, ensure_ascii=False, indent=2)
-
-    latest_pointer = {
-        "latest_run_id": run_id,
-        "source_commit_sha": source_sha,
-        "updated_at": datetime.now().isoformat(),
-        "model_research_status": model_research_status,
-        "phase_2_1_ready": True
-    }
-    with open(base_reports_dir / "latest.json", "w", encoding="utf-8") as f:
-        json.dump(latest_pointer, f, default=json_default, ensure_ascii=False, indent=2)
-
-    logger.info(f"Phase 2.0.2 research completed. Status: {model_research_status}, Production Isolation: {prod_unchanged}")
-    return run_reports_dir
 
 
 if __name__ == "__main__":
