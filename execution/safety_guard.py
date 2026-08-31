@@ -65,7 +65,7 @@ class ExecutionSafetyGuard:
             if val > max_single_val:
                 safe_s = int(max_single_val / (p * 100)) * 100
                 clamped_shares[sym] = safe_s
-                msg = f"🛡️ [单股上限防线] 标的 {sym} 目标市值 {val:,.2f} 超过 20% 上限 ({max_single_val:,.2f})，裁剪为 {safe_s} 股"
+                msg = f"[GUARD] [单股上限防线] 标的 {sym} 目标市值 {val:,.2f} 超过 20% 上限 ({max_single_val:,.2f})，裁剪为 {safe_s} 股"
                 logger.warning(msg)
                 audit_logs.append(msg)
 
@@ -74,7 +74,7 @@ class ExecutionSafetyGuard:
         max_allowed_stock_val = total_equity * self.max_cap_util
         if total_target_val > max_allowed_stock_val:
             scale = max_allowed_stock_val / (total_target_val + 1e-8)
-            msg = f"🛡️ [资金缓冲防线] 目标持仓总市值 {total_target_val:,.2f} 超过 95% 资金上限，保留 5% 现金 ({total_equity * (1-self.max_cap_util):,.2f}元)，整体等比缩放 {scale:.2%}"
+            msg = f"[GUARD] [资金缓冲防线] 目标持仓总市值 {total_target_val:,.2f} 超过 95% 资金上限，保留 5% 现金 ({total_equity * (1-self.max_cap_util):,.2f}元)，整体等比缩放 {scale:.2%}"
             logger.warning(msg)
             audit_logs.append(msg)
             for sym in clamped_shares:
@@ -100,7 +100,7 @@ class ExecutionSafetyGuard:
         turnover_val = total_sell_amt + total_buy_amt
         max_turnover_limit = total_equity * self.max_daily_turnover
         if turnover_val > max_turnover_limit:
-            msg = f"🛡️ [换手熔断防线] 本次拟调仓额 {turnover_val:,.2f} 突破单日 50% 换手上限 ({max_turnover_limit:,.2f})，启动安全降频等比裁剪"
+            msg = f"[GUARD] [换手熔断防线] 本次拟调仓额 {turnover_val:,.2f} 突破单日 50% 换手上限 ({max_turnover_limit:,.2f})，启动安全降频等比裁剪"
             logger.warning(msg)
             audit_logs.append(msg)
             turnover_scale = max_turnover_limit / (turnover_val + 1e-8)
