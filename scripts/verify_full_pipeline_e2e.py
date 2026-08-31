@@ -109,7 +109,10 @@ def verify_all_routes():
         factor_df = labeler.compute_excess_return_label(factor_df)
 
     # 走步时序滚动训练 (测试复合加权 + 多模型集成)
-    trainer = WalkForwardTrainer(train_years=1.0, val_months=3, test_months=3, purge_gap_days=5, model_type="ensemble")
+    trainer = WalkForwardTrainer(
+        train_years=1.0, val_months=3, test_months=3, purge_gap_days=5,
+        model_type="ensemble", label_col="label_up_down_5d"
+    )
     oos_df, latest_model = trainer.run_walk_forward(factor_df)
     assert not oos_df.empty, "走步预测输出不得为空"
     print(f"   * Walk-Forward 滚动折数: {len(trainer.models)} 折 | 样本外预测样本: {len(oos_df)} 条")
@@ -195,7 +198,7 @@ def verify_all_routes():
     print("   -> 路线四 (券商调仓执行中枢) 验证 100% 通过！")
 
     print("\n" + "=" * 80)
-    print(">>> 🏆 全链路测试结论: 路线一、二、三、四、五 均已 100% 实现且严密验证通过！")
+    print(">>> [SUCCESS] 全链路测试结论: 路线一、二、三、四、五 均已 100% 实现且严密验证通过！")
     print("=" * 80)
 
 
