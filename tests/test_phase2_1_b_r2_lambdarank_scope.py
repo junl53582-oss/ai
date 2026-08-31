@@ -4,10 +4,12 @@ Covering:
 1. Critical Ineligible Extreme-Value Isolation Test: Adding extreme ineligible rows (+999/-999) does not mutate eligible relevance grades.
 2. Direct testing of shared helper `_build_lambdarank_relevance_labels`.
 3. Relevance grade decile correctness (0..9, min=0, max=9, non-eligible is NaN).
-4. Group size and date alignment exact matching.
-5. Scipy version string validation.
-6. Fold training diagnostics extraction test.
+4. Group size and date alignment exact matching across contiguous blocks.
+5. Daily RankIC hash canonical formatting and stability.
+6. Scipy version string validation.
+7. Fold training diagnostics and best_iteration_ratio extraction test.
 """
+import hashlib
 import numpy as np
 import pandas as pd
 import pytest
@@ -16,6 +18,7 @@ import scipy
 from tools.run_phase2_1_b_objective_study import (
     _build_lambdarank_relevance_labels,
     _compute_lambdarank_scope_diagnostics,
+    _compute_daily_rankic_hash,
     _get_environment_info,
     _extract_fold_diagnostics,
 )
@@ -87,12 +90,24 @@ def test_lambdarank_scope_diagnostics_calculation():
     
     scope_df, summary = _compute_lambdarank_scope_diagnostics(df, df["common_train"], grades)
     
-    assert summary["eligible_training_rows"] == 20
-    assert summary["ineligible_labeled_rows"] == 10
-    assert summary["ineligible_non_null_grade_count"] == 0
-    assert summary["daily_eligible_count_min"] == 10
-    assert summary["daily_eligible_count_max"] == 10
-    assert len(scope_df) == 10
+    assert summary["common_train_rows"] == 20
+    assert summary["outside_common_train_rows"] == 10
+    assert summary["outside_scope_non_null_grade_count"] == 0
+    assert summary["eligible_non_finite_grade_count"] == 0
+    assert summary["eligible_non_integer_grade_count"] == 0
+    assert summary["eligible_per_date_min"] == 10
+    assert summary["eligible_per_date_max"] == 10
+    assert len(scope_df) >= 10
+
+
+def test_daily_rankic_hash_canonical_calculation():
+    dates = pd.bdate_range("2023-01-01", periods=5)
+    s = pd.Series([0.05123456789123456, -0.02123456789123456, 0.0, 0.03333333333333333, 0.08765432109876543],
+                  index=dates)
+    h1 = _compute_daily_rankic_hash(s)
+    h2 = _compute_daily_rankic_hash(s.sample(frac=1.0, random_state=42))  # out-of-order Series
+    assert h1 == h2
+    assert len(h1) == 64
 
 
 def test_lambdarank_group_alignment_exact_dates():

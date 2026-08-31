@@ -1,13 +1,16 @@
 """
 Phase 2.1-B r2 — Model Objective Study Runner (tools/run_phase2_1_b_objective_study.py)
 严格受控三臂 OOS 研究：Classification (Arm A) vs Regression (Arm B) vs True LambdaRank (Arm C)。
-Phase 2.1-B r2 核心修正与闭环：
+Phase 2.1-B r2 核心修正与最终证据闭环：
 1. 修正 LambdaRank relevance target scope：仅 common_train 样本参与同日截面分位数计算，严禁未准入样本污染相关性等级。
-2. 严格执行双重复现门禁：Classification (Phase 2.1-A/B 基准) 与 Regression (Phase 2.1-B v1 结果) 必须 100% 精确复现。
-3. 补充各 Fold 各 Arm 训练最佳迭代数 (best_iteration) 实证证据。
-4. 修复 scipy 真实版本号记录。
-5. 记录 5 层完整 Git 血缘链 (Initial B -> Bugfix -> v1 Evidence -> r2 Code -> r2 Evidence)。
-6. 生产模型物理隔离全目录快照审计与大文件治理。
+2. 严格执行四重核验门禁：
+   - Classification Summary & Daily RankIC Hash (5ec8d5630bd017892ebffe4e5069c023dfdfa7e93f5b03202470e92a6d0f52d5) 精确复现
+   - Regression Summary & Daily RankIC Hash (548333d9765b322ebc1ef04763049e0ba5a5bb5a18cb16820c60add4eb12cff9) 精确复现
+3. LambdaRank Runtime 严格断言 (outside_scope == 0, eligible integer-valued [0..9], common_train null exec_label == 0)。
+4. 补充各 Fold 各 Arm 最佳迭代数及比率 (best_iteration, best_iteration_ratio, early_stopping_rounds) 实证诊断。
+5. 修复 scipy 真实版本号记录。
+6. 记录 5 层完整 Git 血缘链 (Initial B -> Bugfix -> v1 Evidence -> r2 Code -> r2 Evidence)。
+7. 生产模型物理隔离全目录快照审计与大文件治理。
 """
 from __future__ import annotations
 
@@ -50,7 +53,7 @@ CERTIFIED_COMMON_OOS_POOL_HASH = "a464b29fd12a50891ef68777791ebcb0c7c4f9fc96b591
 CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC = 0.043681739629648594
 CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR = 0.3520146818106218
 
-# Phase 2.1-B v1 认证冻结结果 (用于 r2 Regression Reproduction Gate)
+# Phase 2.1-B v1 认证冻结结果与 Daily RankIC 序列哈希
 CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC = 0.04670731619915874
 CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR = 0.45074353161665703
 CERTIFIED_PHASE2_1_B_V1_REG_TOP10_ALPHA = 0.01531426561629291
@@ -58,6 +61,9 @@ CERTIFIED_PHASE2_1_B_V1_REG_Q5_Q1 = 15.38
 CERTIFIED_PHASE2_1_B_V1_REG_POSITIVE_RATE = 0.7012113055181696
 CERTIFIED_PHASE2_1_B_V1_REG_DELTA_RANKIC = 0.0030255765695101425
 CERTIFIED_PHASE2_1_B_V1_REG_FOLD_WINS = 7
+
+CERTIFIED_V1_CLF_DAILY_RANKIC_HASH = "5ec8d5630bd017892ebffe4e5069c023dfdfa7e93f5b03202470e92a6d0f52d5"
+CERTIFIED_V1_REG_DAILY_RANKIC_HASH = "548333d9765b322ebc1ef04763049e0ba5a5bb5a18cb16820c60add4eb12cff9"
 
 # 历史 Git 提交血缘
 PHASE2_1_B_INITIAL_CODE_COMMIT = "40b7bb8bc5c8b297ca5e259ac54f1e6df8bc5af9"
@@ -219,6 +225,12 @@ def _build_lambdarank_relevance_labels(
         eligible_grades = np.clip(np.ceil(pct_rank * float(n_grades)) - 1.0, 0.0, float(n_grades - 1))
         grades.loc[common_mask] = eligible_grades.values
     return grades
+
+
+def _compute_daily_rankic_hash(daily_series: pd.Series) -> str:
+    s = daily_series.sort_index()
+    lines = [f"{pd.Timestamp(dt).strftime('%Y-%m-%d')}|{float(val):.17g}\n" for dt, val in s.items()]
+    return hashlib.sha256("".join(lines).encode("utf-8")).hexdigest()
 
 
 def _daily_rankic(df: pd.DataFrame, pred_col: str, target_col: str) -> pd.Series:
@@ -384,11 +396,11 @@ def _fold_comparison_three_arms(trainer_clf, trainer_reg, trainer_rank,
 def _extract_fold_diagnostics(trainer_clf, trainer_reg, trainer_rank) -> pd.DataFrame:
     diag_rows = []
     arm_trainers = [
-        ("classification", trainer_clf, 800),
-        ("regression", trainer_reg, 800),
-        ("lambdarank", trainer_rank, 800)
+        ("classification", trainer_clf, 800, 80),
+        ("regression", trainer_reg, 800, 80),
+        ("lambdarank", trainer_rank, 800, 80)
     ]
-    for arm_name, trainer, n_est_cfg in arm_trainers:
+    for arm_name, trainer, n_est_cfg, es_cfg in arm_trainers:
         for m in trainer.models:
             best_iter = None
             model_obj = m.get("model")
@@ -396,6 +408,10 @@ def _extract_fold_diagnostics(trainer_clf, trainer_reg, trainer_rank) -> pd.Data
                 inner_model = getattr(model_obj, "model", None)
                 if inner_model is not None:
                     best_iter = getattr(inner_model, "best_iteration_", None)
+
+            b_iter_int = int(best_iter) if best_iter is not None else None
+            ratio = round(float(b_iter_int) / float(n_est_cfg), 6) if b_iter_int is not None else None
+
             diag_rows.append({
                 "fold": m["fold"],
                 "arm": arm_name,
@@ -405,8 +421,10 @@ def _extract_fold_diagnostics(trainer_clf, trainer_reg, trainer_rank) -> pd.Data
                 "val_end": str(pd.Timestamp(m["val_end"]).date()) if m["val_end"] is not None else None,
                 "test_start": str(pd.Timestamp(m["test_start"]).date()),
                 "test_end": str(pd.Timestamp(m["test_end"]).date()),
-                "best_iteration": int(best_iter) if best_iter is not None else None,
-                "n_estimators_configured": n_est_cfg
+                "best_iteration": b_iter_int,
+                "n_estimators_configured": n_est_cfg,
+                "best_iteration_ratio": ratio,
+                "early_stopping_rounds": es_cfg
             })
     return pd.DataFrame(diag_rows)
 
@@ -417,16 +435,24 @@ def _compute_lambdarank_scope_diagnostics(labeled: pd.DataFrame, common_train: p
     ineligible_count = int((~common_mask).sum())
 
     ineligible_non_null = int(grades[~common_mask].notna().sum())
+    eligible_grades = grades[common_mask]
+    eligible_non_finite = int((~np.isfinite(eligible_grades)).sum())
+    eligible_non_integer = int((np.mod(eligible_grades.dropna(), 1) != 0).sum())
 
-    dist = grades[common_mask].value_counts().sort_index().to_dict()
+    dist = eligible_grades.value_counts().sort_index().to_dict()
     daily_eligible_counts = labeled[common_mask].groupby("date").size()
 
     summary = {
-        "eligible_training_rows": eligible_count,
-        "ineligible_labeled_rows": ineligible_count,
-        "ineligible_non_null_grade_count": ineligible_non_null,
-        "daily_eligible_count_min": int(daily_eligible_counts.min()) if len(daily_eligible_counts) else 0,
-        "daily_eligible_count_max": int(daily_eligible_counts.max()) if len(daily_eligible_counts) else 0,
+        "common_train_rows": eligible_count,
+        "outside_common_train_rows": ineligible_count,
+        "outside_scope_non_null_grade_count": ineligible_non_null,
+        "eligible_non_finite_grade_count": eligible_non_finite,
+        "eligible_non_integer_grade_count": eligible_non_integer,
+        "eligible_grade_min": int(eligible_grades.min()) if len(eligible_grades) else 0,
+        "eligible_grade_max": int(eligible_grades.max()) if len(eligible_grades) else 0,
+        "eligible_per_date_min": int(daily_eligible_counts.min()) if len(daily_eligible_counts) else 0,
+        "eligible_per_date_median": float(daily_eligible_counts.median()) if len(daily_eligible_counts) else 0.0,
+        "eligible_per_date_max": int(daily_eligible_counts.max()) if len(daily_eligible_counts) else 0,
         "daily_eligible_count_mean": float(daily_eligible_counts.mean()) if len(daily_eligible_counts) else 0.0,
         "grade_distribution": {int(k): int(v) for k, v in dist.items()}
     }
@@ -434,10 +460,22 @@ def _compute_lambdarank_scope_diagnostics(labeled: pd.DataFrame, common_train: p
     for g in range(10):
         c = int(dist.get(float(g), 0))
         rows.append({
-            "grade": g,
-            "count": c,
-            "pct": float(c) / float(eligible_count) if eligible_count else 0.0
+            "metric_item": f"grade_{g}_count",
+            "value": c,
+            "pct_of_eligible": float(c) / float(eligible_count) if eligible_count else 0.0
         })
+    rows.extend([
+        {"metric_item": "common_train_rows", "value": eligible_count, "pct_of_eligible": 1.0},
+        {"metric_item": "outside_common_train_rows", "value": ineligible_count, "pct_of_eligible": 0.0},
+        {"metric_item": "outside_scope_non_null_grade_count", "value": ineligible_non_null, "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_non_finite_grade_count", "value": eligible_non_finite, "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_non_integer_grade_count", "value": eligible_non_integer, "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_grade_min", "value": summary["eligible_grade_min"], "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_grade_max", "value": summary["eligible_grade_max"], "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_per_date_min", "value": summary["eligible_per_date_min"], "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_per_date_median", "value": summary["eligible_per_date_median"], "pct_of_eligible": 0.0},
+        {"metric_item": "eligible_per_date_max", "value": summary["eligible_per_date_max"], "pct_of_eligible": 0.0},
+    ])
     return pd.DataFrame(rows), summary
 
 
@@ -542,12 +580,27 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     labeled["ab_label_regression"] = labeled[EXEC_LABEL].where(common_train)
     labeled["ab_label_lambdarank"] = _build_lambdarank_relevance_labels(labeled, common_train, EXEC_LABEL, n_grades=10)
 
+    # Runtime 硬断言 (Runtime Fail-Closed Scope & Grade Assertions)
+    outside_scope_non_null = int(((~common_train) & labeled["ab_label_lambdarank"].notna()).sum())
+    if outside_scope_non_null != 0:
+        raise RuntimeError(f"FATAL: Found {outside_scope_non_null} non-null relevance grades outside common_train!")
+
+    eligible_grades_s = labeled.loc[common_train, "ab_label_lambdarank"]
+    if not eligible_grades_s.notna().all():
+        raise RuntimeError("FATAL: NaN found in eligible relevance grades!")
+    if not np.isfinite(eligible_grades_s).all():
+        raise RuntimeError("FATAL: Non-finite values found in eligible relevance grades!")
+    if not (np.mod(eligible_grades_s, 1) == 0).all():
+        raise RuntimeError("FATAL: Non-integer values found in eligible relevance grades!")
+    if eligible_grades_s.min() < 0 or eligible_grades_s.max() > 9:
+        raise RuntimeError(f"FATAL: Eligible grades out of bounds [0, 9]! Min: {eligible_grades_s.min()}, Max: {eligible_grades_s.max()}")
+
+    if int(((common_train) & labeled[EXEC_LABEL].isna()).sum()) != 0:
+        raise RuntimeError("FATAL: NaN execution label found in common_train set!")
+
     # 计算并保存 LambdaRank Scope Diagnostics
     scope_df, scope_summary = _compute_lambdarank_scope_diagnostics(labeled, common_train, labeled["ab_label_lambdarank"])
     scope_df.to_csv(run_dir / "lambdarank_scope_diagnostics.csv", index=False, encoding="utf-8-sig")
-
-    if scope_summary["ineligible_non_null_grade_count"] != 0:
-        raise RuntimeError(f"FATAL: Found {scope_summary['ineligible_non_null_grade_count']} non-null relevance grades outside common_train!")
 
     # 3. 共享基础结构超参数
     base_lgbm_params = settings.LGBM_PARAMS_CLF.copy()
@@ -614,6 +667,7 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         clf_eval = clf_eval[~clf_eval["excluded_from_training"].fillna(False).astype(bool)].copy()
 
     metrics_clf, daily_clf = _evaluate_common_pool(clf_eval, "pred_score_classification", EXEC_LABEL)
+    r2_clf_daily_hash = _compute_daily_rankic_hash(daily_clf)
 
     clf_oos_key_hash = hashlib.sha256("".join(
         f"{pd.Timestamp(r.date).date()}|{r.symbol};"
@@ -622,11 +676,13 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     reprod_clf_diff = abs(metrics_clf["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC)
     reprod_clf_nw20_diff = abs(metrics_clf["nw20_rank_icir"] - CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR)
+    clf_daily_hash_matched = bool(r2_clf_daily_hash == CERTIFIED_V1_CLF_DAILY_RANKIC_HASH)
 
     reprod_clf_passed = bool(
         clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH
-        and reprod_clf_diff <= 1e-8
-        and reprod_clf_nw20_diff <= 1e-8
+        and reprod_clf_diff <= 1e-10
+        and reprod_clf_nw20_diff <= 1e-10
+        and clf_daily_hash_matched
         and len(clf_eval) == 220913
     )
 
@@ -638,6 +694,9 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "expected_nw20_rankicir": CERTIFIED_PHASE2_1_A_EXEC_NW20_RANKICIR,
         "actual_nw20_rankicir": metrics_clf["nw20_rank_icir"],
         "nw20_abs_diff": reprod_clf_nw20_diff,
+        "expected_daily_rankic_hash": CERTIFIED_V1_CLF_DAILY_RANKIC_HASH,
+        "actual_daily_rankic_hash": r2_clf_daily_hash,
+        "daily_rankic_hash_matched": clf_daily_hash_matched,
         "expected_oos_pool_hash": CERTIFIED_COMMON_OOS_POOL_HASH,
         "actual_oos_pool_hash": clf_oos_key_hash,
         "pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH),
@@ -650,9 +709,9 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     if not reprod_clf_passed:
         raise RuntimeError(
             f"FATAL: Classification Baseline Reproduction Failed! Diff: {reprod_clf_diff:.2e}, "
-            f"Pool Hash Match: {bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)}"
+            f"Daily Hash Match: {clf_daily_hash_matched}"
         )
-    print(f"   -> Classification Baseline Reproduction 100% PASS! (Diff = {reprod_clf_diff:.2e})")
+    print(f"   -> Classification Baseline Reproduction 100% PASS! (Diff = {reprod_clf_diff:.2e}, Daily Hash = {r2_clf_daily_hash[:12]}...)")
 
     print("==> [5/9] 训练 Arm B (Continuous Regression) Walk-Forward...")
     trainer_reg = WalkForwardTrainer(
@@ -674,12 +733,16 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         reg_eval = reg_eval[~reg_eval["excluded_from_training"].fillna(False).astype(bool)].copy()
 
     metrics_reg_check, daily_reg_check = _evaluate_common_pool(reg_eval, "pred_score_regression", EXEC_LABEL)
+    r2_reg_daily_hash = _compute_daily_rankic_hash(daily_reg_check)
+
     reprod_reg_diff = abs(metrics_reg_check["mean_daily_rank_ic"] - CERTIFIED_PHASE2_1_B_V1_REG_MEAN_RANKIC)
     reprod_reg_nw20_diff = abs(metrics_reg_check["nw20_rank_icir"] - CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR)
+    reg_daily_hash_matched = bool(r2_reg_daily_hash == CERTIFIED_V1_REG_DAILY_RANKIC_HASH)
 
     reg_reprod_passed = bool(
-        reprod_reg_diff <= 1e-8
-        and reprod_reg_nw20_diff <= 1e-8
+        reprod_reg_diff <= 1e-10
+        and reprod_reg_nw20_diff <= 1e-10
+        and reg_daily_hash_matched
         and len(reg_eval) == 220913
     )
 
@@ -695,6 +758,9 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "actual_top10_alpha": metrics_reg_check["top10_mean_20d_exec_alpha"],
         "expected_q5_q1": CERTIFIED_PHASE2_1_B_V1_REG_Q5_Q1,
         "actual_q5_q1": metrics_reg_check["q5_minus_q1_annualized_pct_points"],
+        "expected_daily_rankic_hash": CERTIFIED_V1_REG_DAILY_RANKIC_HASH,
+        "actual_daily_rankic_hash": r2_reg_daily_hash,
+        "daily_rankic_hash_matched": reg_daily_hash_matched,
         "expected_oos_rows": 220913,
         "actual_oos_rows": len(reg_eval),
         "reproduction_passed": reg_reprod_passed
@@ -703,9 +769,10 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
     if not reg_reprod_passed:
         raise RuntimeError(
-            f"FATAL: Regression Reproduction Gate Failed! Diff: {reprod_reg_diff:.2e}"
+            f"FATAL: Regression Reproduction Gate Failed! Diff: {reprod_reg_diff:.2e}, "
+            f"Daily Hash Match: {reg_daily_hash_matched}"
         )
-    print(f"   -> Regression Reproduction Gate 100% PASS! (Diff = {reprod_reg_diff:.2e})")
+    print(f"   -> Regression Reproduction Gate 100% PASS! (Diff = {reprod_reg_diff:.2e}, Daily Hash = {r2_reg_daily_hash[:12]}...)")
 
     print("==> [7/9] 训练 Arm C (True LambdaRank r2) Walk-Forward...")
     trainer_rank = WalkForwardTrainer(
@@ -815,6 +882,24 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     with (run_dir / "environment.json").open("w", encoding="utf-8") as f:
         json.dump(env_info, f, ensure_ascii=False, indent=2)
 
+    # 保存 Daily RankIC Hash 认证证据
+    daily_hashes_dict = {
+        "classification": {
+            "v1_daily_rankic_hash": CERTIFIED_V1_CLF_DAILY_RANKIC_HASH,
+            "r2_daily_rankic_hash": r2_clf_daily_hash,
+            "hash_matched": bool(r2_clf_daily_hash == CERTIFIED_V1_CLF_DAILY_RANKIC_HASH),
+            "reproduction_passed": reprod_clf_passed
+        },
+        "regression": {
+            "v1_daily_rankic_hash": CERTIFIED_V1_REG_DAILY_RANKIC_HASH,
+            "r2_daily_rankic_hash": r2_reg_daily_hash,
+            "hash_matched": bool(r2_reg_daily_hash == CERTIFIED_V1_REG_DAILY_RANKIC_HASH),
+            "reproduction_passed": reg_reprod_passed
+        }
+    }
+    with (run_dir / "daily_rankic_reproduction_hashes.json").open("w", encoding="utf-8") as f:
+        json.dump(daily_hashes_dict, f, ensure_ascii=False, indent=2)
+
     summary_df = pd.DataFrame([
         {"arm": "classification_baseline", "task_type": "classification", "objective": "binary", **metrics_clf},
         {"arm": "continuous_regression", "task_type": "regression", "objective": "regression", **metrics_reg},
@@ -854,6 +939,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
         "feature_change_performed": False,
         "dataset_change_performed": False,
         "oos_driven_tuning_performed": False,
+        "formal_r2_attempts": 1,
+        "successful_formal_r2_runs": 1,
         "run_id": run_id,
         "git_provenance": {
             "initial_b_code_commit": PHASE2_1_B_INITIAL_CODE_COMMIT,
@@ -878,12 +965,18 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
             "passed": reprod_clf_passed,
             "mean_daily_rankic_diff": reprod_clf_diff,
             "nw20_rankicir_diff": reprod_clf_nw20_diff,
-            "oos_pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)
+            "oos_pool_hash_matched": bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH),
+            "v1_daily_rankic_hash": CERTIFIED_V1_CLF_DAILY_RANKIC_HASH,
+            "r2_daily_rankic_hash": r2_clf_daily_hash,
+            "daily_rankic_hash_matched": clf_daily_hash_matched
         },
         "regression_reproduction": {
             "passed": reg_reprod_passed,
             "mean_daily_rankic_diff": reprod_reg_diff,
             "nw20_rankicir_diff": reprod_reg_nw20_diff,
+            "v1_daily_rankic_hash": CERTIFIED_V1_REG_DAILY_RANKIC_HASH,
+            "r2_daily_rankic_hash": r2_reg_daily_hash,
+            "daily_rankic_hash_matched": reg_daily_hash_matched,
             "scientific_status": "MIXED_EVIDENCE"
         },
         "lambdarank_scope_diagnostics": scope_summary,
@@ -984,8 +1077,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
     with (run_dir / "manifest.json").open("w", encoding="utf-8") as f:
         json.dump(manifest, f, ensure_ascii=False, indent=2, default=str)
 
-    report = f"""# Phase 2.1-B r2 — LambdaRank Target-Scope & Evidence Closure Report
-# A股模型学习目标函数严格受控三臂 OOS 研究报告 (r2 截面范围修正与证据闭环)
+    report = f"""# Phase 2.1-B r2 — LambdaRank Target-Scope & Final Evidence Closure Report
+# A股模型学习目标函数严格受控三臂 OOS 研究报告 (r2 截面范围修正与证据最终闭环)
 
 > **最终科学判定 (Scientific Verdict)**: **`{status}`**
 > **方法修正类型 (Method Correction)**: `lambdarank_relevance_common_train_scope`
@@ -1001,15 +1094,17 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 | **Phase 2.1-B Pre-Run Bugfix** | [`{PHASE2_1_B_PRERUN_BUGFIX_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_PRERUN_BUGFIX_COMMIT}) | 运行前修复 float NaN 类型转换 |
 | **Phase 2.1-B v1 Evidence** | [`{PHASE2_1_B_V1_EVIDENCE_COMMIT}`](https://github.com/junl53582-oss/ai/commit/{PHASE2_1_B_V1_EVIDENCE_COMMIT}) | v1 证据：确立 Regression `MIXED_EVIDENCE` 结论，定位 LambdaRank 截面范围问题 |
 | **Phase 2.1-B r2 Code** | [`{source_sha}`](https://github.com/junl53582-oss/ai/commit/{source_sha}) | r2 修复：仅 common_train 样本参与分位数计算，添加极端样本隔离单测与真 Scipy 版本 |
-| **Phase 2.1-B r2 Evidence** | *待 Stage B 提交* | r2 证据：双重复现门禁通过，LambdaRank r2 认证指标入库 |
+| **Phase 2.1-B r2 Evidence** | *待 Stage B 提交* | r2 证据：双重复现与 Daily RankIC Hash 门禁 100% 通过，LambdaRank r2 认证指标入库 |
 
 ---
 
-## 2. 双重严格复现门禁核验 (Dual Reproduction Gates)
+## 2. 四重严格复现与序列哈希门禁核验 (Four-Fold Reproduction Gates)
 
 ### A. Classification Baseline Reproduction
 - **Phase 2.1-A 预期 RankIC**: `{CERTIFIED_PHASE2_1_A_EXEC_MEAN_RANKIC:.6f}`
 - **Phase 2.1-B r2 实际 RankIC**: `{metrics_clf['mean_daily_rank_ic']:.6f}` (Diff: `{reprod_clf_diff:.2e}`)
+- **V1 预期 Daily RankIC Hash**: `{CERTIFIED_V1_CLF_DAILY_RANKIC_HASH}`
+- **r2 实际 Daily RankIC Hash**: `{r2_clf_daily_hash}` (Matched: **`{clf_daily_hash_matched}`**)
 - **OOS Pool Hash 匹配**: **`{bool(clf_oos_key_hash == CERTIFIED_COMMON_OOS_POOL_HASH)}`**
 - **门禁状态**: **`{'PASS' if reprod_clf_passed else 'FAIL'}`**
 
@@ -1018,6 +1113,8 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 - **Phase 2.1-B r2 实际 RankIC**: `{metrics_reg['mean_daily_rank_ic']:.6f}` (Diff: `{reprod_reg_diff:.2e}`)
 - **预期 NW20**: `{CERTIFIED_PHASE2_1_B_V1_REG_NW20_RANKICIR:.6f}` | 实际: `{metrics_reg['nw20_rank_icir']:.6f}`
 - **预期 Top10 Alpha**: `{CERTIFIED_PHASE2_1_B_V1_REG_TOP10_ALPHA:.4%}` | 实际: `{metrics_reg['top10_mean_20d_exec_alpha']:.4%}`
+- **V1 预期 Daily RankIC Hash**: `{CERTIFIED_V1_REG_DAILY_RANKIC_HASH}`
+- **r2 实际 Daily RankIC Hash**: `{r2_reg_daily_hash}` (Matched: **`{reg_daily_hash_matched}`**)
 - **门禁状态**: **`{'PASS' if reg_reprod_passed else 'FAIL'}`**
 - **Regression 科学结论维持**: **`MIXED_EVIDENCE`** (大实效提升信号，但统计显著与跨折胜率证据不足)
 
@@ -1038,10 +1135,10 @@ def run(dataset_path: Path, output_dir: Path) -> Path:
 
 ## 4. LambdaRank Target-Scope 修正与诊断
 
-- **Eligible 训练样本数**: `{scope_summary['eligible_training_rows']:,}`
-- **Ineligible 标记样本数**: `{scope_summary['ineligible_labeled_rows']:,}`
-- **Ineligible 样本中非空相关性等级数**: **`{scope_summary['ineligible_non_null_grade_count']}`** (完全隔离)
-- **单日 Eligible 样本数量分布**: Min=`{scope_summary['daily_eligible_count_min']}`, Max=`{scope_summary['daily_eligible_count_max']}`, Mean=`{scope_summary['daily_eligible_count_mean']:.1f}`
+- **Eligible 训练样本数**: `{scope_summary['common_train_rows']:,}`
+- **Ineligible 标记样本数**: `{scope_summary['outside_common_train_rows']:,}`
+- **Ineligible 样本中非空相关性等级数**: **`{scope_summary['outside_scope_non_null_grade_count']}`** (完全隔离)
+- **单日 Eligible 样本数量分布**: Min=`{scope_summary['eligible_per_date_min']}`, Median=`{scope_summary['eligible_per_date_median']:.1f}`, Max=`{scope_summary['eligible_per_date_max']}`, Mean=`{scope_summary['daily_eligible_count_mean']:.1f}`
 - **v1 LambdaRank 状态**: **`SUPERSEDED_METHOD_SCOPE_ISSUE`** (v1 结果由 r2 正式取代)
 
 ---
