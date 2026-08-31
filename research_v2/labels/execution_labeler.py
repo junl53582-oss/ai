@@ -12,6 +12,10 @@ The generator deliberately separates:
 It never forward-fills missing execution states on its own. If the source dataset
 contains ffilled prices, the explicit suspension/volume/limit-lock fields still
 gate label validity.
+
+Research Integrity Hardened:
+- Max Exit Defer Trading Days Policy (MAX_EXIT_DEFER_TRADING_DAYS fail-closed: EXIT_DEFER_EXCEEDS_POLICY)
+- Require Canonical Calendar gate in certified mode
 """
 from __future__ import annotations
 
@@ -43,11 +47,17 @@ class ExecutionAlignedLabeler:
         "is_suspended", "is_limit_up_locked", "is_limit_down_locked",
     }
 
-    def __init__(self, schema: Optional[ExecutionAlignedLabelSchema] = None,
-                 threshold_mode: Optional[str] = None, threshold: Optional[float] = None,
-                 extreme_quantile: Optional[float] = None,
-                 commission_rate: Optional[float] = None,
-                 slippage_rate: Optional[float] = None) -> None:
+    def __init__(
+        self,
+        schema: Optional[ExecutionAlignedLabelSchema] = None,
+        threshold_mode: Optional[str] = None,
+        threshold: Optional[float] = None,
+        extreme_quantile: Optional[float] = None,
+        commission_rate: Optional[float] = None,
+        slippage_rate: Optional[float] = None,
+        max_exit_defer_trading_days: Optional[int] = 5,
+        require_canonical_calendar: bool = False
+    ) -> None:
         self.schema = schema or ExecutionAlignedLabelSchema()
         self.schema.validate()
         self.threshold_mode = threshold_mode or settings.LABEL_THRESHOLD_MODE
@@ -55,6 +65,8 @@ class ExecutionAlignedLabeler:
         self.extreme_quantile = float(getattr(settings, "LABEL_EXTREME_QUANTILE", 0.30)) if extreme_quantile is None else float(extreme_quantile)
         self.commission_rate = float(settings.COMMISSION_RATE) if commission_rate is None else float(commission_rate)
         self.slippage_rate = float(settings.SLIPPAGE_RATE) if slippage_rate is None else float(slippage_rate)
+        self.max_exit_defer_trading_days = int(max_exit_defer_trading_days) if max_exit_defer_trading_days is not None else None
+        self.require_canonical_calendar = bool(require_canonical_calendar)
         self.cols = ExecutionLabelColumns()
         if not 0.0 < self.extreme_quantile < 0.5:
             raise ValueError("extreme_quantile must be in (0, 0.5)")
@@ -95,7 +107,19 @@ class ExecutionAlignedLabeler:
             dup = df.loc[df.duplicated(["date", "symbol"], keep=False), ["date", "symbol"]].head(5)
             raise ValueError("Duplicate date/symbol rows would make execution mapping ambiguous: " + str(dup.to_dict(orient="records")))
 
-    def compute(self, df: pd.DataFrame, canonical_dates: Optional[Iterable[pd.Timestamp]] = None) -> pd.DataFrame:
+    def compute(
+        self,
+        df: pd.DataFrame,
+        canonical_dates: Optional[Iterable[pd.Timestamp]] = None,
+        require_canonical_calendar: Optional[bool] = None
+    ) -> pd.DataFrame:
+        must_require_cal = self.require_canonical_calendar if require_canonical_calendar is None else bool(require_canonical_calendar)
+        if must_require_cal and (canonical_dates is None or len(list(canonical_dates)) == 0):
+            raise RuntimeError(
+                "FATAL: Canonical exchange trading calendar is required in certified mode! "
+                "Deducing trading calendar from filtered stock rows is disallowed."
+            )
+
         self._validate_input(df)
         base = df.copy()
         base["date"] = pd.to_datetime(base["date"])
@@ -246,6 +270,11 @@ class ExecutionAlignedLabeler:
 
         no_exit = (reason == "") & out["actual_exit_date"].isna()
         reason.loc[no_exit] = "NO_EXECUTABLE_EXIT_BEFORE_DATA_END"
+
+        # 延期退出上限策略检查 (Exit Deferral Exceeds Policy Gate)
+        if self.max_exit_defer_trading_days is not None:
+            defer_exceeded = (reason == "") & (pd.to_numeric(out["exit_deferred_days"], errors="coerce").fillna(0) > self.max_exit_defer_trading_days)
+            reason.loc[defer_exceeded] = "EXIT_DEFER_EXCEEDS_POLICY"
 
         bad_benchmark = (reason == "") & ~(self._positive_numeric(out["benchmark_entry_open"]) & self._positive_numeric(out["benchmark_exit_open"]))
         reason.loc[bad_benchmark] = "BENCHMARK_OPEN_MISSING"
