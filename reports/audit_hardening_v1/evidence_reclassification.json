@@ -1,0 +1,41 @@
+{
+  "version": "audit_hardening_v1",
+  "created_at": "2026-08-31T12:27:12.483757",
+  "reclassified_evidence": [
+    {
+      "evidence_item": "Phase 2.0.2 trading_fold_stability.csv",
+      "historical_label": "VERIFIED_STABLE",
+      "reclassified_status": "SUPERSEDED_INVALID_EVIDENCE",
+      "scientific_status": "INVALID_SYNTHETIC_DATA",
+      "action": "Preserved for historical audit trail; marked invalid for scientific certification."
+    },
+    {
+      "evidence_item": "Historical 2023-2026 Walk-Forward OOS Evaluations",
+      "historical_label": "FINAL_UNTOUCHED_OOS",
+      "reclassified_status": "HISTORICAL_RESEARCH_OOS",
+      "scientific_status": "VALID_HISTORICAL_RESEARCH_EVIDENCE",
+      "action": "Reclassified as historical research OOS evidence due to prior feature/parameter selection exposure."
+    },
+    {
+      "evidence_item": "Phase 2.1-B r2 Common-Pool Classification & Regression Numerical Metrics",
+      "historical_label": "CERTIFIED_BASELINE_AND_REGRESSION_EVIDENCE",
+      "reclassified_status": "VALID_HISTORICAL_RESEARCH_EVIDENCE",
+      "scientific_status": "CERTIFIED_HISTORICAL_RESEARCH_EVIDENCE",
+      "action": "Confirmed and preserved 100% immutable (Regression Mean RankIC 0.046707, Classification 0.043682)."
+    },
+    {
+      "evidence_item": "Phase 2.1-B r2 Continuous Regression Robust Improvement",
+      "historical_label": "ROBUST_IMPROVEMENT_CANDIDATE",
+      "reclassified_status": "MIXED_EVIDENCE_NOT_ROBUST",
+      "scientific_status": "MIXED_EVIDENCE",
+      "action": "Confirmed as large economic improvement signal (+0.0030 RankIC, 1.53% Top 10% Alpha) but lacking statistical bootstrap significance (CI crosses 0) and fold win ratio (<50%)."
+    },
+    {
+      "evidence_item": "Phase 2.1-B r2 True LambdaRank",
+      "historical_label": "LAMBDARANK_R2",
+      "reclassified_status": "VALID_NEGATIVE_RESULT",
+      "scientific_status": "VALID_NEGATIVE_RESULT",
+      "action": "Preserved as valid negative scientific result (RankIC 0.030628, delta -0.013054 vs Classification baseline)."
+    }
+  ]
+}

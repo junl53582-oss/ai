@@ -1,0 +1,24 @@
+{
+  "manifest_version": "audit_hardening_v1",
+  "created_at": "2026-08-31T12:27:12.482758",
+  "dataset_path": "data_storage/research/factor_matrix_300.parquet",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "date_start": "2021-09-29",
+  "date_end": "2026-08-24",
+  "freeze_commit_sha": "ddbbf7fa92e1c9218681a1dc257cd813a0b3cd7d",
+  "feature_schema_hash": "82dfd3e9643ae1352829e736b9c8b89d1d648b98d16ef59153f261bf7a453460",
+  "model_config_hash": "9bfa5f6d8924b17f52601db82e75e929f9dfcebc48a73d3ea7483664d4adba61",
+  "selection_history": {
+    "feature_selection_exposure": "ENABLE_REGISTRY_FACTORS=False was chosen after inspecting OOS AUC and Alpha drop",
+    "hyperparameter_exposure": "LightGBM learning_rate and num_leaves were selected based on historical cross-validation",
+    "portfolio_parameter_exposure": "TOP_K_HOLD=10 and REBALANCE_FREQ=20 were reverted to optimal settings after testing alternatives",
+    "model_selection_exposure": "Evaluated on 2023-2026 walk-forward test folds across multiple research phases"
+  },
+  "ever_used_for_feature_selection": true,
+  "ever_used_for_hyperparameter_selection": true,
+  "ever_used_for_portfolio_parameter_selection": true,
+  "ever_used_for_model_selection": true,
+  "holdout_status": "HISTORICAL_RESEARCH_OOS",
+  "final_holdout_available": false,
+  "statement": "All available data within 2021-09-29 ~ 2026-08-24 has been utilized in historical model research and selection. Truly untouched holdout data can only come prospectively from future trading days after complete strategy freezing."
+}
