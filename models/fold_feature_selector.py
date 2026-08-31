@@ -37,7 +37,8 @@ class FoldFeatureSelector:
         train_df: pd.DataFrame,
         candidate_features: List[str],
         label_col: str,
-        method: str = "rank_ic_pruned"
+        method: str = "rank_ic_pruned",
+        strict_selection: bool = False
     ) -> Tuple[List[str], pd.DataFrame]:
         """
         在 train_df 上纯净计算各候选因子的 RankIC、胜率与相关性剪枝：
@@ -106,15 +107,24 @@ class FoldFeatureSelector:
         metrics_df.sort_values(by="abs_rank_ic", ascending=False, inplace=True)
         metrics_df.reset_index(drop=True, inplace=True)
 
-        # 优先使用满足 min_rank_ic 的特征子集
+        # 优先使用满足 min_rank_ic 的特征子集 (strict_selection 模式下强制门禁，禁止静默回退)
         filtered_df = metrics_df[metrics_df["meets_min_rank_ic"]].copy()
-        if len(filtered_df) < max(5, self.top_n // 2):
-            logger.warning(
-                f"仅有 {len(filtered_df)} 个因子达到 min_rank_ic >= {self.min_rank_ic}，回退使用 Top 排序因子保证模型容量"
-            )
-            candidate_pool = metrics_df
-        else:
+        if strict_selection:
+            if sufficient_annual_history:
+                filtered_df = filtered_df[filtered_df["annual_stability"] >= self.min_annual_stability].copy()
+            if len(filtered_df) == 0:
+                raise RuntimeError(
+                    f"FATAL: No features passed strict selection criteria (min_rank_ic={self.min_rank_ic})!"
+                )
             candidate_pool = filtered_df
+        else:
+            if len(filtered_df) < max(5, self.top_n // 2):
+                logger.warning(
+                    f"仅有 {len(filtered_df)} 个因子达到 min_rank_ic >= {self.min_rank_ic}，回退使用 Top 排序因子保证模型容量"
+                )
+                candidate_pool = metrics_df
+            else:
+                candidate_pool = filtered_df
 
         if method == "top_n":
             selected = list(candidate_pool["feature"].head(self.top_n))

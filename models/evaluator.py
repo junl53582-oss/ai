@@ -33,8 +33,9 @@ class ModelEvaluator:
     def evaluate_predictions(
         self,
         df: pd.DataFrame,
-        label_col: str = settings.LABEL_COLUMN,
-        task_type: str = settings.TASK_TYPE
+        label_col: Optional[str] = None,
+        task_type: str = settings.TASK_TYPE,
+        strict_label_resolution: bool = False
     ) -> Dict[str, Any]:
         """
         评估样本外 (OOS) 预测结果：
@@ -55,9 +56,14 @@ class ModelEvaluator:
         if label_col is None:
             label_col = settings.LABEL_COLUMN_CLF if task_type == "classification" else settings.LABEL_COLUMN
 
+        if strict_label_resolution and label_col not in df_ranking.columns:
+            raise KeyError(f"FATAL: Specified label column '{label_col}' not found in DataFrame! strict_label_resolution=True prohibits auto-substitution.")
+
         if task_type == "classification":
             clf_col = label_col if (label_col in df_ranking.columns and not label_col.startswith("label_excess_") and not label_col.startswith("label_net_alpha_")) else None
             if clf_col is None:
+                if strict_label_resolution:
+                    raise KeyError(f"FATAL: No valid classification label '{label_col}' found in DataFrame under strict_label_resolution=True!")
                 clf_cands = [c for c in df_ranking.columns if c.startswith("label_up_down_") or c.startswith("label_direction_") or c.startswith("ab_label_")]
                 if clf_cands:
                     clf_col = clf_cands[0]
@@ -175,6 +181,10 @@ class ModelEvaluator:
             "legacy_row_weighted_q5_minus_q1": quantile_info.get("legacy_row_weighted_q5_minus_q1", quantile_info["Q5_minus_Q1"]),
             "monotonicity_score": quantile_info["monotonicity_score"],
             "quantile_observation_count": quantile_info["quantile_observation_count"],
+            "invalid_tie_dates": quantile_info.get("invalid_tie_dates", 0),
+            "valid_quantile_dates": quantile_info.get("valid_quantile_dates", 0),
+            "invalid_quantile_dates": quantile_info.get("invalid_quantile_dates", 0),
+            "daily_equal_weighted_Q5_minus_Q1": quantile_info.get("daily_equal_weighted_Q5_minus_Q1", quantile_info["Q5_minus_Q1"]),
             "rank_ic_mean": round(rank_ic_mean, 6),
             "mean_rank_ic": round(rank_ic_mean, 6),
             "mean_daily_rank_ic": round(rank_ic_mean, 6),
@@ -223,6 +233,23 @@ class ModelEvaluator:
         - 保留旧版 row-weighted 结果并显式命名为 legacy_row_weighted_q5_minus_q1
         """
         df = df.copy()
+        if df.empty or label_col not in df.columns or "pred_score" not in df.columns:
+            return {
+                "annualized_arithmetic_forward_excess_return": {},
+                "Q5_minus_Q1": 0.0,
+                "mean_daily_q5_minus_q1": 0.0,
+                "legacy_row_weighted_q5_minus_q1": 0.0,
+                "daily_equal_weighted_Q5_minus_Q1": 0.0,
+                "monotonicity_score": 0.0,
+                "total_dates": 0,
+                "valid_quantile_dates": 0,
+                "invalid_quantile_dates": 0,
+                "invalid_tie_dates": 0,
+                "quantile_observation_count": 0,
+                "tie_safe_ranking": True,
+                "daily_equal_weighted": True
+            }
+
         valid_mask = df[label_col].notna() & df["pred_score"].notna()
         df_valid = df[valid_mask].copy()
 
@@ -232,10 +259,15 @@ class ModelEvaluator:
                 "Q5_minus_Q1": 0.0,
                 "mean_daily_q5_minus_q1": 0.0,
                 "legacy_row_weighted_q5_minus_q1": 0.0,
+                "daily_equal_weighted_Q5_minus_Q1": 0.0,
                 "monotonicity_score": 0.0,
+                "total_dates": 0,
                 "valid_quantile_dates": 0,
                 "invalid_quantile_dates": 0,
-                "quantile_observation_count": 0
+                "invalid_tie_dates": 0,
+                "quantile_observation_count": 0,
+                "tie_safe_ranking": True,
+                "daily_equal_weighted": True
             }
 
         daily_groups = []
@@ -245,14 +277,21 @@ class ModelEvaluator:
         med_size = daily_sizes.median() if not daily_sizes.empty else 0
         effective_n_groups = int(med_size) if (2 <= med_size < n_groups) else n_groups
 
+        invalid_tie_dates_count = 0
         for dt, g in df_valid.groupby("date"):
             n_obs = len(g)
             if n_obs < effective_n_groups:
                 invalid_dates_count += 1
                 continue
 
-            # 确定性分位数映射
-            pct = g["pred_score"].rank(method="first", pct=True)
+            n_unique_scores = int(g["pred_score"].nunique())
+            if n_unique_scores < effective_n_groups:
+                invalid_dates_count += 1
+                invalid_tie_dates_count += 1
+                continue
+
+            # Tie-safe 确定性平均分位数映射 (method="average", 严格行序无关，杜绝人为同分拆解)
+            pct = g["pred_score"].rank(method="average", pct=True)
             q_bins = np.clip(np.ceil(pct * float(effective_n_groups)), 1, effective_n_groups).astype(int)
             g_assigned = g.copy()
             g_assigned["group"] = [f"Q{b}" for b in q_bins]
@@ -264,10 +303,15 @@ class ModelEvaluator:
                 "Q5_minus_Q1": 0.0,
                 "mean_daily_q5_minus_q1": 0.0,
                 "legacy_row_weighted_q5_minus_q1": 0.0,
+                "daily_equal_weighted_Q5_minus_Q1": 0.0,
                 "monotonicity_score": 0.0,
+                "total_dates": int(len(df_valid.groupby("date"))),
                 "valid_quantile_dates": 0,
                 "invalid_quantile_dates": invalid_dates_count,
-                "quantile_observation_count": 0
+                "invalid_tie_dates": invalid_tie_dates_count,
+                "quantile_observation_count": 0,
+                "tie_safe_ranking": True,
+                "daily_equal_weighted": True
             }
 
         grouped_df = pd.concat(daily_groups, ignore_index=True)
@@ -304,8 +348,13 @@ class ModelEvaluator:
             "Q5_minus_Q1": mean_daily_q5_minus_q1,
             "mean_daily_q5_minus_q1": mean_daily_q5_minus_q1,
             "legacy_row_weighted_q5_minus_q1": legacy_q5_minus_q1,
+            "daily_equal_weighted_Q5_minus_Q1": mean_daily_q5_minus_q1,
             "monotonicity_score": monotonicity,
+            "total_dates": int(len(df_valid.groupby("date"))),
             "valid_quantile_dates": int(len(daily_q_means)),
             "invalid_quantile_dates": int(invalid_dates_count),
-            "quantile_observation_count": int(len(grouped_df))
+            "invalid_tie_dates": int(invalid_tie_dates_count),
+            "quantile_observation_count": int(len(grouped_df)),
+            "tie_safe_ranking": True,
+            "daily_equal_weighted": True
         }
