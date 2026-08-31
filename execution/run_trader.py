@@ -65,10 +65,13 @@ class PortfolioRebalancer:
         current_holdings = {sym: pos for sym, pos in positions.items() if pos.total_shares > 0}
         logger.info(f"当前持仓标的数: {len(current_holdings)} 只")
 
-        # 确定各标的最新参考价
+        # 确定各标的最新参考价 (Phase A 修复: 同步提取昨收价, 激活防线 5 涨停拦截)
         prices: Dict[str, float] = {}
+        pre_closes: Dict[str, Optional[float]] = {}
         for _, row in target_df.iterrows():
             prices[row["symbol"]] = float(row.get("close", 10.0))
+            pc = row.get("pre_close")
+            pre_closes[row["symbol"]] = float(pc) if (pc is not None and pd.notna(pc) and float(pc) > 0) else None
         for sym, pos in current_holdings.items():
             if sym not in prices:
                 prices[sym] = pos.current_price or pos.avg_cost_price or 10.0
@@ -113,8 +116,8 @@ class PortfolioRebalancer:
                 actual_sell = (actual_sell // 100) * 100
                 if actual_sell > 0:
                     p = prices.get(sym, pos.current_price)
-                    # 防线 5: 价格与涨跌停安全校验
-                    is_safe, msg = self.guard.validate_price_and_limit(sym, "SELL", p, p)
+                    # 防线 5: 价格与涨跌停安全校验 (传入真实昨收价)
+                    is_safe, msg = self.guard.validate_price_and_limit(sym, "SELL", p, p, pre_closes.get(sym))
                     if not is_safe:
                         logger.error(f"❌ 卖出拦截: {msg}")
                         continue
@@ -142,8 +145,8 @@ class PortfolioRebalancer:
                 delta_buy = (delta_buy // 100) * 100
                 if delta_buy > 0:
                     p = prices.get(sym, 10.0)
-                    # 防线 5: 价格偏离度与涨停防追高拦截
-                    is_safe, msg = self.guard.validate_price_and_limit(sym, "BUY", p, p)
+                    # 防线 5: 价格偏离度与涨停防追高拦截 (Phase A 修复: 传入真实昨收价, 此前恒不生效)
+                    is_safe, msg = self.guard.validate_price_and_limit(sym, "BUY", p, p, pre_closes.get(sym))
                     if not is_safe:
                         logger.error(f"❌ 买入拦截: {msg}")
                         continue
@@ -208,12 +211,20 @@ def run_trader_cli():
     if args.broker == "miniqmt":
         broker = MiniQMTBroker(qmt_path=args.qmt_path, account_id=args.account_id)
         if not broker.connect():
-            logger.warning("连接 MiniQMT 失败，防线 7 自动熔断回退到本地 PaperBroker 仿真沙盒")
+            # Phase A 修复: 降级必须显式告警, 严禁静默回退 (用户可能误以为在实盘)
+            logger.critical("🛑 [防线7] MiniQMT 连接失败！已降级为 PaperBroker 仿真沙盒——本次会话所有'成交'均为模拟，绝无真实下单。")
+            print("\n" + "!" * 64)
+            print("⚠️  警告: 实盘通道 (MiniQMT) 不可用，本次已显式降级为模拟盘 (PAPER)。")
+            print("⚠️  当前会话不涉及任何真实资金，请勿据本次输出评估实盘表现。")
+            print("!" * 64 + "\n")
             broker = PaperBroker(initial_cash=args.initial_cash)
             broker.connect()
     else:
         broker = PaperBroker(initial_cash=args.initial_cash)
         broker.connect()
+        # Phase A 修复: 进程启动即跨日 T+1 解锁——此前 unlock_t1_shares 无任何调用点,
+        # 导致首次买入后所有持仓永远无法卖出 (paper 通道实质瘫痪)。
+        broker.unlock_t1_shares()
 
     # 构造最新决策目标持仓
     from factors.processor import FactorProcessor

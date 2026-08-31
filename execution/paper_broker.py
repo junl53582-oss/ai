@@ -25,6 +25,8 @@ class PaperBroker(BaseBroker):
         self.positions: Dict[str, Position] = {}
         self.orders: List[ExecutionOrder] = []
         self.is_connected = False
+        # T+1 修复 (Phase A): 记录每只标的最后一次买入日期, 供跨日解锁判断
+        self._last_buy_dates: Dict[str, str] = {}
 
     def connect(self) -> bool:
         self.is_connected = True
@@ -86,7 +88,9 @@ class PaperBroker(BaseBroker):
             new_shares = old_shares + shares
             pos.avg_cost_price = (pos.avg_cost_price * old_shares + trade_amount) / new_shares
             pos.total_shares = new_shares
-            pos.available_shares = pos.available_shares # T+1: 当日买入不增加可用
+            # T+1 语义 (已修复): 当日买入计入总持仓但不可用, 跨日由 unlock_t1_shares() 解锁
+            pos.available_shares = pos.available_shares
+            self._last_buy_dates[symbol] = datetime.now().strftime("%Y-%m-%d")
             pos.current_price = price
             pos.market_value = pos.total_shares * price
             pos.floating_pnl = (pos.current_price - pos.avg_cost_price) * pos.total_shares
@@ -156,8 +160,24 @@ class PaperBroker(BaseBroker):
             return self.orders
         return [o for o in self.orders if o.status == status]
 
-    def unlock_t1_shares(self):
-        """开盘跨日调用：将全部总股数解锁为可用股数"""
-        for pos in self.positions.values():
+    def unlock_t1_shares(self, today: Optional[str] = None):
+        """跨日调用：将昨日及更早买入的持仓解锁为可用股数 (T+1)。
+
+        Args:
+            today: 当前交易日 (YYYY-MM-DD)。为 None 时无条件解锁全部持仓；
+                   给定日期时仅解锁"最后买入日 < today"的标的，当日买入的股份保持锁定。
+        """
+        unlocked = []
+        for sym, pos in self.positions.items():
+            if pos.total_shares <= pos.available_shares:
+                continue  # 已全部可用, 无需解锁
+            if today is not None:
+                last_buy = self._last_buy_dates.get(sym)
+                if last_buy is not None and last_buy >= today:
+                    continue  # 当日买入, 保持 T+1 锁定
             pos.available_shares = pos.total_shares
-        logger.info("已执行 T+1 跨日持仓可用股数解锁")
+            unlocked.append(f"{sym}({pos.total_shares}股)")
+        if unlocked:
+            logger.info(f"已执行 T+1 跨日持仓可用股数解锁: {', '.join(unlocked)}")
+        else:
+            logger.info("T+1 解锁扫描完成: 无需解锁的持仓")

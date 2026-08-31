@@ -114,6 +114,15 @@ class ExecutionSafetyGuard:
 
         return clamped_shares, audit_logs
 
+    def _limit_up_threshold(self, symbol: str) -> float:
+        """按板块返回涨停拦截阈值 (涨幅比例, 留 0.2% 余量)。主板 10% / 创业板·科创 20% / 北交 30%。"""
+        sym = str(symbol).split(".")[0]
+        if sym.startswith(("300", "301", "688", "689")):
+            return 0.196  # 20% 板
+        if sym.startswith(("83", "87", "88", "43", "92")) or sym.startswith("4"):
+            return 0.294  # 30% 板 (北交所)
+        return 0.098      # 主板 10% 板
+
     def validate_price_and_limit(
         self,
         symbol: str,
@@ -124,17 +133,26 @@ class ExecutionSafetyGuard:
     ) -> Tuple[bool, str]:
         """
         防线 5: 价格偏离度审查与涨停买入拦截
+
+        注意: pre_close_price 必须传入真实昨收价才能激活涨停拦截;
+        缺省 None 时仅执行偏离度校验并在日志中提示防线降级。
         """
-        # 1. 价格偏离度不得超过 2%
-        if latest_market_price > 0:
+        if order_price is None or order_price <= 0:
+            return False, f"标的 {symbol} 委托价格非法: {order_price}"
+
+        # 1. 价格偏离度不得超过阈值 (仅当市价与委托价独立可得时有意义)
+        if latest_market_price and latest_market_price > 0 and latest_market_price != order_price:
             dev = abs(order_price - latest_market_price) / latest_market_price
             if dev > self.max_price_deviation:
-                return False, f"委托价 {order_price:.2f} 偏离最新市价 {latest_market_price:.2f} 达到 {dev*100:.2f}% (超过 2% 上限)"
+                return False, f"委托价 {order_price:.2f} 偏离最新市价 {latest_market_price:.2f} 达到 {dev*100:.2f}% (超过 {self.max_price_deviation*100:.0f}% 上限)"
 
-        # 2. 严禁在涨停板挂买单 (以昨收价计算涨幅 >= 9.8%)
+        # 2. 严禁在涨停板挂买单 (以真实昨收价计算涨幅, 阈值按板块自适应)
         if side.upper() in ("BUY", "买入") and pre_close_price and pre_close_price > 0:
+            threshold = self._limit_up_threshold(symbol)
             change_ratio = (order_price - pre_close_price) / pre_close_price
-            if change_ratio >= 0.098:
-                return False, f"标的 {symbol} 委托价格 {order_price:.2f} 触碰 +9.8% 涨停线，触发涨停防追高拦截"
+            if change_ratio >= threshold:
+                return False, f"标的 {symbol} 委托价格 {order_price:.2f} 相对昨收 {pre_close_price:.2f} 涨幅 {change_ratio*100:.2f}% 触碰涨停拦截线 (+{threshold*100:.1f}%)，触发涨停防追高拦截"
+        elif side.upper() in ("BUY", "买入") and not pre_close_price:
+            logger.warning(f"[GUARD] [防线5降级] 标的 {symbol} 买入校验缺少昨收价 (pre_close), 涨停防追高拦截未生效——请接入实时行情数据源")
 
         return True, "价格安全合规"
