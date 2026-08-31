@@ -1,0 +1,16 @@
+{
+  "classification": {
+    "v1_daily_rankic_hash": "5ec8d5630bd017892ebffe4e5069c023dfdfa7e93f5b03202470e92a6d0f52d5",
+    "r2_daily_rankic_hash": "42640bcd8506e6f9655661c0dc7258854fdf8c3813ebd0e3d3946d510e4cacba",
+    "daily_rankic_max_abs_diff_vs_v1": 9.8879238130678e-17,
+    "hash_matched": false,
+    "reproduction_passed": true
+  },
+  "regression": {
+    "v1_daily_rankic_hash": "548333d9765b322ebc1ef04763049e0ba5a5bb5a18cb16820c60add4eb12cff9",
+    "r2_daily_rankic_hash": "83cb779a849997fbe90a022b7bcfd619baa11b6673c54e2afe95078b3d891016",
+    "daily_rankic_max_abs_diff_vs_v1": 9.8879238130678e-17,
+    "hash_matched": false,
+    "reproduction_passed": true
+  }
+}
