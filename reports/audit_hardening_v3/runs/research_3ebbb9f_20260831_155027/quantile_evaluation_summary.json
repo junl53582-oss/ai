@@ -1,0 +1,7 @@
+{
+  "ranking_method": "average",
+  "daily_equal_weighted": true,
+  "all_equal_dates_invalid": true,
+  "row_shuffle_invariant": true,
+  "source_code_sha": "3ebbb9fa3f8dd6ed71dd56d1cdb6fd3faf8d8c0c"
+}

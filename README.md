@@ -9,6 +9,16 @@
 
 ---
 
+## Current Phase — Phase 2.1-B r3.2: Evidence Integrity & Scientific Closure
+
+The canonical r3.2 real-data run is fail-closed: `INFRASTRUCTURE_STATUS = INSUFFICIENT_EVIDENCE` because formal PIT announcement evidence is absent; it is not silently treated as verified. `MODEL_EVIDENCE_STATUS = MIXED_EVIDENCE_NOT_ROBUST`: the frozen seeds `[42, 100, 2024]` yield RankIC std `0.007994 > 0.0050`, and regression's bootstrap 95% lower bound is `-0.03723`.
+
+Historical research OOS is not a prospective untouched final holdout. `FINAL_HOLDOUT_AVAILABLE = FALSE`, `LIVE_TRADING_READY = FALSE`, and `PRODUCTION_MODEL_PROMOTION = FALSE`.
+
+Current limitations: no prospective untouched final holdout; regression robust improvement is not established; strict fundamental PIT evidence is unavailable; r3.2 improves evidence integrity, not alpha optimization.
+
+---
+
 ## 📈 当前研究认证状态 (Current Research Status — Phase 2.1-0)
 
 | 投研与验证维度 | 当前认证状态 | 核心实证指标 / 结论 |

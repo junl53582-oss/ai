@@ -1,0 +1,249 @@
+{
+  "INFRASTRUCTURE_STATUS": "INSUFFICIENT_EVIDENCE",
+  "MODEL_EVIDENCE_STATUS": "MIXED_EVIDENCE_NOT_ROBUST",
+  "GOVERNANCE_STATUS": "PASS",
+  "OVERALL_RESEARCH_STATUS": "FAILED",
+  "OVERALL_STATUS": "FAILED",
+  "RESEARCH_INTEGRITY_VERIFIED": false,
+  "FINAL_HOLDOUT_AVAILABLE": false,
+  "LIVE_TRADING_READY": false,
+  "PRODUCTION_MODEL_PROMOTION": false,
+  "GATES": {
+    "FORMAL_RESEARCH_RUNNER_EXECUTABLE": {
+      "gate_id": "FORMAL_RESEARCH_RUNNER_EXECUTABLE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "complete persisted candidate and baseline fold trace",
+      "threshold": "all required provenance fields",
+      "actual_value": {
+        "folds": 20,
+        "issue": ""
+      },
+      "reason": "Fold trace verified.",
+      "evidence_artifacts": [
+        "fold_backtest_provenance.json"
+      ],
+      "evidence_sha256": {
+        "fold_backtest_provenance.json": "88330b636035009356f14c6c5f5d22c137a9bbdde1133d11294f3a341dc41f6a"
+      }
+    },
+    "REAL_FOLD_BACKTEST_PROVENANCE": {
+      "gate_id": "REAL_FOLD_BACKTEST_PROVENANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "complete persisted candidate and baseline fold trace",
+      "threshold": "all required provenance fields",
+      "actual_value": {
+        "folds": 20,
+        "issue": ""
+      },
+      "reason": "Fold trace verified.",
+      "evidence_artifacts": [
+        "fold_backtest_provenance.json"
+      ],
+      "evidence_sha256": {
+        "fold_backtest_provenance.json": "88330b636035009356f14c6c5f5d22c137a9bbdde1133d11294f3a341dc41f6a"
+      }
+    },
+    "PRODUCTION_MODEL_ISOLATION": {
+      "gate_id": "PRODUCTION_MODEL_ISOLATION",
+      "status": "PASS",
+      "passed": true,
+      "condition": "production snapshots are byte-identical",
+      "threshold": "before == after",
+      "actual_value": {
+        "before": {
+          "double_ensemble_latest.pkl": {
+            "size": 85642,
+            "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+          },
+          "latest_ensemble.pkl": {
+            "size": 181683,
+            "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+          },
+          "latest_lightgbm.pkl": {
+            "size": 11086,
+            "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+          }
+        },
+        "after": {
+          "double_ensemble_latest.pkl": {
+            "size": 85642,
+            "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+          },
+          "latest_ensemble.pkl": {
+            "size": 181683,
+            "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+          },
+          "latest_lightgbm.pkl": {
+            "size": 11086,
+            "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+          }
+        },
+        "file_sha_before": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900",
+        "file_sha_after": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+      },
+      "reason": "Production directory unchanged.",
+      "evidence_artifacts": [
+        "production_isolation.json"
+      ],
+      "evidence_sha256": {
+        "production_isolation.json": "27a9233a87a80776d85796d5ffd8193cd47ca4e9a4dcc67327051a793c9d35da"
+      }
+    },
+    "WALKFORWARD_PURGE_GATE": {
+      "gate_id": "WALKFORWARD_PURGE_GATE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "all trading-day gaps meet purge",
+      "threshold": "actual gaps >= purge_gap_days",
+      "actual_value": {
+        "folds": 60,
+        "issue": ""
+      },
+      "reason": "Purge evidence verified.",
+      "evidence_artifacts": [
+        "walk_forward_purge_audit.json"
+      ],
+      "evidence_sha256": {
+        "walk_forward_purge_audit.json": "73520ab5a40189ab221616c0a58df3d869f7fc1b3343245a78319ea450289679"
+      }
+    },
+    "CANONICAL_CALENDAR_PROVENANCE": {
+      "gate_id": "CANONICAL_CALENDAR_PROVENANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "unique ascending canonical dates overlap dataset",
+      "threshold": "valid source, SHA, source SHA and overlap > 0",
+      "actual_value": {
+        "dates": 1187,
+        "issue": ""
+      },
+      "reason": "Calendar facts verified.",
+      "evidence_artifacts": [
+        "calendar_metadata.json"
+      ],
+      "evidence_sha256": {
+        "calendar_metadata.json": "1702c133e3bf82fdc3516b970b7588d6d7b8e3705ba3df69e5e2b3a54351436c"
+      }
+    },
+    "STRICT_FUNDAMENTAL_PIT": {
+      "gate_id": "STRICT_FUNDAMENTAL_PIT",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "passed": false,
+      "condition": "official PIT chronology is independently recorded",
+      "threshold": "zero synthetic-certified and chronology violations",
+      "actual_value": {
+        "source_code_sha": "8dbf06213b9af0a6614f377513dc997aa80266be",
+        "synthetic_delay_certified_count": 0,
+        "invalid_chronology_count": 0,
+        "official_announcement_rows": 0,
+        "certification_note": "No formal fundamental evidence was supplied for this run."
+      },
+      "reason": "PIT provenance incomplete",
+      "evidence_artifacts": [
+        "fundamental_provenance_manifest.json"
+      ],
+      "evidence_sha256": {
+        "fundamental_provenance_manifest.json": "826e72234de5dddb9253f31449c206b670be6782f0aeb1415e91f7679aad42e7"
+      }
+    },
+    "QUANTILE_EVALUATION_INTEGRITY": {
+      "gate_id": "QUANTILE_EVALUATION_INTEGRITY",
+      "status": "PASS",
+      "passed": true,
+      "condition": "tie-preserving ranks and equal-date weighting verified",
+      "threshold": "average ranking + invariant checks",
+      "actual_value": {
+        "ranking_method": "average",
+        "daily_equal_weighted": true,
+        "all_equal_dates_invalid": true,
+        "row_shuffle_invariant": true,
+        "source_code_sha": "8dbf06213b9af0a6614f377513dc997aa80266be"
+      },
+      "reason": "Quantile facts verified.",
+      "evidence_artifacts": [
+        "quantile_evaluation_summary.json"
+      ],
+      "evidence_sha256": {
+        "quantile_evaluation_summary.json": "363d72d056f065b9f65dfee6a88e92c9a268a8b963a98eea176c3a94ada30bd1"
+      }
+    },
+    "MULTI_SEED_ROBUSTNESS": {
+      "gate_id": "MULTI_SEED_ROBUSTNESS",
+      "status": "FAIL",
+      "passed": false,
+      "condition": "fixed seeds 42, 100, 2024 meet bound",
+      "threshold": "std <= 0.0050",
+      "actual_value": {
+        "std": 0.007994,
+        "seeds": [
+          "42",
+          "100",
+          "2024"
+        ]
+      },
+      "reason": "fixed seed stability fails",
+      "evidence_artifacts": [
+        "multi_seed_robustness.json"
+      ],
+      "evidence_sha256": {
+        "multi_seed_robustness.json": "b4f543aa5a7d1698f8456518bde09e879b25434f91ae6a88e99eca96ac348bb6"
+      }
+    },
+    "ROBUST_MODEL_IMPROVEMENT": {
+      "gate_id": "ROBUST_MODEL_IMPROVEMENT",
+      "status": "MIXED_EVIDENCE_NOT_ROBUST",
+      "passed": false,
+      "condition": "non-self comparison has positive 95% CI lower bound",
+      "threshold": "bootstrap_ci_95_lower > 0",
+      "actual_value": {
+        "comparison_pair": "lightgbm_reg_baseline_vs_lightgbm_clf_baseline",
+        "bootstrap_ci_95_lower": -0.03723
+      },
+      "reason": "robust improvement not established",
+      "evidence_artifacts": [
+        "bootstrap_comparison.json"
+      ],
+      "evidence_sha256": {
+        "bootstrap_comparison.json": "6908532fc4123754e0ad4e53ad5cd4bff0019d76a9d81af7b0106613553f99b0"
+      }
+    },
+    "FINAL_HOLDOUT_GOVERNANCE": {
+      "gate_id": "FINAL_HOLDOUT_GOVERNANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "historical OOS is not prospective holdout",
+      "threshold": "FINAL_HOLDOUT_AVAILABLE == false",
+      "actual_value": {
+        "FINAL_HOLDOUT_AVAILABLE": false,
+        "historical_oos": true
+      },
+      "reason": "Holdout governance accurate.",
+      "evidence_artifacts": [
+        "holdout_manifest.json"
+      ],
+      "evidence_sha256": {
+        "holdout_manifest.json": "8d41dc952bab3892682a600994d83ced92bee32c5f4f755db616058f29cf24b9"
+      }
+    },
+    "LIVE_TRADING_GOVERNANCE": {
+      "gate_id": "LIVE_TRADING_GOVERNANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "live promotion remains disabled",
+      "threshold": "LIVE_TRADING_READY == false",
+      "actual_value": {
+        "LIVE_TRADING_READY": false,
+        "PRODUCTION_MODEL_PROMOTION": false
+      },
+      "reason": "No live/production claim.",
+      "evidence_artifacts": [
+        "holdout_manifest.json"
+      ],
+      "evidence_sha256": {
+        "holdout_manifest.json": "8d41dc952bab3892682a600994d83ced92bee32c5f4f755db616058f29cf24b9"
+      }
+    }
+  }
+}
