@@ -20,6 +20,7 @@ data_storage/fundamentals/*
 # Phase A: 行情主数据集 (19.9MB) 入库; 311MB 因子矩阵不入库, 由 tools/build_factor_matrix_300.py 确定性重建
 data_storage/research/*.parquet
 !data_storage/research/market_daily_300.parquet
+!data_storage/research/market_daily_300_v2.parquet
 saved_models/*.pkl
 saved_models/*.txt
 

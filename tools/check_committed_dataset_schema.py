@@ -58,6 +58,22 @@ def check_market_dataset(path: Path) -> bool:
             logger.error(f"❌ 基准数据覆盖率不达标 (open: {b_open_cov:.2f}, close: {b_close_cov:.2f})！")
             return False
 
+        # ---------- 列值分布断言 (Phase A / 2026-09-01 新增, 堵 governance 盲区) ----------
+        # 背景: market_daily_300.parquet 的 LOG_CIRC_MV 曾被因子管线的标准化值污染
+        # (逐日 mean=0/std=1) 且所有既有 gate 未拦截。原始对数流通市值 (yuan) 应在
+        # ~[18, 32] 区间; 若被标准化, 全局均值≈0。此断言按 fail-closed 处理。
+        if "LOG_CIRC_MV" in df.columns:
+            mv = df["LOG_CIRC_MV"].dropna()
+            if len(mv) > 0:
+                g_mean, g_std = float(mv.mean()), float(mv.std())
+                logger.info(f"  * LOG_CIRC_MV 全局 mean={g_mean:.3f} std={g_std:.3f} (原始值期望 ~23±3)")
+                if not (15.0 <= g_mean <= 35.0):
+                    logger.error(
+                        f"❌ LOG_CIRC_MV 值域异常 (全局均值 {g_mean:.3f})! 疑似标准化值污染原始行情列。"
+                        "Fail-Closed: 请重建数据集 (tools/build_dataset_300_v2.py)。"
+                    )
+                    return False
+
         logger.info("  -> 行情数据集 Schema 校验通过！")
         return True
     except Exception as e:

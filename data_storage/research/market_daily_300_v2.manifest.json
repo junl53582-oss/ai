@@ -1,0 +1,29 @@
+{
+  "dataset_name": "A_SHARE_PIT_RESEARCH_MARKET_DAILY_300_V2",
+  "dataset_version": "2.0",
+  "is_ci_fixture": false,
+  "production_ready": true,
+  "recipe": {
+    "recipe_version": "2.0",
+    "raw_log_circ_mv_formula": "np.log(np.maximum(amount / turnover.replace(0,nan).fillna(0.01), 1e8))  # == data_manager.py:693-696",
+    "settings_snapshot": {
+      "ENABLE_REGISTRY_FACTORS": true,
+      "ENABLE_FUNDAMENTALS": false
+    },
+    "universe_state": "inherited from legacy market_daily_300.parquet in_universe column (PIT incomplete, see RUNTIME_ATTESTATION)"
+  },
+  "code_commit": "f026f2c9563a52920d4efc66dbb8d7d11880f82e",
+  "built_at": "2026-09-01T03:15:58",
+  "parent_dataset": {
+    "path": "data_storage/research/market_daily_300.parquet",
+    "file_sha256": "47dc1429f20acfbd254c3c23f172c80f5d87852fa04bb4d6f60579af310033be",
+    "note": "LOG_CIRC_MV column in parent is lineage-polluted (standardized); v2 restores raw values"
+  },
+  "symbol_count": 300,
+  "row_count": 349379,
+  "date_range": [
+    "2021-09-29 00:00:00",
+    "2026-08-24 00:00:00"
+  ],
+  "file_sha256": "e66feb759fc67c8ce8656981f9f46d93c22390ff027be84deb6dc1fb31575326"
+}
