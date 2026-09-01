@@ -1,0 +1,60 @@
+{
+ "source": "cninfo",
+ "source_class": "OFFICIAL_PRIMARY",
+ "symbol": "301165.SZ",
+ "fetched_at": "2026-09-01T13:57:37",
+ "events": [
+  {
+   "symbol": "301165.SZ",
+   "ex_date": "2023-05-31",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.8,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "301165.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "301165.SZ",
+   "ex_date": "2024-06-04",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.5599999999999999,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "301165.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "301165.SZ",
+   "ex_date": "2025-06-04",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.606,
+   "share_ratio": 0.4,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "301165.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "301165.SZ",
+   "ex_date": "2026-05-25",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.525,
+   "share_ratio": 0.4,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "301165.json",
+   "source_sha256": null
+  }
+ ]
+}
