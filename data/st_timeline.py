@@ -53,7 +53,9 @@ class STTimelineProvider:
 
     def fetch_sz_st_periods(self, refresh: bool = False) -> pd.DataFrame:
         """由简称变更表推导 ST 周期: 名称含 'ST' 视为 ST 状态, 变更日切换"""
-        table = self.fetch_sz_name_change_table(refresh=refresh)
+        table = self.fetch_sz_name_change_table(refresh=refresh).copy()
+        table["变更日期"] = pd.to_datetime(table["变更日期"], errors="coerce")
+        table = table.dropna(subset=["变更日期"])
         records = []
         for code, grp in table.groupby("证券代码"):
             is_st = grp["变更后简称"].astype(str).str.contains("ST", na=False)
@@ -90,8 +92,16 @@ class STTimelineProvider:
             return []
         periods = self.fetch_sz_st_periods()
         sub = periods[periods["证券代码"] == code]
-        return [(r["st_start"].strftime("%Y-%m-%d"), r["st_end"].strftime("%Y-%m-%d") if pd.notna(r["st_end"]) else None, r["st_type"])
-                for r in sub.to_dict("records")]
+        out = []
+        for r in sub.to_dict("records"):
+            start = r["st_start"]
+            end = r["st_end"]
+            out.append((
+                start.strftime("%Y-%m-%d") if pd.notna(start) else None,
+                end.strftime("%Y-%m-%d") if pd.notna(end) else None,
+                r["st_type"],
+            ))
+        return out
 
     # ------------------------------------------------------------ 覆盖
     def build_universe_coverage(self, symbols: List[str]) -> dict:

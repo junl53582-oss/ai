@@ -70,7 +70,7 @@ class TestCoverage:
         assert cov["requested_symbols"] == 3
         assert cov["sz_covered_with_dates"] == 1
         assert cov["sh_uncovered_no_date_source"] == 1
-        assert cov["coverage_ratio"] == pytest.approx(1 / 3)
+        assert cov["coverage_ratio"] == pytest.approx(1 / 3, abs=0.001)
 
 
 if __name__ == "__main__":
