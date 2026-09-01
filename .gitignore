@@ -43,3 +43,6 @@ reports/**/models/**/*.pkl
 
 # Phase A: 复权因子事件表缓存 (每标的 ~KB 级, 不入版本控制)
 data_storage/adjust_factors/
+
+# Phase A: 公司行为事件缓存 (巨潮 cninfo, 每标的 KB 级, 不入库)
+data_storage/corporate_actions/
