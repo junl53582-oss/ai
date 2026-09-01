@@ -1,0 +1,16 @@
+{
+  "dataset_name": "CORPORATE_ACTIONS_CNINFO",
+  "created_at": "2026-09-01T13:40:01",
+  "symbol_count": 296,
+  "requested_symbol_count": 300,
+  "event_count": 5153,
+  "coverage_ratio": 0.9867,
+  "coverage": 296.0,
+  "unverified_symbols": [
+    "688047.SH",
+    "688506.SH",
+    "688521.SH",
+    "688981.SH"
+  ],
+  "source": "cninfo (ak.stock_dividend_cninfo)"
+}
