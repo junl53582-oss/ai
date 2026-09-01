@@ -162,7 +162,10 @@ class QuantConfig:
         "early_stopping_rounds": 80,
         "random_state": 42,
         "verbose": -1,
-        "n_jobs": -1
+        # Phase A (2026-09-01): n_jobs 从 -1 (全核) 收敛为 4 —— 研究/回测大量 LightGBM
+        # 训练下全核线程风暴在 Windows+libomp 触发原生崩溃 (进程静默消失, 无 traceback,
+        # 无事件记录; 已致 6 次研究进程死亡)。限核后单次训练稍慢但稳定, 结果不变。
+        "n_jobs": 4
     })
     # 回归模式参数 (连续超额收益)
     LGBM_PARAMS: Dict[str, Any] = field(default_factory=lambda: {
@@ -180,7 +183,8 @@ class QuantConfig:
         "early_stopping_rounds": 50,
         "random_state": 42,
         "verbose": -1,
-        "n_jobs": -1
+        # Phase A: 同上, 限核防原生崩溃
+        "n_jobs": 4
     })
 
     # ---------------- A股交易规则与组合配置 ----------------
