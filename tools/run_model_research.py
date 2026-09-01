@@ -284,6 +284,9 @@ def run_research(
     正式模型科研与认证主程序 (支持生产运行与 Smoke 测试运行)
     """
     run_config = run_config or {}
+    run_mode = run_config.get("run_mode")
+    if run_mode not in {"certified", "synthetic_test"}:
+        raise ValueError("FATAL: run_mode must be explicitly 'certified' or 'synthetic_test'")
     data_file = Path(dataset_path) if dataset_path is not None else PROJECT_ROOT / "data_storage" / "research" / "factor_matrix_300.parquet"
     base_reports_dir = Path(output_root) if output_root is not None else PROJECT_ROOT / "reports" / "audit_hardening_v3" / "runs"
 
@@ -295,6 +298,9 @@ def run_research(
 
     is_worktree_clean, dirty_items = get_git_worktree_clean()
     source_sha = get_git_commit_sha()
+    expected_code_freeze_sha = run_config.get("expected_code_freeze_sha")
+    if run_mode == "certified" and (not is_worktree_clean or not source_sha or source_sha != expected_code_freeze_sha):
+        raise RuntimeError("FATAL: certified run requires a clean worktree at the declared CODE_FREEZE_SHA")
     run_id = f"research_{source_sha[:7]}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
     run_reports_dir = base_reports_dir / run_id
@@ -321,17 +327,13 @@ def run_research(
 
     # 交易日历 Provenance
     cal_dates = run_config.get("canonical_dates", None)
-    if cal_dates is None and "date" in df_raw.columns:
+    calendar_source = run_config.get("calendar_source")
+    calendar_artifact_path = Path(run_config["calendar_artifact_path"]) if run_config.get("calendar_artifact_path") else None
+    if run_mode == "certified" and (cal_dates is None or not calendar_source or calendar_source in {"DATASET_DERIVED", "SYNTHETIC_TEST_CALENDAR"} or calendar_artifact_path is None or not calendar_artifact_path.is_file()):
+        raise RuntimeError("FATAL: certified run requires independent canonical calendar evidence")
+    if run_mode == "synthetic_test" and cal_dates is None:
         cal_dates = sorted(pd.to_datetime(df_raw["date"].unique()))
-
-    cal_meta = {
-        "calendar_source": "SSE_SZSE_CANONICAL_CALENDAR",
-        "calendar_provenance_verified": True,
-        "calendar_date_start": str(min(cal_dates).date()) if cal_dates else "",
-        "calendar_date_end": str(max(cal_dates).date()) if cal_dates else "",
-        "calendar_row_count": len(cal_dates) if cal_dates else 0,
-        "calendar_sha256": hashlib.sha256(str(cal_dates).encode("utf-8")).hexdigest() if cal_dates else ""
-    }
+        calendar_source = "SYNTHETIC_TEST_CALENDAR"
 
     labeler = TargetLabeler(
         horizon=settings.LABEL_HORIZON,
@@ -353,6 +355,7 @@ def run_research(
     n_estimators = int(run_config.get("n_estimators", 100))
 
     all_model_results = []
+    metrics_by_model = {}
     daily_rankic_dict = {}
     candidate_oos_dfs = {}
     candidate_trainers = {}
@@ -394,6 +397,7 @@ def run_research(
         all_purge_audits.extend(trainer.fold_audit_records)
 
         metrics = evaluator.evaluate_predictions(oos_df, task_type=cand["task_type"])
+        metrics_by_model[m_id] = metrics
         rank_ic_s = metrics["rank_ic_series"]
         daily_rankic_dict[m_id] = rank_ic_s
 
@@ -540,6 +544,7 @@ def run_research(
 
     # 6. 多随机种子独立重训与统计稳健性审计 (Fixed Seed Set: [42, 100, 2024])
     seed_set = run_config.get("seed_set", [42, 100, 2024])
+    logger.info(f"--> [阶段 6/8] 多种子稳健性审计开始: seeds={seed_set} (每种子全量走步重训, 耗时大户)...")
     seed_rankic_dict = {}
     seed_param_evidence = {}
     for test_seed in seed_set:
@@ -581,6 +586,7 @@ def run_research(
     }
 
     # 7. 生产模型物理隔离复核
+    logger.info("--> [阶段 7/8] 多种子审计完成, 生产模型物理隔离复核...")
     prod_sha_after = _sha256_file(prod_model_file)
     prod_snap_after = _snapshot_directory(prod_models_dir)
 
@@ -588,7 +594,9 @@ def run_research(
     # files back and recomputes their hashes; it never trusts the dictionaries.
     bootstrap_primary = bootstrap_rows[0] if bootstrap_rows else {}
     calendar_dates = [str(pd.Timestamp(x).date()) for x in cal_dates]
-    cal_meta = {"calendar_source": "SSE_SZSE_CANONICAL_CALENDAR", "dates": calendar_dates,
+    calendar_artifact_sha256 = _sha256_file(calendar_artifact_path) if calendar_artifact_path else ""
+    cal_meta = {"run_mode": run_mode, "calendar_source": calendar_source,
+                "calendar_artifact_sha256": calendar_artifact_sha256, "dates": calendar_dates,
                 "dataset_overlap_count": int(df_raw["date"].isin(pd.to_datetime(cal_dates)).sum()),
                 "calendar_sha256": hashlib.sha256("\n".join(calendar_dates).encode()).hexdigest(),
                 "source_code_sha": source_sha}
@@ -596,20 +604,50 @@ def run_research(
                 "invalid_chronology_count": 0, "official_announcement_rows": 0,
                 "certification_note": "No formal fundamental evidence was supplied for this run."}
     feature_meta = {"strict_selection": True}
-    quantile_meta = {"ranking_method": "average", "daily_equal_weighted": True,
-                     "all_equal_dates_invalid": True, "row_shuffle_invariant": True,
-                     "source_code_sha": source_sha}
-    holdout_meta = {"FINAL_HOLDOUT_AVAILABLE": False, "historical_oos": True}
-    (run_reports_dir / "fold_backtest_provenance.json").write_text(json.dumps({"run_id": run_id, "run_mode": run_config.get("run_mode", "certified"), "folds": trading_fold_records}, indent=2, ensure_ascii=False), encoding="utf-8")
+    quantile_model_id = "baseline" if "baseline" in metrics_by_model else next(iter(metrics_by_model), "")
+    quantile_runtime = metrics_by_model.get(quantile_model_id, {})
+    quantile_meta = {key: quantile_runtime.get(key) for key in (
+        "ranking_method", "expected_n_groups", "total_dates", "valid_quantile_dates",
+        "invalid_quantile_dates", "invalid_tie_dates", "dates_missing_required_groups",
+        "daily_group_counts")}
+    quantile_meta.update({"aggregation_method": quantile_runtime.get("quantile_aggregation_method"),
+                          "runtime_model_id": quantile_model_id, "source_code_sha": source_sha})
+    holdout_meta = {"final_holdout_available": False, "historical_oos_status": True, "live_trading_ready": False, "production_model_promotion": False, "source_code_sha": source_sha, "created_at": datetime.now().isoformat()}
+    (run_reports_dir / "fold_backtest_provenance.json").write_text(json.dumps({"run_id": run_id, "run_mode": run_mode, "folds": trading_fold_records}, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "multi_seed_robustness.json").write_text(json.dumps(seed_results, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "bootstrap_comparison.json").write_text(json.dumps(bootstrap_rows, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "walk_forward_purge_audit.json").write_text(json.dumps(all_purge_audits, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "calendar_metadata.json").write_text(json.dumps(cal_meta, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "fundamental_provenance_manifest.json").write_text(json.dumps(pit_meta, indent=2, ensure_ascii=False), encoding="utf-8")
     (run_reports_dir / "quantile_evaluation_summary.json").write_text(json.dumps(quantile_meta, indent=2, ensure_ascii=False), encoding="utf-8")
-    (run_reports_dir / "holdout_manifest.json").write_text(json.dumps(holdout_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "governance_manifest.json").write_text(json.dumps(holdout_meta, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "runtime_source_provenance.json").write_text(json.dumps({
+        "runtime_git_sha": source_sha, "worktree_clean_before_run": bool(is_worktree_clean),
+        "dirty_items_before_run": dirty_items, "expected_code_freeze_sha": expected_code_freeze_sha,
+        "created_at": datetime.now().isoformat()}, indent=2, ensure_ascii=False), encoding="utf-8")
     isolation = {"before": prod_snap_before, "after": prod_snap_after, "file_sha_before": prod_sha_before, "file_sha_after": prod_sha_after}
     (run_reports_dir / "production_isolation.json").write_text(json.dumps(isolation, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    # Diagnostics are part of the immutable artifact set and are written before
+    # its manifest.  The later gate matrix is bound by FINAL_RUN_POINTER instead
+    # of creating a circular manifest/hash dependency.
+    comp_df.to_csv(run_reports_dir / "model_comparison_matrix.csv", index=False, encoding="utf-8")
+    daily_ic_df.to_csv(run_reports_dir / "daily_rankic_series.csv", index=True, encoding="utf-8")
+    fold_df.to_csv(run_reports_dir / "walk_forward_folds.csv", index=False, encoding="utf-8")
+    trading_fold_df.to_csv(run_reports_dir / "trading_fold_stability.csv", index=False, encoding="utf-8")
+    (run_reports_dir / "production_snapshot_before.json").write_text(json.dumps(prod_snap_before, indent=2, ensure_ascii=False), encoding="utf-8")
+    (run_reports_dir / "production_snapshot_after.json").write_text(json.dumps(prod_snap_after, indent=2, ensure_ascii=False), encoding="utf-8")
+
+    config_hash = hashlib.sha256(json.dumps(run_config, sort_keys=True, default=str).encode("utf-8")).hexdigest()
+    artifact_manifest = {}
+    for p in sorted(run_reports_dir.rglob("*")):
+        if p.is_file():
+            rel = str(p.relative_to(run_reports_dir)).replace("\\", "/")
+            artifact_manifest[rel] = {"sha256": _sha256_file(p), "size_bytes": p.stat().st_size,
+                "generated_by": "tools/run_model_research.py", "source_code_sha": source_sha,
+                "dataset_sha256": dataset_sha256, "calendar_sha256": cal_meta["calendar_sha256"],
+                "config_hash": config_hash, "run_id": run_id}
+    (run_reports_dir / "artifact_manifest.json").write_text(json.dumps(artifact_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     gate_matrix = evaluate_research_gates(
         prod_snap_before=prod_snap_before,
@@ -628,32 +666,9 @@ def run_research(
         evidence_dir=run_reports_dir
     )
 
-    # 9. Save non-gating diagnostics after the raw evidence.
-    comp_df.to_csv(run_reports_dir / "model_comparison_matrix.csv", index=False, encoding="utf-8")
-    daily_ic_df.to_csv(run_reports_dir / "daily_rankic_series.csv", index=True, encoding="utf-8")
-    fold_df.to_csv(run_reports_dir / "walk_forward_folds.csv", index=False, encoding="utf-8")
-    trading_fold_df.to_csv(run_reports_dir / "trading_fold_stability.csv", index=False, encoding="utf-8")
-    (run_reports_dir / "production_snapshot_before.json").write_text(json.dumps(prod_snap_before, indent=2, ensure_ascii=False), encoding="utf-8")
-    (run_reports_dir / "production_snapshot_after.json").write_text(json.dumps(prod_snap_after, indent=2, ensure_ascii=False), encoding="utf-8")
+    # The matrix is intentionally outside artifact_manifest: the pointer binds
+    # both files and avoids a self-referential hash cycle.
     (run_reports_dir / "audit_gate_matrix.json").write_text(json.dumps(gate_matrix, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    # 10. Generate a self-verifying manifest with immutable run provenance.
-    config_hash = hashlib.sha256(json.dumps(run_config, sort_keys=True, default=str).encode("utf-8")).hexdigest()
-    artifact_manifest = {}
-    for p in sorted(run_reports_dir.rglob("*")):
-        if p.is_file():
-            rel = str(p.relative_to(run_reports_dir)).replace("\\", "/")
-            artifact_manifest[rel] = {
-                "sha256": _sha256_file(p),
-                "size_bytes": p.stat().st_size,
-                "generated_by": "tools/run_model_research.py",
-                "source_code_sha": source_sha,
-                "dataset_sha256": dataset_sha256,
-                "calendar_sha256": cal_meta["calendar_sha256"],
-                "config_hash": config_hash,
-                "run_id": run_id,
-            }
-    (run_reports_dir / "artifact_manifest.json").write_text(json.dumps(artifact_manifest, indent=2, ensure_ascii=False), encoding="utf-8")
 
     logger.info(f"=== 研究与认证完成! Overall Status: {gate_matrix['OVERALL_STATUS']} ===")
     return {
