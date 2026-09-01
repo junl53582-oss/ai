@@ -27,8 +27,18 @@ PY = r"C:\Users\lin\AppData\Local\Programs\Python\Python311\python.exe"
 BATCHES = [(0, 10), (10, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 79)]
 
 
+def _is_complete(out_dir: Path) -> bool:
+    """批次完成的判定: 报告目录含 ≥20 个 csv/json/md 证据文件"""
+    n = len(list(out_dir.glob("*.csv"))) + len(list(out_dir.glob("*.json"))) + len(list(out_dir.glob("*.md")))
+    return n >= 20
+
+
 def run_batch(start: int, end: int, dataset: str, out_root: Path, attempt: int) -> bool:
     out_dir = out_root / f"batch{start}_{end}"
+    # 断点续跑: 输出目录已有完整产物 (>=20 文件) 视为已完成, 直接跳过
+    if _is_complete(out_dir):
+        print(f"[{time.strftime('%H:%M:%S')}] 批次 {start}:{end} 已存在完整产物, 跳过", flush=True)
+        return True
     out_dir.mkdir(parents=True, exist_ok=True)
     cmd = [
         PY, "-u", str(ROOT / "tools" / "run_factor_research.py"),
