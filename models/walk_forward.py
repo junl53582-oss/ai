@@ -57,6 +57,12 @@ class WalkForwardTrainer:
         self.random_state = int(random_state)
         self.save_model = bool(model_dir is not None) if save_model is None else bool(save_model)
         self.strict_mode = bool(strict_mode)
+        self.label_horizon_trading_days = int(settings.LABEL_HORIZON)
+        if self.strict_mode and self.purge_gap_days < self.label_horizon_trading_days:
+            raise ValueError(
+                f"FATAL: strict walk-forward purge_gap_days ({self.purge_gap_days}) "
+                f"is below label horizon ({self.label_horizon_trading_days})"
+            )
 
         # 生产模型物理隔离审计门禁 (Production Isolation Guard)
         prod_dir_resolved = Path(settings.MODELS_DIR).resolve()
@@ -154,7 +160,7 @@ class WalkForwardTrainer:
         # 标签检查与严格 Fail-Closed (Strict Label Resolution Gate)
         if self.label_col not in df.columns:
             available_labels = [c for c in df.columns if "label" in c or "target" in c or "ab_label" in c]
-            if self._label_col_explicitly_set and self.strict_mode:
+            if self.strict_mode:
                 raise KeyError(
                     f"FATAL: Requested label '{self.label_col}' not found in dataset! "
                     f"Available label candidates: {available_labels}"
@@ -304,6 +310,8 @@ class WalkForwardTrainer:
                 "test_start": str(test_dates.min().date()),
                 "test_end": str(test_dates.max().date()),
                 "purge_gap_days": self.purge_gap_days,
+                "configured_purge_gap_trading_days": self.purge_gap_days,
+                "label_horizon_trading_days": self.label_horizon_trading_days,
                 "actual_train_val_gap_trading_days": actual_train_val_gap_trading_days,
                 "actual_val_test_gap_trading_days": actual_val_test_gap_trading_days,
                 "actual_train_test_gap_trading_days": actual_train_test_gap_trading_days,
@@ -329,7 +337,8 @@ class WalkForwardTrainer:
                     train_df=train_df,
                     candidate_features=feature_cols,
                     label_col=self.label_col,
-                    method=sel_method
+                    method=sel_method,
+                    strict_selection=self.strict_mode,
                 )
             else:
                 fold_feats = feature_cols
@@ -439,7 +448,20 @@ class WalkForwardTrainer:
 
         # 仅在显式 save_model=True 且配置了合法 isolated model_dir 时才保存 (Production Isolation Guard)
         if self.save_model and latest_model is not None and self.model_dir is not None:
-            latest_model.save()
+            saved_path = latest_model.save()
+            # Phase A: 研究制品登记入注册表 (状态固定 RESEARCH —— 研究运行禁止写 PRODUCTION)
+            try:
+                from .registry import ModelRegistry
+                ModelRegistry().register_research_artifact(
+                    artifact_path=saved_path,
+                    model_type=self.model_type,
+                    task_type=self.task_type,
+                    metrics={},  # 指标由研究管线回填后才允许晋升为 CANDIDATE (fail-closed)
+                    dataset_sha256=getattr(self, "dataset_sha256", None),
+                    notes="walk-forward 自动登记 (指标待研究管线回填)",
+                )
+            except Exception as reg_err:  # 登记失败不阻断研究, 但必须显式告警
+                logger.warning(f"模型注册表登记失败 (不阻断研究运行): {reg_err}")
 
         logger.info(f"Walk-Forward 滚动训练完成，共 {fold - 1} 折，样本外记录数: {len(full_oos_df)}")
         return full_oos_df, latest_model

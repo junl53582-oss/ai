@@ -80,13 +80,19 @@ def run_daily_automation(
     channel: str = "feishu",
     optimizer_type: str = "equal",
     force_update: bool = False,
-    current_holdings: Optional[Set[str]] = None
+    current_holdings: Optional[Set[str]] = None,
+    mode: str = "research"
 ) -> Dict[str, Any]:
     """执行每日盘后自动化任务并推送决策清单
 
     Args:
         current_holdings: 当前真实持仓标的集合。不传则退化为空集 (滞回缓冲不生效,
                           新买入门槛为 TOP_K_BUY); 传入后已持仓标的按 TOP_K_HOLD 宽缓冲保留。
+        mode:
+            "research"  (默认/旧行为): 每日重跑 walk-forward 取最新 OOS 截面。
+                        架构审计判定此为 research replay 而非真正推理, 仅用于研究场景。
+            "inference": 加载注册表中唯一的 PRODUCTION 模型做批量推理 (推荐生产路径)。
+                        无 PRODUCTION 模型时 fail-closed 拒绝运行, 绝不以重训冒充推理。
     """
     print("\n" + "=" * 70)
     print(">> 启动 A股盘后量化自动化任务 (Daily Automation Runner)")
@@ -112,13 +118,27 @@ def run_daily_automation(
         labeler = TargetLabeler(horizon=settings.LABEL_HORIZON)
         factor_df = _execute_stage("标签生成", lambda: labeler.compute_excess_return_label(factor_df, canonical_dates=data_manager.get_trading_calendar()), retries=1)
 
-        # 3. 走步训练与预测 (重训阶段不自动重试——同数据重试无意义, 失败直接告警)
-        print("[3/4] 执行走步预测提取最新截面打分...")
-        trainer = WalkForwardTrainer()
-        oos_df, latest_model = _execute_stage("走步训练", lambda: trainer.run_walk_forward(factor_df), retries=0)
+        # 3. 打分 (两种模式)
+        if mode == "inference":
+            # 生产路径: 加载 PRODUCTION 模型批量推理 (不训练, 可归因到具体模型版本)
+            print("[3/4] 载入 PRODUCTION 模型执行批量推理 (禁止训练)...")
+            from models.inference import BatchInference
+            engine = BatchInference()  # 无 PRODUCTION 模型时 fail-closed 抛错
+            scored = _execute_stage(
+                "批量推理",
+                lambda: engine.predict(factor_df, dataset_sha256=None),
+                retries=0,
+            )
+            latest_date = scored["date"].max()
+            daily_df = scored[scored["date"] == latest_date].copy()
+        else:
+            # 研究路径: 重跑走步训练 (research replay, 仅供研究, 不产生可上线信号)
+            print("[3/4] 执行走步预测提取最新截面打分 (RESEARCH 模式: 每日重训, 非推理)...")
+            trainer = WalkForwardTrainer()
+            oos_df, latest_model = _execute_stage("走步训练", lambda: trainer.run_walk_forward(factor_df), retries=0)
 
-        latest_date = oos_df["date"].max()
-        daily_df = oos_df[oos_df["date"] == latest_date].copy()
+            latest_date = oos_df["date"].max()
+            daily_df = oos_df[oos_df["date"] == latest_date].copy()
         expected_exec_date = data_manager.get_next_trading_date(latest_date)
         exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "次一交易日"
 
@@ -184,6 +204,8 @@ if __name__ == "__main__":
     parser.add_argument("--optimizer", type=str, default="equal", help="组合优化器类型")
     parser.add_argument("--force-update", action="store_true", help="强制更新数据")
     parser.add_argument("--holdings", type=str, default=None, help="当前持仓标的, 逗号分隔 (如 600519.SH,000858.SZ); 不传则滞回缓冲不生效")
+    parser.add_argument("--mode", type=str, default="research", choices=["research", "inference"],
+                        help="research=每日重训(研究用, 默认); inference=加载 PRODUCTION 模型批量推理(生产路径)")
     args = parser.parse_args()
 
     holdings = {s.strip() for s in args.holdings.split(",") if s.strip()} if args.holdings else set()
@@ -193,5 +215,6 @@ if __name__ == "__main__":
         channel=args.channel,
         optimizer_type=args.optimizer,
         force_update=args.force_update,
-        current_holdings=holdings
+        current_holdings=holdings,
+        mode=args.mode
     )
