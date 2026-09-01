@@ -27,6 +27,24 @@ class DataFetchError(Exception):
     pass
 
 
+def _proc_sina_stock(df: pd.DataFrame) -> pd.DataFrame:
+    """新浪 stock_zh_a_daily 标准化: 数值化、成交量股→手、补 pct_change 与 turnover"""
+    d = df.copy()
+    d["date"] = pd.to_datetime(d["date"])
+    for c in ["open", "high", "low", "close", "volume", "amount", "turnover"]:
+        if c in d.columns:
+            d[c] = pd.to_numeric(d[c], errors="coerce").astype(float)
+    # 新浪成交量为"股"，统一转为"手" (100股=1手)，与东方财富口径一致
+    if "volume" in d.columns:
+        d["volume"] = d["volume"] / 100.0
+    # 新浪无涨跌幅列，用收盘价计算
+    d["pct_change"] = d["close"].pct_change()
+    # 新浪换手率已是小数形式 (0.002678 = 0.2678%)，保持原样
+    if "turnover" not in d.columns:
+        d["turnover"] = 0.0
+    return d
+
+
 class DataFetcher:
     """数据拉取与格式统一器"""
 
@@ -74,12 +92,21 @@ class DataFetcher:
                 sina_code = self._to_sina_symbol(symbol)
                 raw_df = ak.stock_zh_a_daily(symbol=sina_code, start_date=start_str, end_date=end_str, adjust="")
                 time.sleep(0.15)  # 防新浪限流
-                adj_df = ak.stock_zh_a_daily(symbol=sina_code, start_date=start_str, end_date=end_str, adjust="qfq")
+                # Phase A: PIT 安全复权 —— 改用后复权因子事件表 (hfq-factor), 替代 qfq 价格快照
+                # (qfq 每次除权后全序列重算, 历史复权价随未来事件改变 = 非 PIT 未来函数)
+                factor_df = ak.stock_zh_a_daily(symbol=sina_code, adjust="hfq-factor")
+                time.sleep(0.10)
                 if raw_df is not None and not raw_df.empty:
                     self.source_counts["akshare"] = self.source_counts.get("akshare", 0) + 1
                     self.last_stock_source = "sina"
-                    df = self._standardize_sina_stock(raw_df, adj_df, symbol)
-                    logger.info(f"从新浪获取股票 {symbol} 行情成功 ({len(df)} 条)")
+                    if factor_df is not None and not factor_df.empty:
+                        df = self._standardize_sina_stock_pit(raw_df, factor_df, symbol)
+                        logger.info(f"从新浪获取股票 {symbol} 行情成功 ({len(df)} 条, 复权模式: hfq_factor_pit)")
+                    else:
+                        # 因子表缺失则退回 qfq 快照 (降级, 由认证 gate adjustment_not_point_in_time_safe 标记)
+                        logger.warning(f"股票 {symbol} 复权因子表为空, 降级为 qfq 快照 (非 PIT)")
+                        adj_df = ak.stock_zh_a_daily(symbol=sina_code, start_date=start_str, end_date=end_str, adjust="qfq")
+                        df = self._standardize_sina_stock(raw_df, adj_df, symbol)
             except Exception as e:
                 logger.warning(f"从新浪获取股票 {symbol} 行情失败: {e}")
 
@@ -248,21 +275,7 @@ class DataFetcher:
 
     def _standardize_sina_stock(self, raw_df: pd.DataFrame, adj_df: Optional[pd.DataFrame], symbol: str) -> pd.DataFrame:
         """标准化新浪 stock_zh_a_daily 数据 (英文列名, volume 单位为股, 无 pct_change 列)"""
-        def _proc(df: pd.DataFrame) -> pd.DataFrame:
-            d = df.copy()
-            d["date"] = pd.to_datetime(d["date"])
-            for c in ["open", "high", "low", "close", "volume", "amount", "turnover"]:
-                if c in d.columns:
-                    d[c] = pd.to_numeric(d[c], errors="coerce").astype(float)
-            # 新浪成交量为"股"，统一转为"手" (100股=1手)，与东方财富口径一致
-            if "volume" in d.columns:
-                d["volume"] = d["volume"] / 100.0
-            # 新浪无涨跌幅列，用收盘价计算
-            d["pct_change"] = d["close"].pct_change()
-            # 新浪换手率已是小数形式 (0.002678 = 0.2678%)，保持原样
-            if "turnover" not in d.columns:
-                d["turnover"] = 0.0
-            return d
+        _proc = _proc_sina_stock
 
         raw = _proc(raw_df.copy())
         raw["symbol"] = symbol
@@ -290,6 +303,51 @@ class DataFetcher:
         merged.sort_values("date", inplace=True)
         merged.reset_index(drop=True, inplace=True)
         return merged
+
+    def _standardize_sina_stock_pit(
+        self, raw_df: pd.DataFrame, events_df: pd.DataFrame, symbol: str
+    ) -> pd.DataFrame:
+        """
+        PIT 安全复权标准化 (Phase A / 2026-09-01)
+
+        用新浪 hfq-factor 后复权因子事件表替代 qfq 价格快照:
+            adj_price_t = raw_price_t × f_t / f_base
+        f_t 为 t 日最新事件因子 (仅依赖 ≤ t 的事件), f_base 为 settings.START_DATE
+        的固定基准因子 → 未来除权事件不会改写历史复权价 (qfq 快照会)。
+        """
+        raw = _proc_sina_stock(raw_df.copy())
+        raw["symbol"] = symbol
+
+        ev = events_df.copy()
+        ev["date"] = pd.to_datetime(ev["date"])
+        ev["hfq_factor"] = pd.to_numeric(ev["hfq_factor"], errors="coerce")
+        ev = ev.dropna().sort_values("date")
+        if ev.empty or not (ev["hfq_factor"] > 0).all():
+            raise DataFetchError(f"复权因子事件表无效: {symbol}")
+
+        # 日频因子: 每交易日取 ≤ 当日的最新事件因子 (首事件前为 1.0)
+        factor_map = ev.set_index("date")["hfq_factor"]
+        dates = pd.to_datetime(raw["date"])
+        f_daily = factor_map.reindex(dates, method="ffill").fillna(1.0)
+
+        # 固定基准: START_DATE 处的因子 (增量拉取时保持不变)
+        base_date = pd.to_datetime(settings.START_DATE)
+        hist = ev[ev["date"] <= base_date]
+        f_base = float(hist["hfq_factor"].iloc[-1]) if not hist.empty else 1.0
+        if f_base <= 0:
+            f_base = 1.0
+        ratio = f_daily / f_base
+
+        raw["adj_open"] = raw["open"] * ratio.values
+        raw["adj_high"] = raw["high"] * ratio.values
+        raw["adj_low"] = raw["low"] * ratio.values
+        raw["adj_close"] = raw["close"] * ratio.values
+        raw["adj_pct_change"] = raw["adj_close"].pct_change().fillna(raw["pct_change"])
+        raw["data_source"] = "akshare"
+        raw["adjustment_mode"] = "hfq_factor_pit"
+        raw.sort_values("date", inplace=True)
+        raw.reset_index(drop=True, inplace=True)
+        return raw
 
     def _load_or_generate_fallback(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
         """从本地 CSV 加载或在允许时生成仿真数据"""

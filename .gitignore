@@ -40,3 +40,6 @@ reports/**/*.parquet
 reports/**/common_execution_oos.parquet
 reports/**/common_objective_oos.parquet
 reports/**/models/**/*.pkl
+
+# Phase A: 复权因子事件表缓存 (每标的 ~KB 级, 不入版本控制)
+data_storage/adjust_factors/
