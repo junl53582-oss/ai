@@ -46,3 +46,6 @@ data_storage/adjust_factors/
 
 # Phase A: 公司行为事件缓存 (巨潮 cninfo, 每标的 KB 级, 不入库)
 data_storage/corporate_actions/
+
+# Phase A: ST 时间线缓存 (深市改名史, 不入库)
+data_storage/st_timeline/
