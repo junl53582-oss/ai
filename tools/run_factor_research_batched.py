@@ -24,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 PY = r"C:\Users\lin\AppData\Local\Programs\Python\Python311\python.exe"
 
-BATCHES = [(0, 20), (20, 40), (40, 60), (60, 79)]
+BATCHES = [(0, 10), (10, 20), (20, 30), (30, 40), (40, 50), (50, 60), (60, 70), (70, 79)]
 
 
 def run_batch(start: int, end: int, dataset: str, out_root: Path, attempt: int) -> bool:
