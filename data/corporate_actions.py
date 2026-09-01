@@ -104,6 +104,7 @@ class CorporateActionProvider:
     def build_universe_panel(self, symbols: List[str], refresh: bool = False) -> pd.DataFrame:
         """构建全池公司行为事件面板 (供认证覆盖统计)"""
         frames = []
+        failed_symbols = []
         for sym in symbols:
             try:
                 ev = self.get_event_stream(sym, refresh=refresh)
@@ -113,17 +114,22 @@ class CorporateActionProvider:
                 if not ev.empty:
                     frames.append(ev)
             except Exception as e:
+                failed_symbols.append(sym)
                 logger.warning(f"{sym} 公司行为拉取失败: {e}")
         if not frames:
             return pd.DataFrame()
         panel = pd.concat(frames, ignore_index=True)
-        # manifest
+        # manifest (含未验证标的清单, 诚实记录覆盖缺口)
         manifest = {
             "dataset_name": "CORPORATE_ACTIONS_CNINFO",
             "created_at": datetime.now().isoformat(timespec="seconds"),
             "symbol_count": int(panel["symbol"].nunique()) if "symbol" in panel.columns else 0,
+            "requested_symbol_count": int(len(symbols)),
             "event_count": int(len(panel)),
+            "coverage_ratio": round(float(panel["symbol"].nunique()) / max(len(symbols), 1), 4),
             "coverage": float(panel["symbol"].nunique()) if "symbol" in panel.columns else 0.0,
+            "unverified_symbols": failed_symbols,
+            "source": "cninfo (ak.stock_dividend_cninfo)",
         }
         (self.cache_dir / "corporate_actions_manifest.json").write_text(
             __import__("json").dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
