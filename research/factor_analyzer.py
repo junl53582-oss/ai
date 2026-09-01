@@ -241,6 +241,7 @@ class FactorResearchEngine:
         self.horizon_significance_df = pd.DataFrame(horizon_rows)
 
         # 3. 单因子基础指标与 HAC 检验 (主视界)
+        logger.info(f"[研究阶段 3/10] 单因子基础指标与 HAC 检验开始 ({len(factor_cols)} 因子)...")
         daily_ic_dict = {}
         for f in factor_cols:
             m = FactorMetricsEngine.evaluate_factor(df_labeled, f, primary_ret_col, horizon=primary_h, config=self.config)

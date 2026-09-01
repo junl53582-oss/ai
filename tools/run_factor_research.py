@@ -33,6 +33,8 @@ def main():
     parser.add_argument("--horizon", type=int, default=20, help="主研究预测视界 (交易日, 默认 20)")
     parser.add_argument("--output-dir", type=str, default=str(settings.BASE_DIR / "reports" / "factor_research"), help="报告输出目录")
     parser.add_argument("--limit-factors", type=int, default=None, help="仅研究前 N 个因子 (用于加速调试)")
+    parser.add_argument("--factor-start", type=int, default=0, help="因子切片起点 (含, 用于分批跑长任务)")
+    parser.add_argument("--factor-end", type=int, default=None, help="因子切片终点 (不含; 默认=全部)")
     parser.add_argument("--dataset", type=str, default=None, help="指定因子矩阵数据集路径 (默认优先使用 300 标的生产数据集)")
     parser.add_argument("--force-rebuild", action="store_true", help="强制清除旧缓存并从原始数据重构因子矩阵")
     args = parser.parse_args()
@@ -86,6 +88,10 @@ def main():
     factor_cols_present = [c for c in factor_cols if c in factor_df.columns]
     if args.limit_factors:
         factor_cols_present = factor_cols_present[:args.limit_factors]
+    # 分批模式: 因子切片 (start 含 / end 不含), 与 limit_factors 互斥时以后者优先
+    if not args.limit_factors and (args.factor_start > 0 or args.factor_end is not None):
+        factor_cols_present = factor_cols_present[args.factor_start:args.factor_end]
+        logger.info(f"分批模式: 因子切片 [{args.factor_start}:{args.factor_end})")
 
     logger.info(f"成功加载因子矩阵，样本行数: {len(factor_df)}，待研究因子数: {len(factor_cols_present)}")
 
