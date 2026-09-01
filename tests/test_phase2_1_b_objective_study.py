@@ -184,6 +184,8 @@ def test_walk_forward_three_arms_isolated_execution(tmp_path):
         "verbose": -1
     }
     
+    # Synthetic three-arm estimator isolation only; not scientific certification.
+    # Its intentionally short windows cannot satisfy the certified 20-day horizon.
     # Arm A
     p_a = base_params.copy()
     p_a["objective"] = "binary"
@@ -191,7 +193,7 @@ def test_walk_forward_three_arms_isolated_execution(tmp_path):
     t_a = WalkForwardTrainer(
         train_years=0.1, val_months=1, test_months=1, purge_gap_days=2,
         label_col="label_direction_20d", task_type="classification", model_type="lightgbm",
-        model_dir=tmp_path / "clf", model_params=p_a, random_state=42
+        model_dir=tmp_path / "clf", model_params=p_a, random_state=42, strict_mode=False
     )
     oos_a, _ = t_a.run_walk_forward(df, feature_cols=["factor_a", "factor_b"])
     
@@ -202,7 +204,7 @@ def test_walk_forward_three_arms_isolated_execution(tmp_path):
     t_b = WalkForwardTrainer(
         train_years=0.1, val_months=1, test_months=1, purge_gap_days=2,
         label_col="label_net_alpha_20d", task_type="regression", model_type="regression",
-        model_dir=tmp_path / "reg", model_params=p_b, random_state=42
+        model_dir=tmp_path / "reg", model_params=p_b, random_state=42, strict_mode=False
     )
     oos_b, _ = t_b.run_walk_forward(df, feature_cols=["factor_a", "factor_b"])
     
@@ -215,7 +217,7 @@ def test_walk_forward_three_arms_isolated_execution(tmp_path):
     t_c = WalkForwardTrainer(
         train_years=0.1, val_months=1, test_months=1, purge_gap_days=2,
         label_col="label_rank", task_type="ranking", model_type="ranking",
-        model_dir=tmp_path / "rank", model_params=p_c, random_state=42
+        model_dir=tmp_path / "rank", model_params=p_c, random_state=42, strict_mode=False
     )
     oos_c, _ = t_c.run_walk_forward(df, feature_cols=["factor_a", "factor_b"])
     

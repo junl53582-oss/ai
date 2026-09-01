@@ -75,7 +75,8 @@ def test_formal_research_runner_smoke_completes(tmp_path, synthetic_research_dat
         "train_years": 0.6,
         "val_months": 2,
         "test_months": 2,
-        "purge_gap_days": 5,
+        "purge_gap_days": 20,
+        "run_mode": "synthetic_test",
         "candidates": [
             {"model_id": "lightgbm_clf_baseline", "model_name": "LightGBM Classification", "task_type": "classification", "feature_selection": "all", "weighting_mode": "none"},
             {"model_id": "lightgbm_reg_baseline", "model_name": "LightGBM Regression", "task_type": "regression", "feature_selection": "all", "weighting_mode": "none"}
@@ -146,7 +147,8 @@ def test_real_fold_metrics_not_copied_constants(tmp_path, synthetic_research_dat
         "train_years": 0.6,
         "val_months": 2,
         "test_months": 2,
-        "purge_gap_days": 5,
+        "purge_gap_days": 20,
+        "run_mode": "synthetic_test",
         "candidates": [
             {"model_id": "lightgbm_clf_baseline", "model_name": "LightGBM Classification", "task_type": "classification", "feature_selection": "all", "weighting_mode": "none"},
             {"model_id": "lightgbm_reg_baseline", "model_name": "LightGBM Regression", "task_type": "regression", "feature_selection": "all", "weighting_mode": "none"}

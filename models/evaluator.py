@@ -184,6 +184,11 @@ class ModelEvaluator:
             "invalid_tie_dates": quantile_info.get("invalid_tie_dates", 0),
             "valid_quantile_dates": quantile_info.get("valid_quantile_dates", 0),
             "invalid_quantile_dates": quantile_info.get("invalid_quantile_dates", 0),
+            "expected_n_groups": quantile_info.get("expected_n_groups", 5),
+            "ranking_method": quantile_info.get("ranking_method"),
+            "daily_group_counts": quantile_info.get("daily_group_counts", {}),
+            "dates_missing_required_groups": quantile_info.get("dates_missing_required_groups", 0),
+            "quantile_aggregation_method": quantile_info.get("aggregation_method"),
             "daily_equal_weighted_Q5_minus_Q1": quantile_info.get("daily_equal_weighted_Q5_minus_Q1", quantile_info["Q5_minus_Q1"]),
             "rank_ic_mean": round(rank_ic_mean, 6),
             "mean_rank_ic": round(rank_ic_mean, 6),
@@ -227,92 +232,71 @@ class ModelEvaluator:
         """
         将股票每日按预测得分分为 5 组 (Q1~Q5)，评估分层收益的单调性与利差：
         Research Integrity Hardened:
-        - 确定性 percentile rank 映射 (rank(method='first', pct=True))，杜绝异常日全部塞 Q1
+        - 确定性 percentile rank 映射 (rank(method='average', pct=True))，同分不按行序拆解
         - 每日横截面有效样本不足 n_groups 时显式标记无效并跳过，禁止坍塌
         - 跨交易日等权聚合 (Daily Equal-Weighting): 先算每日各组平均收益，再跨日求平均
         - 保留旧版 row-weighted 结果并显式命名为 legacy_row_weighted_q5_minus_q1
         """
         df = df.copy()
+        empty = {
+            "annualized_arithmetic_forward_excess_return": {}, "Q5_minus_Q1": 0.0,
+            "mean_daily_q5_minus_q1": 0.0, "legacy_row_weighted_q5_minus_q1": 0.0,
+            "daily_equal_weighted_Q5_minus_Q1": 0.0, "monotonicity_score": 0.0,
+            "total_dates": 0, "valid_quantile_dates": 0, "invalid_quantile_dates": 0,
+            "invalid_tie_dates": 0, "quantile_observation_count": 0,
+            "expected_n_groups": int(n_groups), "ranking_method": "average",
+            "daily_group_counts": {}, "dates_missing_required_groups": 0,
+            "aggregation_method": "mean_of_daily_quantile_returns",
+            "daily_equal_weighted": True,
+        }
         if df.empty or label_col not in df.columns or "pred_score" not in df.columns:
-            return {
-                "annualized_arithmetic_forward_excess_return": {},
-                "Q5_minus_Q1": 0.0,
-                "mean_daily_q5_minus_q1": 0.0,
-                "legacy_row_weighted_q5_minus_q1": 0.0,
-                "daily_equal_weighted_Q5_minus_Q1": 0.0,
-                "monotonicity_score": 0.0,
-                "total_dates": 0,
-                "valid_quantile_dates": 0,
-                "invalid_quantile_dates": 0,
-                "invalid_tie_dates": 0,
-                "quantile_observation_count": 0,
-                "tie_safe_ranking": True,
-                "daily_equal_weighted": True
-            }
+            return empty
 
         valid_mask = df[label_col].notna() & df["pred_score"].notna()
         df_valid = df[valid_mask].copy()
 
         if len(df_valid) == 0:
-            return {
-                "annualized_arithmetic_forward_excess_return": {},
-                "Q5_minus_Q1": 0.0,
-                "mean_daily_q5_minus_q1": 0.0,
-                "legacy_row_weighted_q5_minus_q1": 0.0,
-                "daily_equal_weighted_Q5_minus_Q1": 0.0,
-                "monotonicity_score": 0.0,
-                "total_dates": 0,
-                "valid_quantile_dates": 0,
-                "invalid_quantile_dates": 0,
-                "invalid_tie_dates": 0,
-                "quantile_observation_count": 0,
-                "tie_safe_ranking": True,
-                "daily_equal_weighted": True
-            }
+            return empty
 
         daily_groups = []
         invalid_dates_count = 0
 
-        daily_sizes = df_valid.groupby("date").size()
-        med_size = daily_sizes.median() if not daily_sizes.empty else 0
-        effective_n_groups = int(med_size) if (2 <= med_size < n_groups) else n_groups
-
         invalid_tie_dates_count = 0
+        dates_missing_required_groups = 0
+        daily_group_counts: Dict[str, Dict[str, int]] = {}
+        expected_groups = set(range(1, n_groups + 1))
         for dt, g in df_valid.groupby("date"):
             n_obs = len(g)
-            if n_obs < effective_n_groups:
+            if n_obs < n_groups:
                 invalid_dates_count += 1
+                dates_missing_required_groups += 1
                 continue
 
             n_unique_scores = int(g["pred_score"].nunique())
-            if n_unique_scores < effective_n_groups:
+            if n_unique_scores < n_groups:
                 invalid_dates_count += 1
                 invalid_tie_dates_count += 1
+                dates_missing_required_groups += 1
                 continue
 
             # Tie-safe 确定性平均分位数映射 (method="average", 严格行序无关，杜绝人为同分拆解)
             pct = g["pred_score"].rank(method="average", pct=True)
-            q_bins = np.clip(np.ceil(pct * float(effective_n_groups)), 1, effective_n_groups).astype(int)
+            q_bins = np.clip(np.ceil(pct * float(n_groups)), 1, n_groups).astype(int)
+            counts = q_bins.value_counts().sort_index().to_dict()
+            if set(counts) != expected_groups:
+                invalid_dates_count += 1
+                dates_missing_required_groups += 1
+                continue
             g_assigned = g.copy()
             g_assigned["group"] = [f"Q{b}" for b in q_bins]
             daily_groups.append(g_assigned)
+            daily_group_counts[str(pd.Timestamp(dt).date())] = {f"Q{k}": int(counts[k]) for k in sorted(counts)}
 
         if not daily_groups:
-            return {
-                "annualized_arithmetic_forward_excess_return": {},
-                "Q5_minus_Q1": 0.0,
-                "mean_daily_q5_minus_q1": 0.0,
-                "legacy_row_weighted_q5_minus_q1": 0.0,
-                "daily_equal_weighted_Q5_minus_Q1": 0.0,
-                "monotonicity_score": 0.0,
-                "total_dates": int(len(df_valid.groupby("date"))),
-                "valid_quantile_dates": 0,
-                "invalid_quantile_dates": invalid_dates_count,
-                "invalid_tie_dates": invalid_tie_dates_count,
-                "quantile_observation_count": 0,
-                "tie_safe_ranking": True,
-                "daily_equal_weighted": True
-            }
+            return {**empty, "total_dates": int(df_valid["date"].nunique()),
+                    "invalid_quantile_dates": int(invalid_dates_count),
+                    "invalid_tie_dates": int(invalid_tie_dates_count),
+                    "dates_missing_required_groups": int(dates_missing_required_groups)}
 
         grouped_df = pd.concat(daily_groups, ignore_index=True)
         annual_factor = (242.0 / settings.LABEL_HORIZON) * 100.0
@@ -355,6 +339,10 @@ class ModelEvaluator:
             "invalid_quantile_dates": int(invalid_dates_count),
             "invalid_tie_dates": int(invalid_tie_dates_count),
             "quantile_observation_count": int(len(grouped_df)),
-            "tie_safe_ranking": True,
-            "daily_equal_weighted": True
+            "expected_n_groups": int(n_groups),
+            "ranking_method": "average",
+            "daily_group_counts": daily_group_counts,
+            "dates_missing_required_groups": int(dates_missing_required_groups),
+            "aggregation_method": "mean_of_daily_quantile_returns",
+            "daily_equal_weighted": True,
         }

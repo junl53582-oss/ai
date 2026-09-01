@@ -49,6 +49,8 @@ class FoldFeatureSelector:
 
         valid_df = train_df[train_df[label_col].notna()].copy()
         if len(valid_df) < 30:
+            if strict_selection:
+                raise RuntimeError("FATAL: INSUFFICIENT_TRAIN_HISTORY for strict feature selection")
             return candidate_features[:self.top_n], pd.DataFrame()
 
         # 检查训练年份跨度
@@ -101,6 +103,8 @@ class FoldFeatureSelector:
             })
 
         if not feature_records:
+            if strict_selection:
+                raise RuntimeError("FATAL: No feature evidence for strict selection")
             return candidate_features[:self.top_n], pd.DataFrame()
 
         metrics_df = pd.DataFrame(feature_records)

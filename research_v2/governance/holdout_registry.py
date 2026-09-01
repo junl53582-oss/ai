@@ -80,12 +80,11 @@ def build_regression_native_train_pool(
     构造 Continuous Regression Native 训练池 (Phase 2.1-C):
     仅要求执行标签有效，不要求分类极值标签非空，最大化样本量与连续学习能力。
     """
-    if "label_valid" not in df_labeled.columns:
-        raise KeyError("FATAL: certified regression native pool requires label_valid")
-    if exec_label_col not in df_labeled.columns:
-        raise KeyError(f"FATAL: certified regression native pool requires {exec_label_col}")
-    in_univ = df_labeled["in_universe"].fillna(False).astype(bool) if "in_universe" in df_labeled.columns else pd.Series(True, index=df_labeled.index)
-    not_excl = ~df_labeled["excluded_from_training"].fillna(False).astype(bool) if "excluded_from_training" in df_labeled.columns else pd.Series(True, index=df_labeled.index)
+    for required in ("label_valid", exec_label_col, "in_universe", "excluded_from_training"):
+        if required not in df_labeled.columns:
+            raise KeyError(f"FATAL: certified regression native pool requires {required}")
+    in_univ = df_labeled["in_universe"].fillna(False).astype(bool)
+    not_excl = ~df_labeled["excluded_from_training"].fillna(False).astype(bool)
 
     return (
         df_labeled["label_valid"].fillna(False).astype(bool)

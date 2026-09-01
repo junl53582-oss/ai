@@ -9,9 +9,11 @@
 
 ---
 
-## Current Phase — Phase 2.1-B r3.2: Evidence Integrity & Scientific Closure
+## Current certification state — Phase 2.1-B r3.2.1
 
-The canonical r3.2 real-data run is fail-closed: `INFRASTRUCTURE_STATUS = INSUFFICIENT_EVIDENCE` because formal PIT announcement evidence is absent; it is not silently treated as verified. `MODEL_EVIDENCE_STATUS = MIXED_EVIDENCE_NOT_ROBUST`: the frozen seeds `[42, 100, 2024]` yield RankIC std `0.007994 > 0.0050`, and regression's bootstrap 95% lower bound is `-0.03723`.
+The r3.2.1 certification path is fail-closed. A certified real-data run requires an independently supplied canonical exchange calendar, formal announcement-date PIT evidence, a clean declared code freeze, and a recomputable artifact chain. A `synthetic_test` run is engineering-only and can never yield a scientific certification.
+
+The retained r3.2 canonical real-data result is `INFRASTRUCTURE_STATUS = INSUFFICIENT_EVIDENCE` because formal PIT announcement evidence is absent; it is not silently treated as verified. `MODEL_EVIDENCE_STATUS = MIXED_EVIDENCE_NOT_ROBUST`: the frozen seeds `[42, 100, 2024]` yield RankIC std `0.007994 > 0.0050`, and regression's bootstrap 95% lower bound is `-0.03723`.
 
 Historical research OOS is not a prospective untouched final holdout. `FINAL_HOLDOUT_AVAILABLE = FALSE`, `LIVE_TRADING_READY = FALSE`, and `PRODUCTION_MODEL_PROMOTION = FALSE`.
 
@@ -19,7 +21,9 @@ Current limitations: no prospective untouched final holdout; regression robust i
 
 ---
 
-## 📈 当前研究认证状态 (Current Research Status — Phase 2.1-0)
+## Historical research record — Phase 2.1-0
+
+The following table is historical context only. It is not the current r3.2.1 certification decision and must not be read as a live-trading approval.
 
 | 投研与验证维度 | 当前认证状态 | 核心实证指标 / 结论 |
 | :--- | :---: | :--- |

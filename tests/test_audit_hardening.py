@@ -123,7 +123,7 @@ def test_research_model_never_overwrites_production(tmp_path):
     })
 
     trainer = WalkForwardTrainer(
-        train_years=0.5, val_months=2, test_months=2, purge_gap_days=5,
+        train_years=0.5, val_months=2, test_months=2, purge_gap_days=20,
         model_dir=None, save_model=False
     )
     trainer.run_walk_forward(df, feature_cols=["f1"])
@@ -150,6 +150,16 @@ def test_subdirectory_under_production_is_rejected():
     sub_path = Path(settings.MODELS_DIR) / "sub_research" / "test.pkl"
     with pytest.raises(RuntimeError, match="FATAL: Direct LightGBMQuantModel.save"):
         model.save(filepath=sub_path, allow_production_write=False)
+
+
+def test_lightgbm_bundle_load_round_trip_and_task_compatibility(tmp_path):
+    saved = LightGBMQuantModel(task_type="classification", model_dir=tmp_path)
+    saved.feature_names = ["f1"]
+    path = saved.save()
+    restored = LightGBMQuantModel(task_type="classification").load(path)
+    assert restored.feature_names == ["f1"]
+    with pytest.raises(RuntimeError, match="task_type"):
+        LightGBMQuantModel(task_type="regression").load(path)
 
 
 # 8. Full Production Directory SHA Snapshot Unchanged

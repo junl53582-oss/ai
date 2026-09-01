@@ -186,7 +186,7 @@ def test_four_year_pit_pipeline_e2e_integration(tmp_path):
     labeler = TargetLabeler(horizon=5)
     factor_df = labeler.compute_excess_return_label(factor_df)
 
-    trainer = WalkForwardTrainer(train_years=1, val_months=3, test_months=6, purge_gap_days=5)
+    trainer = WalkForwardTrainer(train_years=1, val_months=3, test_months=6, purge_gap_days=20)
     oos_df, model = trainer.run_walk_forward(factor_df)
 
     a_2023 = oos_df[(oos_df['symbol'] == 'A') & (oos_df['date'] >= '2022-01-01')]

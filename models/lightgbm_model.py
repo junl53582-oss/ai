@@ -345,3 +345,29 @@ class LightGBMQuantModel:
         }, save_path)
         logger.info(f"模型已保存至: {save_path}")
         return save_path
+
+    def load(self, filepath: Path) -> "LightGBMQuantModel":
+        """Load the bundle emitted by :meth:`save` without changing its identity.
+
+        This is intentionally symmetric with ``save``: callers may restore a
+        research artifact for inference, but malformed or task-incompatible
+        bundles fail closed instead of silently constructing a new estimator.
+        """
+        load_path = Path(filepath)
+        if not load_path.is_file():
+            raise FileNotFoundError(f"LightGBM model bundle not found: {load_path}")
+        bundle = joblib.load(load_path)
+        required = {"model", "features", "params", "task_type", "calibrator", "identity_metadata"}
+        if not isinstance(bundle, dict) or not required <= set(bundle):
+            raise RuntimeError("FATAL: invalid LightGBMQuantModel bundle schema")
+        if bundle["task_type"] != self.task_type:
+            raise RuntimeError("FATAL: LightGBMQuantModel bundle task_type is incompatible with this instance")
+        if not isinstance(bundle["features"], list) or not isinstance(bundle["params"], dict):
+            raise RuntimeError("FATAL: invalid LightGBMQuantModel feature or parameter metadata")
+        self.model = bundle["model"]
+        self.feature_names = list(bundle["features"])
+        self.params = bundle["params"].copy()
+        self.calibrator = bundle["calibrator"]
+        self.identity_metadata = bundle["identity_metadata"].copy()
+        self.random_state = int(self.params.get("random_state", self.random_state))
+        return self

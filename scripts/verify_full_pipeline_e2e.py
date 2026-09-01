@@ -108,10 +108,12 @@ def verify_all_routes():
         labeler = TargetLabeler(horizon=5)
         factor_df = labeler.compute_excess_return_label(factor_df)
 
+    # Synthetic end-to-end engineering smoke test only; not scientific certification.
+    # Its horizon-5 mock fixture intentionally does not satisfy certified horizon-20 purge.
     # 走步时序滚动训练 (测试复合加权 + 多模型集成)
     trainer = WalkForwardTrainer(
         train_years=1.0, val_months=3, test_months=3, purge_gap_days=5,
-        model_type="ensemble", label_col="label_up_down_5d"
+        model_type="ensemble", label_col="label_up_down_5d", strict_mode=False
     )
     oos_df, latest_model = trainer.run_walk_forward(factor_df)
     assert not oos_df.empty, "走步预测输出不得为空"

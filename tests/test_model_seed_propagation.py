@@ -48,12 +48,14 @@ def test_walk_forward_propagates_seed_to_models():
                 "excluded_from_training": False
             })
     df = pd.DataFrame(rows)
+    # Synthetic seed-propagation compatibility test only; not scientific certification.
     trainer = WalkForwardTrainer(
         train_years=0.2,
         val_months=1,
-        test_months=1,
-        purge_gap_days=5,
-        random_state=3407
+            test_months=1,
+            purge_gap_days=5,
+            random_state=3407,
+            strict_mode=False
     )
     oos_df, last_model = trainer.run_walk_forward(df, feature_cols=["F1"])
     assert last_model is not None

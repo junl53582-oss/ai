@@ -284,12 +284,12 @@ def test_phase2_1_a_does_not_mutate_production_model(tmp_path, monkeypatch):
     trainer_legacy = WalkForwardTrainer(
         train_years=1.0, val_months=2, test_months=1, purge_gap_days=20,
         task_type="classification", model_dir=isolated_legacy_dir,
-        model_params=custom_params
+        model_params=custom_params, label_col="ab_label_legacy"
     )
     trainer_exec = WalkForwardTrainer(
         train_years=1.0, val_months=2, test_months=1, purge_gap_days=20,
         task_type="classification", model_dir=isolated_exec_dir,
-        model_params=custom_params
+        model_params=custom_params, label_col="ab_label_execution"
     )
 
     assert trainer_legacy.model_dir.is_relative_to(tmp_path)
