@@ -64,3 +64,40 @@ class NovelAlphaFactory:
         amihud_roll = df_sorted.groupby('symbol').apply(lambda g: (g['pct_change'].abs() / (g['amount'] + 1.0)).rolling(20).mean()).reset_index(0, drop=True)
         vol_20 = df_sorted.groupby('symbol')['pct_change'].rolling(20).std().reset_index(0, drop=True)
         return (amihud_roll * (vol_20 + 1e-6)).reindex(df.index)
+
+    @staticmethod
+    def calc_short_term_reversal(df: pd.DataFrame, window: int = 5) -> pd.Series:
+        """短期超跌缩量反转 (捕捉过度恐慌后的弹性反弹)"""
+        df_sorted = df.sort_values(['symbol', 'date']).copy()
+        df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
+        ret_5 = df_sorted.groupby('symbol')['pct_change'].rolling(window).sum().reset_index(0, drop=True)
+        vol_col = 'volume' if 'volume' in df_sorted.columns else 'amount'
+        vol_short = df_sorted.groupby('symbol')[vol_col].rolling(window).mean().reset_index(0, drop=True)
+        vol_long = df_sorted.groupby('symbol')[vol_col].rolling(20).mean().reset_index(0, drop=True)
+        vol_ratio = np.clip(vol_short / (vol_long + 1e-6), 0.1, 3.0)
+        # 负向动量 * 缩量倍数 (跌得越深且缩量越明显，反弹期望越大)
+        reversal = -ret_5 * (1.5 - np.clip(vol_ratio, 0.5, 1.5))
+        return reversal.reindex(df.index)
+
+    @staticmethod
+    def calc_idio_vol_penalty(df: pd.DataFrame, window: int = 20) -> pd.Series:
+        """特质波动率惩罚 (低特质波动高质量因子)"""
+        df_sorted = df.sort_values(['symbol', 'date']).copy()
+        df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
+        stock_vol = df_sorted.groupby('symbol')['pct_change'].rolling(window).std().reset_index(0, drop=True)
+        bm_ret = df_sorted.groupby('symbol')['benchmark_close'].pct_change().reset_index(0, drop=True)
+        bm_vol = df_sorted.groupby('symbol')['benchmark_close'].pct_change().rolling(window).std().reset_index(0, drop=True)
+        idio_vol = np.maximum(stock_vol - bm_vol, 0.0)
+        # 低特质波动为优: 取负值
+        return (-idio_vol).reindex(df.index)
+
+    @staticmethod
+    def calc_money_flow_divergence(df: pd.DataFrame, window: int = 10) -> pd.Series:
+        """真实量价背离动量 (VWAP 相对于 Close 的偏离均值)"""
+        df_sorted = df.sort_values(['symbol', 'date']).copy()
+        price = df_sorted['adj_close'] if 'adj_close' in df_sorted.columns else df_sorted['close']
+        vwap = df_sorted['amount'] / (df_sorted['volume'] + 1e-6)
+        div_daily = (vwap - price) / (price + 1e-6)
+        df_sorted['__div_daily__'] = div_daily
+        div_roll = df_sorted.groupby('symbol')['__div_daily__'].rolling(window).mean().reset_index(0, drop=True)
+        return div_roll.reindex(df.index)
