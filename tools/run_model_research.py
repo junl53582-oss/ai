@@ -682,4 +682,20 @@ def run_research(
 
 
 if __name__ == "__main__":
-    run_research()
+    import argparse
+    parser = argparse.ArgumentParser(description="Formal Model Research & Certification Runner")
+    parser.add_argument("--mode", "--run-mode", dest="run_mode", choices=["certified", "synthetic_test"], default="certified", help="Research run mode")
+    parser.add_argument("--expected-code-freeze-sha", dest="expected_code_freeze_sha", default=None, help="Expected code freeze git SHA")
+    parser.add_argument("--dataset-path", dest="dataset_path", default=None, help="Path to research parquet dataset")
+    parser.add_argument("--output-root", dest="output_root", default=None, help="Output root directory for reports")
+    args = parser.parse_args()
+
+    cfg = {
+        "run_mode": args.run_mode,
+        "expected_code_freeze_sha": args.expected_code_freeze_sha or get_git_commit_sha()
+    }
+    run_research(
+        dataset_path=Path(args.dataset_path) if args.dataset_path else None,
+        output_root=Path(args.output_root) if args.output_root else None,
+        run_config=cfg
+    )
