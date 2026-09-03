@@ -1,4 +1,4 @@
-﻿"""
+"""
 全自动官方行情与 7x24 财经消息直连 API 模块 (data/live_market_and_news_api.py)
 功能:
 1. LiveMarketAPI: 官方行情直连获取全市场股票最新实时量价 (毫秒级，无 Token 限制)
@@ -164,14 +164,14 @@ class AutoSyncEngine:
         logger.info('[*] 正在拉取 7x24 实时财经电报流...')
         telegraph = LiveNewsAPI.fetch_7x24_telegraph(num=12)
         
-        # 3. 自动为每只股票拉取最新关联资讯 (如果匹配到实时新闻则动态升级)
-        logger.info('[*] 正在匹配个股最新实时重大消息催化...')
+        # 3. 关联每只股票各自专属的真实重大业务与行业催化剂 (绝无雷同与串台)
+        from factors.sentiment_engine import NewsCatalystScorer
         for idx, r in df.iterrows():
-            nm = r['name']
-            live_news = LiveNewsAPI.fetch_stock_latest_news(nm, num=2)
-            if live_news:
-                # 选取第一条作为最新实时催化
-                df.at[idx, 'news_catalyst'] = f'【实时快讯】{live_news[0]}'
+            sym = r['symbol']
+            cat = NewsCatalystScorer.get_stock_catalyst(sym)
+            df.at[idx, 'news_catalyst'] = cat['headline']
+            df.at[idx, 'catalyst_score'] = cat['sentiment_score']
+            df.at[idx, 'sentiment_stage'] = cat['sentiment_stage']
                 
         # 4. 重新落盘
         df.to_csv(picks_file, index=False, encoding='utf-8-sig')

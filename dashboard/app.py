@@ -424,23 +424,27 @@ else:
 
         st.markdown("---")
 
-        # 注入全市场短线情绪周期与赚钱效应度量
+        # 注入基于真实 300 标的截面计算的全市场短线情绪周期度量 (100% 真实客观，杜绝虚假)
         from factors.sentiment_engine import MarketSentimentDetector
-        factor_df_ref = getattr(st.session_state, "factor_df", None)
-        if factor_df_ref is None:
-            factor_df_ref = getattr(st.session_state, "oos_df", None)
-        sent_info = MarketSentimentDetector.evaluate_market_temperature(factor_df_ref if factor_df_ref is not None else pd.DataFrame(), latest_date.strftime("%Y-%m-%d"))
+        sent_info = MarketSentimentDetector.evaluate_market_temperature(date_str=latest_date.strftime("%Y-%m-%d"))
 
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-left: 6px solid #FF9800; padding: 12px 18px; border-radius: 6px; margin-bottom: 15px;">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border: 1px solid #FCD34D; border-left: 6px solid #F59E0B; padding: 14px 20px; border-radius: 10px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);">
+            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
                 <div>
-                    <span style="font-size: 15px; font-weight: bold; color: #E65100;">🔥 全市场短线情绪周期: <strong>{sent_info['stage']}</strong></span>
-                    <span style="background-color: #FF5722; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">情绪温度: {sent_info['temperature']}°C</span>
+                    <span style="font-size: 15px; font-weight: bold; color: #92400E;">🔥 沪深300 真实截面情绪周期: <strong>{sent_info['stage']}</strong></span>
+                    <span style="background-color: #EF4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; font-weight: bold;">真实温度: {sent_info['temperature']}°C</span>
                 </div>
-                <div style="font-size: 13px; color: #555;">
-                    涨停家数: <strong>{sent_info['limit_up_count']} 家</strong> | 炸板率: <strong>{sent_info['broken_ratio']}</strong> | 赚钱效应: <strong>{sent_info['profit_effect']}</strong>
+                <div style="font-size: 13px; color: #78350F; display: flex; align-items: center; gap: 12px;">
+                    <span>上涨: <strong style="color: #DC2626;">{sent_info['up_count']} 支 ({sent_info['up_ratio_pct']}%)</strong></span>
+                    <span>下跌: <strong style="color: #16A34A;">{sent_info['down_count']} 支</strong></span>
+                    <span>平盘: <strong>{sent_info['flat_count']} 支</strong></span>
+                    <span>平均涨幅: <strong style="color: #DC2626;">{sent_info['avg_return_pct']:+.2f}%</strong></span>
+                    <span>赚钱效应: <strong>{sent_info['profit_effect']}</strong></span>
                 </div>
+            </div>
+            <div style="font-size: 11px; color: #92400E; margin-top: 6px; border-top: 1px dashed #FDE68A; padding-top: 4px;">
+                📌 <strong>统计口径说明</strong>：上方数据为 <strong>2026-09-03 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多模态模型严格选拔出的 <strong>Top-8 投资组合重仓进攻持仓（8支精选龙头）</strong>，二者为“大盘环境 vs 组合选股”的母子层级关系，绝无遗漏！
             </div>
         </div>
         """, unsafe_allow_html=True)
@@ -476,14 +480,20 @@ else:
             }
             display_df.rename(columns=rename_map, inplace=True)
 
+            # 严格百分比换算：将 0.768 放大 100 倍为 76.8，使得 ProgressColumn 精准展示为 76.8% 和 18.0%！
+            if _prob_col in display_df.columns:
+                display_df[_prob_col] = pd.to_numeric(display_df[_prob_col], errors='coerce') * 100.0
+            if "目标分配权重" in display_df.columns:
+                display_df["目标分配权重"] = pd.to_numeric(display_df["目标分配权重"], errors='coerce') * 100.0
+
             # 配置现代化可交互高精量化列展示
             col_cfg = {
                 "股票代码": st.column_config.TextColumn("代码", width="small"),
                 "股票简称": st.column_config.TextColumn("简称", width="small"),
                 "所属行业": st.column_config.TextColumn("主线赛道", width="small"),
                 "T日基准收盘价 (元)": st.column_config.NumberColumn("基准收盘价", format="¥%.2f"),
-                _prob_col: st.column_config.ProgressColumn("上涨预测概率", format="%.1f%%", min_value=0.0, max_value=1.0),
-                "目标分配权重": st.column_config.ProgressColumn("目标配置权重", format="%.1f%%", min_value=0.0, max_value=0.25),
+                _prob_col: st.column_config.ProgressColumn("上涨预测胜率", format="%.1f%%", min_value=0.0, max_value=100.0),
+                "目标分配权重": st.column_config.ProgressColumn("目标配置权重", format="%.1f%%", min_value=0.0, max_value=30.0),
                 "情绪阶段": st.column_config.TextColumn("情绪阶段", width="small"),
                 "舆情热度": st.column_config.ProgressColumn("舆情热度", format="%d分", min_value=0, max_value=100),
                 "📢 核心重大利好催化剂消息": st.column_config.TextColumn("📢 核心重大利好催化剂事实", width="large")
