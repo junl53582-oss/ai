@@ -1,0 +1,18 @@
+{
+  "account_id": "PAPER_ACCOUNT_01",
+  "cash": 79995.0,
+  "last_buy_dates": {
+    "600519.SH": "2026-09-03"
+  },
+  "positions": {
+    "600519.SH": {
+      "symbol": "600519.SH",
+      "total_shares": 200,
+      "available_shares": 0,
+      "avg_cost_price": 100.0,
+      "current_price": 100.0,
+      "market_value": 20000.0
+    }
+  },
+  "updated_at": "2026-09-03T21:47:57.560232"
+}
