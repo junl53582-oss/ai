@@ -1,4 +1,4 @@
-﻿"""
+"""
 A股多模态真实市场情绪度量与个股催化剂引擎 (factors/sentiment_engine.py)
 完全杜绝 Mock 虚假数据，100% 基于真实截面 300 支标的逐日计算
 """
@@ -74,8 +74,23 @@ class MarketSentimentDetector:
     """真实全市场短线情绪计算器 (基于真实数据计算)"""
     
     @staticmethod
-    def evaluate_market_temperature(market_df: pd.DataFrame = None, date_str: str = '2026-09-03') -> Dict[str, Any]:
-        """严格从真实 300 标的截面计算统计指标"""
+    def evaluate_market_temperature(*args, **kwargs) -> Dict[str, Any]:
+        """严格从真实 300 标的截面计算统计指标 (支持所有签名组合)"""
+        market_df = kwargs.get('market_df', None)
+        date_str = kwargs.get('date_str', kwargs.get('date', '2026-09-03'))
+        
+        # 兼容位置传参
+        if len(args) == 1:
+            if isinstance(args[0], (str, pd.Timestamp)):
+                date_str = str(args[0])
+            elif isinstance(args[0], pd.DataFrame):
+                market_df = args[0]
+        elif len(args) >= 2:
+            if isinstance(args[0], pd.DataFrame):
+                market_df = args[0]
+            if isinstance(args[1], (str, pd.Timestamp)):
+                date_str = str(args[1])
+                
         sub = None
         if market_df is not None and not market_df.empty and 'date' in market_df.columns:
             sub = market_df[market_df['date'] == pd.to_datetime(date_str)].copy()
