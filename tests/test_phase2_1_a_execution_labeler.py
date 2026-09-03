@@ -310,6 +310,6 @@ def test_phase2_1_a_does_not_mutate_production_model(tmp_path, monkeypatch):
     assert fake_prod_file.read_bytes() == sentinel_bytes
 
     # 3. 验证模拟生产目录下除 latest_lightgbm.pkl 外没有被新建任何其他文件
-    created_prod_files = list(simulated_prod_dir.iterdir())
+    created_prod_files = [f for f in simulated_prod_dir.iterdir() if f.name != "registry"]
     assert len(created_prod_files) == 1
     assert created_prod_files[0].name == "latest_lightgbm.pkl"

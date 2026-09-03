@@ -14,40 +14,41 @@
 - **P1-3 几何复合增长率 (CAGR)**: 纯多头复合收益率严格采用 `(final_equity / initial_equity)**(252/N) - 1`，彻底消除算术均值年化误差。
 
 ## 2. 研究概览与因子分级统计
-- **候选因子总数**: 9 个
+- **候选因子总数**: 10 个
 - **STRONG 核心有效因子**: 0 个
-- **USEFUL 次级可用因子**: 0 个
-- **WEAK 弱预测因子**: 1 个
-- **REJECT 淘汰因子**: 8 个
-- **高相关冗余聚类群组**: 1 组
+- **USEFUL 次级可用因子**: 1 个
+- **WEAK 弱预测因子**: 2 个
+- **REJECT 淘汰因子**: 7 个
+- **高相关冗余聚类群组**: 4 组
 - **Walk-Forward 验证状态**: `OOS_VALIDATED` (总 Fold 数: 6)
 
-## 3. Top 10 探索性候选因子表现 (Exploratory Candidates)
+## 3. Top 10 核心有效因子排行榜
 
 | 排名 | 因子名称 | 分级状态 | 证据级别 | 推荐方向 | 最优视界 | Mean RankIC | HAC t-stat | FDR p-val | 纯多头 CAGR | 纯多头夏普 | 日均换手 | 纯多头超额年化 |
 | :---: | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| 1 | `LOG_CIRC_MV` | `REJECT` | `REJECT` | 反向 (-1) | 20D | -0.0395 | -2.05 | 0.2253 | 209.5% | 3.43 | 1.8% | 218.1% |
-| 2 | `EFFICIENCY_RATIO_10` | `WEAK` | `WEAK` | 正向 (+1) | 20D | 0.0116 | 3.26 | 0.0261 | 68.4% | 2.04 | 34.8% | 74.7% |
-| 3 | `INTRADAY_CLOSE_LOC` | `REJECT` | `REJECT` | 反向 (-1) | 1D | -0.0030 | -1.42 | 0.4915 | 32.9% | 1.19 | 77.2% | 37.4% |
-| 4 | `LOWER_SHADOW_RATIO` | `REJECT` | `REJECT` | 反向 (-1) | 20D | -0.0037 | -1.96 | 0.2253 | 31.0% | 1.15 | 77.1% | 33.3% |
-| 5 | `IS_LIMIT_DOWN_LAG1` | `REJECT` | `REJECT` | 反向 (-1) | 5D | -0.0001 | -0.37 | 0.9975 | 207.7% | 3.17 | 69.4% | -673.5% |
-| 6 | `AMIHUD_20` | `REJECT` | `REJECT` | 正向 (+1) | 1D | 0.0000 | 0.00 | 1.0000 | 155.1% | 3.41 | 4.0% | 154.3% |
-| 7 | `AMIHUD_20_LN` | `REJECT` | `REJECT` | 正向 (+1) | 1D | 0.0000 | 0.00 | 1.0000 | 155.1% | 3.41 | 4.0% | 154.3% |
-| 8 | `ENTITY_RATIO` | `REJECT` | `REJECT` | 正向 (+1) | 1D | 0.0016 | 0.85 | 0.6636 | 26.5% | 1.04 | 77.6% | 34.8% |
-| 9 | `UPPER_SHADOW_RATIO` | `REJECT` | `REJECT` | 反向 (-1) | 3D | -0.0004 | -0.24 | 1.0000 | 23.2% | 0.93 | 77.2% | 29.9% |
+| 1 | `ROC60` | `USEFUL` | `USEFUL` | 反向 (-1) | 20D | -0.0261 | -2.65 | 0.0577 | 56.5% | 1.67 | 10.4% | 55.7% |
+| 2 | `MA_RATIO_120` | `REJECT` | `REJECT` | 正向 (+1) | 20D | 0.0228 | 2.01 | 0.1415 | 91.6% | 2.39 | 8.3% | 58.3% |
+| 3 | `MIN_RATIO_60` | `WEAK` | `WEAK` | 正向 (+1) | 20D | 0.0173 | 1.84 | 0.1627 | 26.6% | 1.01 | 12.2% | 33.7% |
+| 4 | `MIN_RATIO_120` | `REJECT` | `REJECT` | 正向 (+1) | 20D | 0.0138 | 1.26 | 0.2834 | 61.6% | 1.94 | 8.5% | 27.9% |
+| 5 | `ROC120` | `REJECT` | `REJECT` | 反向 (-1) | 20D | -0.0199 | -1.71 | 0.1681 | 102.2% | 2.59 | 7.7% | 62.3% |
+| 6 | `MIN_RATIO_30` | `REJECT` | `REJECT` | 正向 (+1) | 20D | 0.0133 | 1.59 | 0.1931 | 52.9% | 1.69 | 17.8% | 55.7% |
+| 7 | `MA_RATIO_60` | `WEAK` | `WEAK` | 正向 (+1) | 20D | 0.0195 | 2.00 | 0.1415 | 69.9% | 1.93 | 11.6% | 76.3% |
+| 8 | `MA_RATIO_30` | `REJECT` | `REJECT` | 正向 (+1) | 20D | 0.0118 | 1.45 | 0.2436 | 101.0% | 2.44 | 16.4% | 105.9% |
+| 9 | `MAX_RATIO_60` | `REJECT` | `REJECT` | 正向 (+1) | 20D | 0.0078 | 0.89 | 0.4651 | 85.4% | 2.19 | 10.8% | 92.0% |
+| 10 | `MAX_RATIO_120` | `REJECT` | `REJECT` | 正向 (+1) | 20D | 0.0065 | 0.65 | 0.6159 | 114.7% | 2.65 | 7.8% | 82.9% |
 
 ## 4. 真实截面中性化与正交化实证证据
 
 | 因子名称 | Raw RankIC | 真实市值行业中性化 RankIC | 真实正交化 RankIC | 中性化状态 | 正交化状态 |
 | :--- | :---: | :---: | :---: | :--- | :--- |
-| `LOG_CIRC_MV` | -0.0395 | 0.0000 | 0.0084 | `REAL_CALCULATED` | `PARTIAL` |
-| `EFFICIENCY_RATIO_10` | 0.0116 | 0.0114 | 0.0415 | `REAL_CALCULATED` | `PARTIAL` |
-| `INTRADAY_CLOSE_LOC` | -0.0030 | -0.0032 | -0.0028 | `REAL_CALCULATED` | `PARTIAL` |
-| `LOWER_SHADOW_RATIO` | -0.0037 | -0.0036 | 0.0149 | `REAL_CALCULATED` | `PARTIAL` |
-| `IS_LIMIT_DOWN_LAG1` | -0.0001 | -0.0002 | -0.0079 | `REAL_CALCULATED` | `PARTIAL` |
-| `AMIHUD_20` | 0.0000 | 0.0000 | 0.0000 | `REAL_CALCULATED` | `PARTIAL` |
-| `AMIHUD_20_LN` | 0.0000 | 0.0000 | 0.0000 | `REAL_CALCULATED` | `PARTIAL` |
-| `ENTITY_RATIO` | 0.0016 | 0.0016 | -0.0187 | `REAL_CALCULATED` | `PARTIAL` |
+| `ROC60` | -0.0261 | -0.0259 | -0.0221 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `MA_RATIO_120` | 0.0228 | 0.0233 | 0.0032 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `MIN_RATIO_60` | 0.0173 | 0.0173 | -0.0052 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `MIN_RATIO_120` | 0.0138 | 0.0143 | -0.0111 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `ROC120` | -0.0199 | -0.0195 | 0.0017 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `MIN_RATIO_30` | 0.0133 | 0.0136 | 0.0122 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `MA_RATIO_60` | 0.0195 | 0.0198 | 0.0053 | `REAL_CALCULATED` | `REAL_CALCULATED` |
+| `MA_RATIO_30` | 0.0118 | 0.0120 | 0.0020 | `REAL_CALCULATED` | `REAL_CALCULATED` |
 
 ## 5. 严格 Purged Walk-Forward 滚动折数审计 (Fold-by-Fold Audit)
 
@@ -85,8 +86,8 @@
 - **训练区间**: `2024-05-13` ~ `2025-11-27` (112422 样本, 299 标的)
 - **Purge 隔离区间**: `2025-11-28` ~ `2026-01-12` (硬性隔离，无标签重叠)
 - **验证区间 (OOS)**: `2026-01-13` ~ `2026-07-22` (37762 样本, 300 标的)
-- **训练集选出因子数**: `0` 个
-- **OOS 验证表现**: {}
+- **训练集选出因子数**: `5` 个
+- **OOS 验证表现**: {'MIN_RATIO_60': {'train_direction': 1, 'train_horizon': '20D', 'oos_raw_rank_ic': 0.0314, 'oos_aligned_rank_ic': 0.0314, 'oos_icir': 0.2598}, 'MA_RATIO_60': {'train_direction': 1, 'train_horizon': '20D', 'oos_raw_rank_ic': 0.0188, 'oos_aligned_rank_ic': 0.0188, 'oos_icir': 0.1813}, 'ROC120': {'train_direction': -1, 'train_horizon': '20D', 'oos_raw_rank_ic': -0.0057, 'oos_aligned_rank_ic': 0.0057, 'oos_icir': 0.0473}, 'MIN_RATIO_120': {'train_direction': 1, 'train_horizon': '20D', 'oos_raw_rank_ic': 0.0152, 'oos_aligned_rank_ic': 0.0152, 'oos_icir': 0.1183}, 'MA_RATIO_120': {'train_direction': 1, 'train_horizon': '20D', 'oos_raw_rank_ic': 0.0119, 'oos_aligned_rank_ic': 0.0119, 'oos_icir': 0.1094}}
 
 ---
 *本报告由 `research/factor_analyzer.py` 自动生成，20 份结构化证据已同步归档至 `reports/factor_research/`。*
