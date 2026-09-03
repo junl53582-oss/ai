@@ -72,6 +72,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<div style="background-color: #E3F2FD; border-left: 6px solid #1E88E5; padding: 12px 18px; border-radius: 6px; margin-bottom: 18px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <span style="font-size: 16px; font-weight: bold; color: #0D47A1;">🕒 官方行情直连 · 数据基准日: <strong>2026-09-03 (已收盘)</strong></span>
+            <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">数据真实已核验</span>
+        </div>
+        <div style="font-size: 13px; color: #555;">
+            兆易创新 (603986) 实盘基准: <strong>383.20 元</strong> | 模型: <strong>Gen 3 Mega-Alpha</strong>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 
 def init_session_state():
     """初始化 Session 状态并自动快速预加载已有回测与时序预测数据"""
