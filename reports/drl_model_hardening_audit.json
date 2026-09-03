@@ -21,5 +21,5 @@
     "daily_win_rate": 0.5166666666666667
   },
   "feature_dim": 121,
-  "model_path": "C:\\Users\\lin\\Documents\\股票预测\\saved_models\\candidate_gen4_drl_model.pkl"
+  "model_path": "saved_models/candidate_gen4_drl_model.pkl"
 }

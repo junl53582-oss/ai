@@ -1,0 +1,4 @@
+model_id,model_name,task_type,feature_selection,weighting_mode,oos_prediction_rows,common_ranking_rows,common_oos_dates,mean_daily_rank_ic,rank_icir,rank_icir_nw_lag5,rank_icir_nw_lag20,auc,brier_score,q5_minus_q1_spread,monotonicity_score,cum_strategy_return,cagr,cost_adjusted_excess_return,alpha,sharpe_ratio,max_drawdown,turnover,win_rate,total_trades,total_costs
+lightgbm_clf_baseline,LightGBM Classification (Baseline),classification,all,none,227466,227281,744,0.050253,1.430482,0.635357,0.404365,0.5319,0.2497,6.45,0.8,-13.21,-4.39,-30.43,-7.19,-0.74,-15.51,0.0,43.34,693,44636.74
+lightgbm_reg_baseline,LightGBM Regression,regression,all,none,227466,227281,744,0.039695,1.242519,0.556986,0.380199,N/A,N/A,14.07,0.7,11.77,3.59,-5.45,0.68,0.18,-15.08,0.0,51.9,703,80791.82
+lightgbm_ranker,LightGBM Ranker (Pairwise LambdaRank),ranking,all,none,227466,227281,744,0.045053,1.214651,0.534399,0.339042,N/A,N/A,0.5,0.3,-8.34,-2.72,-25.56,-5.2,-0.64,-12.99,0.0,50.12,700,43757.77

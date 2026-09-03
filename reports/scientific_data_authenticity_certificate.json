@@ -21,7 +21,7 @@
     "statistical_significance": "p < 0.10 (Moderate)"
   },
   "model_integrity": {
-    "model_path": "C:\\Users\\lin\\Documents\\股票预测\\saved_models\\latest_lightgbm.pkl",
+    "model_path": "saved_models/latest_lightgbm.pkl",
     "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79",
     "size_mb": 16.154091835021973,
     "architecture": "Tri-Core Mega Ensemble (DoubleEnsemble + TabularMLP + Ridge)",

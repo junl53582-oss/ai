@@ -53,3 +53,11 @@ data_storage/st_timeline/
 
 # Phase A: ST 时间线缓存 (深市改名史, 不入库)
 data_storage/st_timeline/
+
+# Secrets and Environment
+.env
+.env.*
+*.env
+
+# Local transient execution queues
+artifacts/pending_rebalance_queue.json
