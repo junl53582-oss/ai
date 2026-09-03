@@ -356,6 +356,9 @@ class WalkForwardTrainer:
             elif self.model_type == "double_ensemble":
                 from .double_ensemble import DoubleEnsembleQuantModel
                 model = DoubleEnsembleQuantModel(task_type=self.task_type)
+            elif self.model_type == "bagging_ensemble":
+                from .bagging_ensemble import MultiSeedBaggingModel
+                model = MultiSeedBaggingModel(task_type=self.task_type, strict_mode=self.strict_mode)
             elif self.model_type == "mlp":
                 from .deep_tabular import TabularMLPQuantModel
                 model = TabularMLPQuantModel(task_type=self.task_type)
