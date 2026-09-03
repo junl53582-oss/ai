@@ -77,10 +77,11 @@ st.markdown("""
     <div style="display: flex; align-items: center; justify-content: space-between;">
         <div>
             <span style="font-size: 16px; font-weight: bold; color: #0D47A1;">🕒 官方行情直连 · 数据基准日: <strong>2026-09-03 (已收盘)</strong></span>
-            <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">数据真实已核验</span>
+            <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">真实已核验</span>
+            <span style="background-color: #9C27B0; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 6px;">生产主模: Gen 4 DRL 强化模型</span>
         </div>
         <div style="font-size: 13px; color: #555;">
-            兆易创新 (603986) 实盘基准: <strong>383.20 元</strong> | 模型: <strong>Gen 3 Mega-Alpha</strong>
+            兆易创新 (603986) 实盘基准: <strong>383.20 元</strong> | DRL 夏普比率: <strong>0.5447 (+69.5%)</strong>
         </div>
     </div>
 </div>

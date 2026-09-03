@@ -1,0 +1,24 @@
+{
+  "timestamp": "2026-09-04 01:35:23",
+  "model": "TemporalTransformerAlphaModel (PyTorch)",
+  "architecture": "2-Layer TransformerEncoder (d_model=32, n_heads=4, d_ff=64, causal_mask=True)",
+  "sequence_length": 15,
+  "feature_dim": 7,
+  "features_used": [
+    "pct_change",
+    "turnover",
+    "MOM_ACC_20_60",
+    "TURNOVER_SURGE_5",
+    "YANG_ZHANG_VOL_20",
+    "VOLATILITY_SQUEEZE_20",
+    "DOWNSIDE_VOL_RATIO_20"
+  ],
+  "performance_metrics": {
+    "out_of_sample_trading_days": 1,
+    "mean_rankic": 0.06040328050171588,
+    "rankic_ir": 6040328.050171588,
+    "daily_win_rate": 1.0,
+    "causal_mask_verified": true
+  },
+  "model_path": "temporal_transformer_alpha.pt"
+}

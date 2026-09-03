@@ -23,6 +23,7 @@ data_storage/research/*.parquet
 !data_storage/research/market_daily_300_v2.parquet
 saved_models/*.pkl
 saved_models/*.txt
+saved_models/*.pt
 saved_models/registry/
 
 # Logs and temporary files
