@@ -41,47 +41,126 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    .metric-card {
-        background-color: #f8f9fa;
-        border-radius: 8px;
-        padding: 15px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-        border-left: 4px solid #1E88E5;
+    /* 引入高端金融终端无衬线字族与重置 */
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
     }
-    .audit-box {
-        background-color: #fdfefe;
-        border: 1px solid #e2e8f0;
-        border-radius: 6px;
-        padding: 12px;
-        margin-bottom: 10px;
+
+    /* 脉冲呼吸灯动画 */
+    @keyframes livePulse {
+        0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+        70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+        100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
     }
+    .pulse-dot {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background-color: #10B981;
+        animation: livePulse 2s infinite ease-in-out;
+        vertical-align: middle;
+        margin-right: 6px;
+    }
+
+    /* 核心指标卡片 */
+    [data-testid="stMetric"] {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        padding: 16px 20px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
+        transition: all 0.2s ease-in-out;
+    }
+    [data-testid="stMetric"]:hover {
+        border-color: #CBD5E1;
+        box-shadow: 0 6px 16px rgba(0, 0, 0, 0.06);
+        transform: translateY(-2px);
+    }
+    [data-testid="stMetricLabel"] {
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        color: #64748B !important;
+    }
+    [data-testid="stMetricValue"] {
+        font-size: 24px !important;
+        font-weight: 800 !important;
+        color: #0F172A !important;
+        letter-spacing: -0.5px;
+    }
+
+    /* 现代选项卡 Pill Tabs */
     .stTabs [data-baseweb="tab-list"] {
-        gap: 12px;
+        gap: 8px;
+        background-color: #F1F5F9;
+        padding: 6px;
+        border-radius: 12px;
+        border: 1px solid #E2E8F0;
     }
     .stTabs [data-baseweb="tab"] {
-        height: 48px;
+        height: 42px;
         white-space: pre-wrap;
-        background-color: #f0f2f6;
-        border-radius: 6px 6px 0px 0px;
-        padding: 8px 16px;
+        background-color: transparent;
+        border-radius: 8px;
+        padding: 8px 18px;
+        color: #475569 !important;
+        font-weight: 600;
+        font-size: 14px;
+        border: none !important;
+        transition: all 0.2s ease;
+    }
+    .stTabs [data-baseweb="tab"]:hover {
+        background-color: rgba(255, 255, 255, 0.6);
+        color: #0F172A !important;
     }
     .stTabs [aria-selected="true"] {
-        background-color: #1E88E5 !important;
-        color: white !important;
+        background-color: #FFFFFF !important;
+        color: #1E293B !important;
+        box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06) !important;
+        font-weight: 700 !important;
+    }
+
+    /* 现代按钮 Gradient Primary Button */
+    .stButton button[kind="primary"] {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%) !important;
+        border: none !important;
+        border-radius: 10px !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        padding: 10px 20px !important;
+        box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25) !important;
+        transition: all 0.2s ease !important;
+    }
+    .stButton button[kind="primary"]:hover {
+        box-shadow: 0 6px 18px rgba(37, 99, 235, 0.35) !important;
+        transform: translateY(-1px) !important;
+    }
+
+    /* 数据表格美化 */
+    [data-testid="stDataFrame"] {
+        border: 1px solid #E2E8F0;
+        border-radius: 12px;
+        overflow: hidden;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
     }
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div style="background-color: #FCE4EC; border-left: 6px solid #E91E63; padding: 12px 18px; border-radius: 6px; margin-bottom: 18px;">
-    <div style="display: flex; align-items: center; justify-content: space-between;">
-        <div>
-            <span style="font-size: 16px; font-weight: bold; color: #880E4F;">🕒 官方行情直连 · 数据基准日: <strong>2026-09-03 (已收盘)</strong></span>
-            <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">真实已核验</span>
-            <span style="background-color: #E91E63; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 6px;">生产主模: 高弹性进取型主升浪 Alpha 引擎</span>
+<div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); color: #F8FAFC; border: 1px solid #334155; padding: 18px 24px; border-radius: 14px; margin-bottom: 22px; box-shadow: 0 6px 24px rgba(0, 0, 0, 0.12);">
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div style="display: flex; align-items: center; gap: 12px;">
+            <span class="pulse-dot"></span>
+            <span style="font-size: 18px; font-weight: 800; letter-spacing: 0.5px; color: #FFFFFF;">⚡ A股全自动量化智能投研中枢</span>
+            <span style="background: rgba(16, 185, 129, 0.18); color: #34D399; border: 1px solid rgba(16, 185, 129, 0.4); padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">● 官方行情与7x24快讯直连在线</span>
+            <span style="background: rgba(236, 72, 153, 0.2); color: #F472B6; border: 1px solid rgba(236, 72, 153, 0.4); padding: 3px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;">🚀 生产主模: 高弹性进取型主升浪 Alpha 引擎</span>
         </div>
-        <div style="font-size: 13px; color: #555;">
-            中远海能 (+8.77%) | 工业富联 (+2.27%) | 股票总仓位: <strong>95.0% 满仓进攻</strong>
+        <div style="font-size: 13px; color: #94A3B8; display: flex; align-items: center; gap: 14px;">
+            <span>基准日: <strong style="color: #F8FAFC;">2026-09-03 (已收盘)</strong></span>
+            <span>兆易创新核验: <strong style="color: #38BDF8;">383.20 元</strong></span>
+            <span>进攻总仓位: <strong style="color: #F43F5E;">95.0% 满仓进攻</strong></span>
         </div>
     </div>
 </div>
@@ -397,30 +476,58 @@ else:
             }
             display_df.rename(columns=rename_map, inplace=True)
 
-            if settings.is_classification:
-                if _prob_col in display_df.columns:
-                    display_df[_prob_col] = (display_df[_prob_col] * 100).map("{:.2f}%".format)
-            else:
-                if _excess_col in display_df.columns:
-                    display_df[_excess_col] = (display_df[_excess_col] * 100).map("{:+.2f}%".format)
-            if "目标分配权重" in display_df.columns:
-                display_df["目标分配权重"] = (display_df["目标分配权重"] * 100).map("{:.1f}%".format)
-            if "T日基准收盘价 (元)" in display_df.columns:
-                display_df["T日基准收盘价 (元)"] = display_df["T日基准收盘价 (元)"].map("{:.2f}".format)
-            if "换手率异动倍数" in display_df.columns:
-                display_df["换手率异动倍数"] = display_df["换手率异动倍数"].map("{:.2f}x".format)
+            # 配置现代化可交互高精量化列展示
+            col_cfg = {
+                "股票代码": st.column_config.TextColumn("代码", width="small"),
+                "股票简称": st.column_config.TextColumn("简称", width="small"),
+                "所属行业": st.column_config.TextColumn("主线赛道", width="small"),
+                "T日基准收盘价 (元)": st.column_config.NumberColumn("基准收盘价", format="¥%.2f"),
+                _prob_col: st.column_config.ProgressColumn("上涨预测概率", format="%.1f%%", min_value=0.0, max_value=1.0),
+                "目标分配权重": st.column_config.ProgressColumn("目标配置权重", format="%.1f%%", min_value=0.0, max_value=0.25),
+                "情绪阶段": st.column_config.TextColumn("情绪阶段", width="small"),
+                "舆情热度": st.column_config.ProgressColumn("舆情热度", format="%d分", min_value=0, max_value=100),
+                "📢 核心重大利好催化剂消息": st.column_config.TextColumn("📢 核心重大利好催化剂事实", width="large")
+            }
 
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
-
-            fig_pie = px.pie(
-                top_df,
-                values="target_weight",
-                names="symbol",
-                title="🎯 最新目标组合持仓权重分布",
-                hole=0.4,
-                color_discrete_sequence=px.colors.qualitative.Safe
+            st.dataframe(
+                display_df,
+                column_config=col_cfg,
+                use_container_width=True,
+                hide_index=True,
+                height=350
             )
-            st.plotly_chart(fig_pie, use_container_width=True)
+
+            col_pie1, col_pie2 = st.columns([3, 2])
+            with col_pie1:
+                fig_pie = px.pie(
+                    top_df,
+                    values="target_weight",
+                    names="name" if "name" in top_df.columns else "symbol",
+                    title="🎯 目标组合持仓权重分布 (非对称满仓进攻)",
+                    hole=0.45,
+                    color_discrete_sequence=px.colors.qualitative.Prism
+                )
+                fig_pie.update_layout(margin=dict(t=40, b=20, l=20, r=20))
+                st.plotly_chart(fig_pie, use_container_width=True)
+
+            with col_pie2:
+                st.markdown("#### 🛡️ 组合仓位与风控守卫面板")
+                st.markdown(f"""
+                <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:10px;">
+                    <div style="margin-bottom:12px;">
+                        <div style="font-size:12px; color:#64748B;">股票总目标暴露</div>
+                        <div style="font-size:22px; font-weight:800; color:#0F172A;">{top_df['target_weight'].sum()*100:.1f}% <span style="font-size:13px; color:#10B981; font-weight:600;">(满仓进攻)</span></div>
+                    </div>
+                    <div style="margin-bottom:12px;">
+                        <div style="font-size:12px; color:#64748B;">现金防守储备</div>
+                        <div style="font-size:22px; font-weight:800; color:#64748B;">{(1.0 - top_df['target_weight'].sum())*100:.1f}% <span style="font-size:13px; color:#94A3B8;">(极小摩擦)</span></div>
+                    </div>
+                    <div>
+                        <div style="font-size:12px; color:#64748B;">最大单一重仓上限</div>
+                        <div style="font-size:22px; font-weight:800; color:#E11D48;">{top_df['target_weight'].max()*100:.1f}% <span style="font-size:13px; color:#64748B;">({top_df.iloc[0]['name'] if 'name' in top_df.columns else ''})</span></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
             st.markdown("---")
             with st.expander("📡 7x24 全球与 A股实时财经快讯直播流 (直连官方实时新闻 API)", expanded=True):
