@@ -9,11 +9,15 @@ root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+import json
+import logging
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+
+logger = logging.getLogger(__name__)
 
 from config.settings import settings
 from data.universe_provider import create_universe_provider
@@ -77,7 +81,7 @@ def init_session_state():
             st.session_state[k] = None
 
     # 秒级快速恢复已有投研回测大屏
-    if st.session_state.equity_df is None:
+    if st.session_state.equity_df is None or st.session_state.oos_df is None:
         try:
             eq_path = settings.REPORTS_DIR / "equity_curve_latest.csv"
             ord_path = settings.REPORTS_DIR / "orders_latest.csv"
@@ -91,8 +95,14 @@ def init_session_state():
                 st.session_state.oos_df = pd.read_parquet(oos_path)
                 if "date" in st.session_state.oos_df.columns:
                     st.session_state.oos_df["date"] = pd.to_datetime(st.session_state.oos_df["date"])
-        except Exception:
-            pass
+                if st.session_state.eval_metrics is None:
+                    try:
+                        st.session_state.eval_metrics = ModelEvaluator().evaluate_predictions(st.session_state.oos_df)
+                    except Exception:
+                        st.session_state.eval_metrics = {}
+                logger.info("已成功预加载本地最新回测与预测产物到 Streamlit Session！")
+        except Exception as e:
+            logger.warning(f"预加载本地产物失败: {e}")
 
 
 init_session_state()
@@ -411,7 +421,7 @@ else:
         st.subheader("🔍 LightGBM 因子重要性与模型质量分析")
         
         latest_model = st.session_state.latest_model
-        eval_metrics = st.session_state.eval_metrics
+        eval_metrics = st.session_state.eval_metrics or {}
 
         if settings.is_classification:
             col_ic1, col_ic2, col_ic3, col_ic4 = st.columns(4)
