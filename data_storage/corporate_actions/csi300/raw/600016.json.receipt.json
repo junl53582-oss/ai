@@ -1,0 +1,22 @@
+{
+ "receipt_id": "CNINFO_3427d6d98ab1",
+ "source_id": "CNINFO",
+ "source_url": "https://www.cninfo.com.cn",
+ "requested_at": "2026-09-01T13:57:52+08:00",
+ "downloaded_at": "2026-09-01T13:57:52+08:00",
+ "http_status": 200,
+ "content_length": 11758,
+ "raw_sha256": "5f7a127a8c24c2cce0fb5c232bb28214c1afa143537f980701c730b113940505",
+ "original_filename": "600016.json",
+ "query_context": {
+  "symbol": "600016.SH",
+  "source": "cninfo",
+  "evidence_type": "CORPORATE_ACTION"
+ },
+ "receipt_integrity_digest": "46d1cc28773547c69394e2a4e295c1212953ea78ddf54a0c5ebad104070e2434",
+ "trust_anchor_type": "TRUSTED_KEY_ATTESTATION",
+ "signing_key_id": "CNINFO_OPERATOR_KEY_001",
+ "attestation_signature": "58e9bcbf8417c086c5543ebccc01ce315f935b96d17a64e94bcff6d18b5e40b2f060441f18f3c692db5345d6c05300a4f94d92caa95f1c7a5f429463f828f60e",
+ "operator_attestation": null,
+ "trust_anchor_verified": false
+}

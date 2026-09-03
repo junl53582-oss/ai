@@ -128,7 +128,7 @@ def test_outer_test_never_used_for_calibration(synthetic_panel_df):
 
 # 7. Purge gap >= label horizon
 def test_purge_gap_ge_label_horizon():
-    trainer = WalkForwardTrainer(purge_gap_days=5)
+    trainer = WalkForwardTrainer()
     assert trainer.purge_gap_days >= settings.LABEL_HORIZON
 
 
@@ -140,7 +140,8 @@ def test_formal_production_insufficient_history_fails_closed():
         "F1": np.random.normal(0, 1, 10),
         "label_excess_20d": np.random.normal(0, 0.05, 10)
     })
-    trainer = WalkForwardTrainer(train_years=2.0, val_months=6, test_months=3)
+    trainer = WalkForwardTrainer(train_years=2.0, val_months=6, test_months=3,
+                                 label_col="label_excess_20d", task_type="regression")
     # 当样本极其不足时，run_walk_forward 无法产生有效折数，fail-closed
     with pytest.raises(ValueError):
         trainer.run_walk_forward(short_df, feature_cols=["F1"])
@@ -150,6 +151,7 @@ def test_formal_production_insufficient_history_fails_closed():
 def test_feature_selection_only_train_window(synthetic_panel_df):
     labeler = TargetLabeler(horizon=5)
     df_labeled = labeler.compute_excess_return_label(synthetic_panel_df)
+    # Synthetic feature-selector unit test only; not scientific certification.
     trainer = WalkForwardTrainer(
         train_years=0.2,
         val_months=1,
@@ -158,7 +160,7 @@ def test_feature_selection_only_train_window(synthetic_panel_df):
         feature_selection_method="top_n",
         top_k_features=2,
         label_col="label_excess_5d",
-        task_type="regression"
+        task_type="regression", strict_mode=False
     )
     oos_df, _ = trainer.run_walk_forward(df_labeled, feature_cols=["F1", "F2", "F3"])
     assert not oos_df.empty
@@ -296,7 +298,8 @@ def test_deterministic_fixed_seed(synthetic_panel_df):
 def test_model_report_records_fold_boundaries(synthetic_panel_df):
     labeler = TargetLabeler(horizon=5)
     df_labeled = labeler.compute_excess_return_label(synthetic_panel_df)
-    trainer = WalkForwardTrainer(train_years=0.2, val_months=1, test_months=1, purge_gap_days=5, label_col="label_up_down_5d")
+    # Synthetic reporting compatibility test only; not scientific certification.
+    trainer = WalkForwardTrainer(train_years=0.2, val_months=1, test_months=1, purge_gap_days=5, label_col="label_up_down_5d", strict_mode=False)
     oos_df, _ = trainer.run_walk_forward(df_labeled, feature_cols=["F1", "F2", "F3"])
     assert len(trainer.models) > 0
     for m in trainer.models:

@@ -1,0 +1,2 @@
+﻿phase,expected_mean_daily_rankic,actual_mean_daily_rankic,rankic_abs_diff,expected_nw20_rankicir,actual_nw20_rankicir,nw20_abs_diff,expected_top10_alpha,actual_top10_alpha,expected_q5_q1,actual_q5_q1,expected_oos_rows,actual_oos_rows,reproduction_passed
+2.1-B-r2,0.04670731619915874,0.04670731619915874,0.0,0.45074353161665703,0.45074353161665703,0.0,0.01531426561629291,0.01531426561629291,15.38,15.38,220913,220913,True

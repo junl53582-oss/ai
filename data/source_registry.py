@@ -116,6 +116,23 @@ TRUSTED_SOURCE_REGISTRY: Dict[str, Dict[str, Any]] = {
             "CORPORATE_ACTION_DATASET",
             "TRADING_CALENDAR"
         ]
+    },
+    # Phase A (2026-09-01): 巨潮资讯网 (cninfo) —— 中国证监会指定法定信息披露平台,
+    # 由深圳证券信息有限公司运营。作为 OFFICIAL_PRIMARY 来源登记, 用于分红送转
+    # 公司行为事件证据链 (ak.stock_dividend_cninfo)。
+    "CNINFO": {
+        "canonical_source_name": "Shenzhen Stock Exchange Information Co., Ltd. (Cninfo)",
+        "short_name": "巨潮资讯网",
+        "source_class": "OFFICIAL_PRIMARY",
+        "allowed_domains": [
+            "cninfo.com.cn",
+            "www.cninfo.com.cn",
+            "static.cninfo.com.cn"
+        ],
+        "allowed_evidence_types": [
+            "CORPORATE_ACTION",
+            "CORPORATE_ACTION_DATASET"
+        ]
     }
 }
 

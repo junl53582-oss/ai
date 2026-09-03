@@ -1,0 +1,103 @@
+{
+  "account_id": "PAPER_ACCOUNT_01",
+  "cash": 170164.49200000017,
+  "last_buy_dates": {
+    "600519.SH": "2026-09-03",
+    "000858.SZ": "2026-09-03",
+    "600036.SH": "2026-09-03",
+    "300750.SZ": "2026-09-03",
+    "603986.SH": "2026-09-04",
+    "600160.SH": "2026-09-04",
+    "603799.SH": "2026-09-04",
+    "301308.SZ": "2026-09-04",
+    "002460.SZ": "2026-09-04",
+    "601901.SH": "2026-09-04",
+    "300014.SZ": "2026-09-04",
+    "600219.SH": "2026-09-04",
+    "000630.SZ": "2026-09-04",
+    "600029.SH": "2026-09-04",
+    "600026.SH": "2026-09-04",
+    "300413.SZ": "2026-09-04",
+    "300418.SZ": "2026-09-04",
+    "002837.SZ": "2026-09-04",
+    "601872.SH": "2026-09-04",
+    "600048.SH": "2026-09-04",
+    "000977.SZ": "2026-09-04",
+    "601009.SH": "2026-09-04"
+  },
+  "positions": {
+    "603986.SH": {
+      "symbol": "603986.SH",
+      "total_shares": 300,
+      "available_shares": 200,
+      "avg_cost_price": 382.17333333333335,
+      "current_price": 383.2,
+      "market_value": 114960.0
+    },
+    "600026.SH": {
+      "symbol": "600026.SH",
+      "total_shares": 14300,
+      "available_shares": 9400,
+      "avg_cost_price": 20.329999999999995,
+      "current_price": 20.33,
+      "market_value": 290719.0
+    },
+    "300413.SZ": {
+      "symbol": "300413.SZ",
+      "total_shares": 8300,
+      "available_shares": 3900,
+      "avg_cost_price": 20.15,
+      "current_price": 20.15,
+      "market_value": 167245.0
+    },
+    "300418.SZ": {
+      "symbol": "300418.SZ",
+      "total_shares": 2500,
+      "available_shares": 1100,
+      "avg_cost_price": 44.26,
+      "current_price": 44.26,
+      "market_value": 110650.0
+    },
+    "002837.SZ": {
+      "symbol": "002837.SZ",
+      "total_shares": 1400,
+      "available_shares": 600,
+      "avg_cost_price": 68.49,
+      "current_price": 68.49,
+      "market_value": 95886.0
+    },
+    "601872.SH": {
+      "symbol": "601872.SH",
+      "total_shares": 4600,
+      "available_shares": 2200,
+      "avg_cost_price": 19.3,
+      "current_price": 19.3,
+      "market_value": 88780.0
+    },
+    "600048.SH": {
+      "symbol": "600048.SH",
+      "total_shares": 17600,
+      "available_shares": 8400,
+      "avg_cost_price": 5.09,
+      "current_price": 5.09,
+      "market_value": 89584.0
+    },
+    "000977.SZ": {
+      "symbol": "000977.SZ",
+      "total_shares": 900,
+      "available_shares": 400,
+      "avg_cost_price": 86.35,
+      "current_price": 86.35,
+      "market_value": 77715.0
+    },
+    "601009.SH": {
+      "symbol": "601009.SH",
+      "total_shares": 6100,
+      "available_shares": 2900,
+      "avg_cost_price": 11.85,
+      "current_price": 11.85,
+      "market_value": 72285.0
+    }
+  },
+  "updated_at": "2026-09-04T00:34:41.063791"
+}

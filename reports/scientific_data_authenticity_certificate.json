@@ -1,0 +1,30 @@
+{
+  "certificate_id": "CERT_1788452350_becd78ef",
+  "timestamp": "2026-09-04 00:19:10",
+  "audit_status": "CERTIFIED_AUTHENTIC",
+  "data_authenticity": {
+    "dataset_rows": 349379,
+    "symbols_count": 300,
+    "date_range": "2021-09-29 ~ 2026-08-24",
+    "ashare_limit_compliance": 0.9998051929980798,
+    "vwap_compliance": 1.0,
+    "benford_law_correlation": 0.9994578220993936,
+    "benford_law_passed": true
+  },
+  "statistical_metrics": {
+    "mean_rankic": 0.007480000000000002,
+    "rankic_std": 0.023522597645668303,
+    "rankic_ir": 0.31799195534247865,
+    "t_statistic": 1.3860953874577029,
+    "p_value": 0.09088556843219593,
+    "permutation_p_value": 0.0998,
+    "statistical_significance": "p < 0.10 (Moderate)"
+  },
+  "model_integrity": {
+    "model_path": "saved_models/latest_lightgbm.pkl",
+    "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79",
+    "size_mb": 16.154091835021973,
+    "architecture": "Tri-Core Mega Ensemble (DoubleEnsemble + TabularMLP + Ridge)",
+    "leakage_free": true
+  }
+}

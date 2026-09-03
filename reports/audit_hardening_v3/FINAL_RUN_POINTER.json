@@ -1,0 +1,10 @@
+{
+  "run_id": "research_8dbf062_20260831_155701",
+  "code_freeze_sha": "8dbf06213b9af0a6614f377513dc997aa80266be",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "calendar_sha256": "cf08829d987632359ac12537a2d8659354aa1acc71057670ad81af2921eb0c23",
+  "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
+  "artifact_manifest_sha256": "d006cb4d40efc9f9c189ecce017480054fbb27fd18d0c8b7084895aacf373211",
+  "gate_matrix_sha256": "deeeb4f0858bb7a86ef87c2937cd94d5602ab4a3d7e33f58bfce475b5acfa8ff",
+  "run_status": "FAILED: INSUFFICIENT_EVIDENCE_FOR_STRICT_FUNDAMENTAL_PIT"
+}

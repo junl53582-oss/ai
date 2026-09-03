@@ -1,0 +1,86 @@
+{
+ "source": "cninfo",
+ "source_class": "OFFICIAL_PRIMARY",
+ "symbol": "601868.SH",
+ "fetched_at": "2026-09-01T13:57:44",
+ "events": [
+  {
+   "symbol": "601868.SH",
+   "ex_date": "2022-08-26",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.0225,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "601868.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "601868.SH",
+   "ex_date": "2023-06-16",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.0252,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "601868.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "601868.SH",
+   "ex_date": "2024-08-15",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.026000000000000002,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "601868.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "601868.SH",
+   "ex_date": "2025-01-20",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.0125,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "601868.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "601868.SH",
+   "ex_date": "2025-08-15",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.0262,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "601868.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "601868.SH",
+   "ex_date": "2026-08-24",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.0312,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "601868.json",
+   "source_sha256": null
+  }
+ ]
+}

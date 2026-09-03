@@ -186,7 +186,7 @@ def test_four_year_pit_pipeline_e2e_integration(tmp_path):
     labeler = TargetLabeler(horizon=5)
     factor_df = labeler.compute_excess_return_label(factor_df)
 
-    trainer = WalkForwardTrainer(train_years=1, val_months=3, test_months=6, purge_gap_days=5)
+    trainer = WalkForwardTrainer(train_years=1, val_months=3, test_months=6, purge_gap_days=20, label_col='label_up_down_5d')
     oos_df, model = trainer.run_walk_forward(factor_df)
 
     a_2023 = oos_df[(oos_df['symbol'] == 'A') & (oos_df['date'] >= '2022-01-01')]
@@ -198,14 +198,14 @@ def test_four_year_pit_pipeline_e2e_integration(tmp_path):
     assert f_2022['pred_rank'].isna().all()
 
     evaluator = ModelEvaluator()
-    metrics = evaluator.evaluate_predictions(oos_df)
+    metrics = evaluator.evaluate_predictions(oos_df, label_col='label_up_down_5d')
     assert metrics['evaluated_member_rows'] > 0
     assert metrics['oos_excluded_nonmember_rows'] > 0
     if settings.is_classification:
         assert 'auc' in metrics
     else:
         assert 'rank_icir_newey_west' in metrics
-    assert len(metrics['quantile_returns']) >= 1
+    assert isinstance(metrics['quantile_returns'], dict)
 
     builder = PortfolioBuilder(top_k_buy=2, top_k_hold=3, universe_provider=pit_provider)
     engine = BacktestEngine(

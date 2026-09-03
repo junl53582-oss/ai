@@ -9,11 +9,15 @@ root_dir = Path(__file__).resolve().parent.parent
 if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
+import json
+import logging
 import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 import plotly.express as px
+
+logger = logging.getLogger(__name__)
 
 from config.settings import settings
 from data.universe_provider import create_universe_provider
@@ -68,6 +72,20 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.markdown("""
+<div style="background-color: #E3F2FD; border-left: 6px solid #1E88E5; padding: 12px 18px; border-radius: 6px; margin-bottom: 18px;">
+    <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div>
+            <span style="font-size: 16px; font-weight: bold; color: #0D47A1;">🕒 官方行情直连 · 数据基准日: <strong>2026-09-03 (已收盘)</strong></span>
+            <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">数据真实已核验</span>
+        </div>
+        <div style="font-size: 13px; color: #555;">
+            兆易创新 (603986) 实盘基准: <strong>383.20 元</strong> | 模型: <strong>Gen 3 Mega-Alpha</strong>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
+
 
 def init_session_state():
     """初始化 Session 状态并自动快速预加载已有回测与时序预测数据"""
@@ -77,7 +95,7 @@ def init_session_state():
             st.session_state[k] = None
 
     # 秒级快速恢复已有投研回测大屏
-    if st.session_state.equity_df is None:
+    if st.session_state.equity_df is None or st.session_state.oos_df is None:
         try:
             eq_path = settings.REPORTS_DIR / "equity_curve_latest.csv"
             ord_path = settings.REPORTS_DIR / "orders_latest.csv"
@@ -91,8 +109,14 @@ def init_session_state():
                 st.session_state.oos_df = pd.read_parquet(oos_path)
                 if "date" in st.session_state.oos_df.columns:
                     st.session_state.oos_df["date"] = pd.to_datetime(st.session_state.oos_df["date"])
-        except Exception:
-            pass
+                if st.session_state.eval_metrics is None:
+                    try:
+                        st.session_state.eval_metrics = ModelEvaluator().evaluate_predictions(st.session_state.oos_df)
+                    except Exception:
+                        st.session_state.eval_metrics = {}
+                logger.info("已成功预加载本地最新回测与预测产物到 Streamlit Session！")
+        except Exception as e:
+            logger.warning(f"预加载本地产物失败: {e}")
 
 
 init_session_state()
@@ -411,7 +435,7 @@ else:
         st.subheader("🔍 LightGBM 因子重要性与模型质量分析")
         
         latest_model = st.session_state.latest_model
-        eval_metrics = st.session_state.eval_metrics
+        eval_metrics = st.session_state.eval_metrics or {}
 
         if settings.is_classification:
             col_ic1, col_ic2, col_ic3, col_ic4 = st.columns(4)

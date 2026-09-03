@@ -1,0 +1,62 @@
+{
+  "audit_gate_matrix.json": {
+    "sha256": "82df967a40676e401a6a5584b8b763b6266487b0a11a563dea339ef687ac6f36",
+    "size_bytes": 6886,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "bootstrap_comparison.json": {
+    "sha256": "84948bcac1ef106bc74d59ea5c02c29b6e4362558c48ace4f94df81e5f306514",
+    "size_bytes": 1165,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "daily_rankic_series.csv": {
+    "sha256": "c85e4d6595f9f6aaba7688b82a9992ef6583a6d38ec578b06571df72124906a1",
+    "size_bytes": 54583,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "model_comparison_matrix.csv": {
+    "sha256": "cb160e512d9d39e51856806f1fcc9752c0ab649d1650708277f24dd21acc3ba5",
+    "size_bytes": 982,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "multi_seed_robustness.json": {
+    "sha256": "b4f543aa5a7d1698f8456518bde09e879b25434f91ae6a88e99eca96ac348bb6",
+    "size_bytes": 907,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "production_snapshot_after.json": {
+    "sha256": "8a75617d8c7ea630318ccca69763d7b88dfc93ff57097d3cbf5595d3cfc168e8",
+    "size_bytes": 419,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "production_snapshot_before.json": {
+    "sha256": "8a75617d8c7ea630318ccca69763d7b88dfc93ff57097d3cbf5595d3cfc168e8",
+    "size_bytes": 419,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "trading_fold_stability.csv": {
+    "sha256": "4c78f80182930262390c56aaa13d407e0e3a224452ce893608314aadd7e090f0",
+    "size_bytes": 3793,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "walk_forward_folds.csv": {
+    "sha256": "026c1fb04bcfdf79e53aae28572dd9d2bc5db2a14927de9c8825b4be55d370bc",
+    "size_bytes": 4304,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  },
+  "walk_forward_purge_audit.json": {
+    "sha256": "73520ab5a40189ab221616c0a58df3d869f7fc1b3343245a78319ea450289679",
+    "size_bytes": 45455,
+    "generated_by": "tools/run_model_research.py",
+    "source_code_sha": "51a3899698591bc7a953e8de78e26bfddd0054f9"
+  }
+}

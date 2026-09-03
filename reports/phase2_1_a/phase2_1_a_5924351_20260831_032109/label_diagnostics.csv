@@ -1,0 +1,2 @@
+﻿total_rows,valid_execution_labels,invalid_execution_labels,invalid_ratio,entry_tradable_ratio,planned_exit_tradable_ratio,deferred_exit_count,mean_deferred_days,max_deferred_days,p95_deferred_days
+349379,342949,6430,0.018404082672398743,0.9987692448601662,0.9808202553673804,401,5.346633416458853,20.0,13.0

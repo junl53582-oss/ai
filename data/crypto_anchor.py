@@ -201,6 +201,21 @@ TRUSTED_KEY_REGISTRY: Dict[str, Dict[str, Any]] = {
         "not_after": "2030-01-01T00:00:00Z",
         "is_production": True
     },
+    # 1b. CNINFO 公司行为采集操作员公钥 (Phase A 2026-09-01 引导登记, 仅用于 Acquisition Receipt)
+    #     私钥由操作员经环境变量 CNINFO_OPERATOR_PRIVATE_KEY 持有 (tools/bootstrap_corporate_actions_operator_key.py)
+    "CNINFO_OPERATOR_KEY_001": {
+        "algorithm": "ED25519",
+        "key_id": "CNINFO_OPERATOR_KEY_001",
+        "public_key_hex": "8e584ea9e3635403f47d6511a85268079c85847af3ceae9a542424e24a4df659",
+        "allowed_purposes": ["ACQUISITION_RECEIPT"],
+        "issuer_type": "PROJECT",
+        "institution": "CNINFO_DISCLOSURE_OPERATOR",
+        "env_private_key_var": "CNINFO_OPERATOR_PRIVATE_KEY",
+        "status": "ACTIVE",
+        "not_before": "2025-01-01T00:00:00Z",
+        "not_after": "2030-01-01T00:00:00Z",
+        "is_production": True
+    },
     # 2. 项目运行时审计防伪信封签名公钥 (仅用于 Runtime Attestation Envelope)
     "PROD_RUNTIME_KEY_2026_V1": {
         "algorithm": "ED25519",

@@ -213,6 +213,7 @@ class FactorResearchEngine:
         logger.info(f"📊 待研究候选因子数量: {len(factor_cols)} 个")
 
         # 2. Factor x Horizon 全家族 Global FDR 多重检验 (Phase 1.5 P0-3)
+        logger.info(f"[研究阶段 2/10] 因子×视界全局 FDR 多重检验开始 ({len(factor_cols)} 因子 × {len(self.config.HORIZONS)} 视界)...")
         horizon_rows = []
         global_pvals = []
 
@@ -240,6 +241,7 @@ class FactorResearchEngine:
         self.horizon_significance_df = pd.DataFrame(horizon_rows)
 
         # 3. 单因子基础指标与 HAC 检验 (主视界)
+        logger.info(f"[研究阶段 3/10] 单因子基础指标与 HAC 检验开始 ({len(factor_cols)} 因子)...")
         daily_ic_dict = {}
         for f in factor_cols:
             m = FactorMetricsEngine.evaluate_factor(df_labeled, f, primary_ret_col, horizon=primary_h, config=self.config)
@@ -262,24 +264,29 @@ class FactorResearchEngine:
                 daily_ic_dict[f] = m.daily_rank_ic_series
 
         # 4. 多视界衰减分析
+        logger.info(f"[研究阶段 4/10] 多视界衰减分析开始 ({len(factor_cols)} 因子)...")
         for f in factor_cols:
             dec = FactorDecayEngine.analyze_decay(df_labeled, f, horizons=self.config.HORIZONS)
             self.decay_dict[f] = dec
 
         # 5. 时间稳定性与牛熊状态分析
+        logger.info(f"[研究阶段 5/10] 时间稳定性与牛熊分析开始 ({len(factor_cols)} 因子)...")
         for f in factor_cols:
             stab = FactorStabilityEngine.evaluate_stability(df_labeled, f, primary_ret_col, config=self.config)
             self.stability_dict[f] = stab
 
         # 6. 相关性与高冗余聚集分析 (Complete Linkage)
+        logger.info(f"[研究阶段 6/10] 相关性/冗余聚类分析开始 ({len(factor_cols)} 因子)...")
         self.corr_result = FactorCorrelationEngine.analyze_correlation(df_labeled, factor_cols, daily_ic_dict, config=self.config)
 
         # 7. 真实中性化与正交化对照检验 (Fail-Closed)
+        logger.info("[研究阶段 7/10] 中性化/正交化/离群对照检验开始...")
         self.neutralization_comparison = self._run_real_neutralization_comparison(df_labeled, factor_cols, primary_ret_col)
         self.orthogonalization_comparison = self._run_real_orthogonalization_comparison(df_labeled, factor_cols, primary_ret_col)
         self.outlier_sensitivity_comparison = self._run_real_outlier_comparison(df_labeled, factor_cols, primary_ret_col)
 
         # 8. 综合评分与等级决策
+        logger.info("[研究阶段 8/10] 综合评分与等级决策...")
         scores_df = FactorSelectionEngine.score_factors(self.metrics_dict, self.stability_dict, self.corr_result, config=self.config)
         self.selection_result = FactorSelectionEngine.classify_factors(
             scores_df=scores_df,
@@ -291,6 +298,7 @@ class FactorResearchEngine:
         )
 
         # 9. 严格 Purged Walk-Forward 样本外验证与逐折 FDR
+        logger.info("[研究阶段 9/10] Purged Walk-Forward 样本外验证开始 (耗时大户)...")
         wf_res = FactorSelectionEngine.run_purged_walk_forward(df_labeled, factor_cols, config=self.config)
         self.selection_result.walk_forward_stability = wf_res
         self.wf_horizon_significance_df = pd.DataFrame(wf_res.get("wf_horizon_significance", []))

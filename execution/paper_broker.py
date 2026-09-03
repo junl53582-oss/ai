@@ -1,34 +1,95 @@
-"""
-本地仿真交易沙盒网关 (execution/paper_broker.py)
-用于模拟盘跟踪、策略盘后挂单推演与无缝回测转实盘校验。
-"""
 import uuid
+import json
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, List, Optional
 import pandas as pd
 import numpy as np
 
+from config.settings import settings
 from .broker_base import BaseBroker, Account, Position, ExecutionOrder, OrderSide, OrderType, ExecutionStatus
 
 logger = logging.getLogger(__name__)
 
 
 class PaperBroker(BaseBroker):
-    """本地仿真交易沙盒网关"""
+    """本地仿真交易沙盒网关 (支持跨日/跨调仓真实持久化)"""
 
-    def __init__(self, initial_cash: float = 1_000_000.0, commission_rate: float = 0.00025, stamp_duty: float = 0.0005):
+    def __init__(self, initial_cash: float = 1_000_000.0, commission_rate: float = 0.00025, stamp_duty: float = 0.0005, persist: bool = False):
         self.account_id = "PAPER_ACCOUNT_01"
+        self.initial_cash = initial_cash
         self.cash = initial_cash
         self.commission_rate = commission_rate
         self.stamp_duty = stamp_duty
         self.positions: Dict[str, Position] = {}
         self.orders: List[ExecutionOrder] = []
         self.is_connected = False
+        self.persist = persist
+        self._last_buy_dates: Dict[str, str] = {}
+
+    def _get_state_file(self) -> Path:
+        return settings.DATA_DIR / "paper_broker_state.json"
+
+    def _save_state(self):
+        if not self.persist:
+            return
+        try:
+            state = {
+                "account_id": self.account_id,
+                "cash": self.cash,
+                "last_buy_dates": self._last_buy_dates,
+                "positions": {
+                    sym: {
+                        "symbol": pos.symbol,
+                        "total_shares": pos.total_shares,
+                        "available_shares": pos.available_shares,
+                        "avg_cost_price": pos.avg_cost_price,
+                        "current_price": pos.current_price,
+                        "market_value": pos.market_value
+                    } for sym, pos in self.positions.items()
+                },
+                "updated_at": datetime.now().isoformat()
+            }
+            p = self._get_state_file()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            with open(p, "w", encoding="utf-8") as f:
+                json.dump(state, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            logger.warning(f"保存 PaperBroker 状态异常: {e}")
+
+    def _load_state(self) -> bool:
+        if not self.persist:
+            return False
+        p = self._get_state_file()
+        if not p.exists():
+            return False
+        try:
+            with open(p, "r", encoding="utf-8") as f:
+                state = json.load(f)
+            self.cash = float(state.get("cash", self.initial_cash))
+            self._last_buy_dates = state.get("last_buy_dates", {})
+            self.positions = {}
+            for sym, pos_d in state.get("positions", {}).items():
+                self.positions[sym] = Position(
+                    symbol=pos_d["symbol"],
+                    total_shares=int(pos_d["total_shares"]),
+                    available_shares=int(pos_d["available_shares"]),
+                    avg_cost_price=float(pos_d["avg_cost_price"]),
+                    current_price=float(pos_d.get("current_price", pos_d["avg_cost_price"])),
+                    market_value=float(pos_d.get("market_value", 0.0))
+                )
+            logger.info(f"已成功恢复 PaperBroker 历史持久化状态: 持仓 {len(self.positions)} 支标的 | 资金 {self.cash:,.2f} 元")
+            return True
+        except Exception as e:
+            logger.warning(f"加载 PaperBroker 历史状态失败: {e}")
+            return False
 
     def connect(self) -> bool:
         self.is_connected = True
-        logger.info(f"PaperBroker 本地仿真账户 [{self.account_id}] 初始化就绪，初始可用资金: {self.cash:,.2f} 元")
+        has_loaded = self._load_state()
+        if not has_loaded:
+            logger.info(f"PaperBroker 本地仿真账户 [{self.account_id}] 初始化就绪，初始可用资金: {self.cash:,.2f} 元")
         return True
 
     def get_account(self) -> Account:
@@ -86,7 +147,9 @@ class PaperBroker(BaseBroker):
             new_shares = old_shares + shares
             pos.avg_cost_price = (pos.avg_cost_price * old_shares + trade_amount) / new_shares
             pos.total_shares = new_shares
-            pos.available_shares = pos.available_shares # T+1: 当日买入不增加可用
+            # T+1 语义 (已修复): 当日买入计入总持仓但不可用, 跨日由 unlock_t1_shares() 解锁
+            pos.available_shares = pos.available_shares
+            self._last_buy_dates[symbol] = datetime.now().strftime("%Y-%m-%d")
             pos.current_price = price
             pos.market_value = pos.total_shares * price
             pos.floating_pnl = (pos.current_price - pos.avg_cost_price) * pos.total_shares
@@ -100,6 +163,7 @@ class PaperBroker(BaseBroker):
                 created_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
             self.orders.append(order)
+            self._save_state()
             return order
 
         else: # SELL
@@ -131,6 +195,7 @@ class PaperBroker(BaseBroker):
                 created_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             )
             self.orders.append(order)
+            self._save_state()
             return order
 
     def cancel_order(self, order_id: str) -> bool:
@@ -156,8 +221,24 @@ class PaperBroker(BaseBroker):
             return self.orders
         return [o for o in self.orders if o.status == status]
 
-    def unlock_t1_shares(self):
-        """开盘跨日调用：将全部总股数解锁为可用股数"""
-        for pos in self.positions.values():
+    def unlock_t1_shares(self, today: Optional[str] = None):
+        """跨日调用：将昨日及更早买入的持仓解锁为可用股数 (T+1)。
+
+        Args:
+            today: 当前交易日 (YYYY-MM-DD)。为 None 时无条件解锁全部持仓；
+                   给定日期时仅解锁"最后买入日 < today"的标的，当日买入的股份保持锁定。
+        """
+        unlocked = []
+        for sym, pos in self.positions.items():
+            if pos.total_shares <= pos.available_shares:
+                continue  # 已全部可用, 无需解锁
+            if today is not None:
+                last_buy = self._last_buy_dates.get(sym)
+                if last_buy is not None and last_buy >= today:
+                    continue  # 当日买入, 保持 T+1 锁定
             pos.available_shares = pos.total_shares
-        logger.info("已执行 T+1 跨日持仓可用股数解锁")
+            unlocked.append(f"{sym}({pos.total_shares}股)")
+        if unlocked:
+            logger.info(f"已执行 T+1 跨日持仓可用股数解锁: {', '.join(unlocked)}")
+        else:
+            logger.info("T+1 解锁扫描完成: 无需解锁的持仓")

@@ -1,0 +1,12 @@
+{
+ "source_id": "CNINFO",
+ "source_class": "OFFICIAL_PRIMARY",
+ "source_name": "Shenzhen Stock Exchange Information Co., Ltd. (Cninfo)",
+ "source_url": "https://www.cninfo.com.cn",
+ "source_reference": "601288.SH",
+ "downloaded_at": "2026-09-01T13:57:42",
+ "original_filename": "601288.json",
+ "sha256": "025ee3d12e0f02d0cea9fa509273aee3338f6b463e2976a5b1ee0422b7e3ab2e",
+ "evidence_type": "CORPORATE_ACTION",
+ "receipt_file": "601288.json.receipt.json"
+}

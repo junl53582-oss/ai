@@ -1,0 +1,99 @@
+{
+ "source": "cninfo",
+ "source_class": "OFFICIAL_PRIMARY",
+ "symbol": "600115.SH",
+ "fetched_at": "2026-09-01T13:57:39",
+ "events": [
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2001-07-24",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.02,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2002-07-11",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.02,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2005-07-29",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.02,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2016-12-07",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.051000000000000004,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2017-08-10",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.049,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2018-07-24",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.051000000000000004,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  },
+  {
+   "symbol": "600115.SH",
+   "ex_date": "2020-08-06",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.05,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "600115.json",
+   "source_sha256": null
+  }
+ ]
+}

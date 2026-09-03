@@ -113,12 +113,14 @@ class MiniQMTBroker(BaseBroker):
     ) -> ExecutionOrder:
         order_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if not self.is_connected or self.trader is None:
-            logger.warning(f"MiniQMT 未连接，仿真模拟委托: {side.value} {symbol} {shares}股 @ {price:.2f}元")
+            msg = "FATAL: MiniQMT 未连接或断线！实盘安全风控已阻断新订单并冻结状态，严禁在未对账情况下假想仿真成交。"
+            logger.error(f"[LIVE_RAILS_DISCONNECT_BLOCK] {msg}")
             order = ExecutionOrder(
-                order_id=f"SIM_QMT_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                order_id=f"BLOCKED_{datetime.now().strftime('%Y%m%d%H%M%S')}",
                 symbol=symbol, side=side, order_type=order_type,
                 requested_shares=shares, requested_price=price,
-                status=ExecutionStatus.SUBMITTED, created_time=order_time
+                status=ExecutionStatus.REJECTED, created_time=order_time,
+                error_msg=msg
             )
             self.orders.append(order)
             return order

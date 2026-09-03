@@ -1,0 +1,21 @@
+{
+ "source": "cninfo",
+ "source_class": "OFFICIAL_PRIMARY",
+ "symbol": "688126.SH",
+ "fetched_at": "2026-09-01T13:57:45",
+ "events": [
+  {
+   "symbol": "688126.SH",
+   "ex_date": "2024-07-31",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.04,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "688126.json",
+   "source_sha256": null
+  }
+ ]
+}

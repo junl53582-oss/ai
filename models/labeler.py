@@ -3,7 +3,11 @@
 严格基于市场 Canonical Trading Calendar 计算未来 N 个真实交易日的 Alpha 超额收益
 杜绝因停牌缺行导致 shift(-5) 跨越数月造成的时间轴弹性失真！
 采用完全向量化合并计算，毫秒级高效响应
+Research Integrity Hardened:
+- 支持严格 Canonical Calendar 认证门禁 (CALENDAR_CERTIFICATION Fail-Closed)
 """
+from __future__ import annotations
+
 import logging
 from typing import Optional, List
 import pandas as pd
@@ -24,24 +28,34 @@ class TargetLabeler:
         task_type: str = settings.TASK_TYPE,
         label_col_clf: Optional[str] = None,
         threshold: float = settings.LABEL_THRESHOLD,
-        threshold_mode: str = settings.LABEL_THRESHOLD_MODE
+        threshold_mode: str = settings.LABEL_THRESHOLD_MODE,
+        require_canonical_calendar: bool = False
     ):
-        self.horizon = horizon
-        self.label_col = label_col or f"label_excess_{horizon}d"  # 连续超额收益列
+        self.horizon = int(horizon)
+        self.label_col = label_col or f"label_excess_{horizon}d"
         self.task_type = task_type
-        self.label_col_clf = label_col_clf or f"label_up_down_{horizon}d"  # 二分类标签列
-        self.threshold = threshold
-        self.threshold_mode = threshold_mode  # "fixed" | "cross_sectional_median"
+        self.label_col_clf = label_col_clf or f"label_up_down_{horizon}d"
+        self.threshold = float(threshold)
+        self.threshold_mode = threshold_mode
+        self.require_canonical_calendar = bool(require_canonical_calendar)
 
     def compute_excess_return_label(
         self,
         df: pd.DataFrame,
-        canonical_dates: Optional[List[pd.Timestamp]] = None
+        canonical_dates: Optional[List[pd.Timestamp]] = None,
+        require_canonical_calendar: Optional[bool] = None
     ) -> pd.DataFrame:
         """
-        基于全市场统一交易日历计算未来 N 个交易日超额收益率 (P1-2 支持注入 canonical_dates)：
+        基于全市场统一交易日历计算未来 N 个交易日超额收益率：
         Label = (Stock_Price(t+N_trd) / Stock_Price(t) - 1) - (Benchmark_Price(t+N_trd) / Benchmark_Price(t) - 1)
         """
+        must_require_cal = self.require_canonical_calendar if require_canonical_calendar is None else bool(require_canonical_calendar)
+        if must_require_cal and (canonical_dates is None or len(canonical_dates) == 0):
+            raise RuntimeError(
+                "FATAL: Canonical exchange trading calendar is required in certified mode! "
+                "Deducing trading calendar from filtered stock rows is disallowed."
+            )
+
         if "benchmark_close" not in df.columns:
             raise ValueError(
                 "Dataframe missing required 'benchmark_close' column for excess return labeling! "
@@ -53,17 +67,21 @@ class TargetLabeler:
         df["date"] = pd.to_datetime(df["date"])
         df.sort_values(by=["date", "symbol"], inplace=True)
 
+        must_require_cal = self.require_canonical_calendar if require_canonical_calendar is None else bool(require_canonical_calendar)
+        if must_require_cal and (canonical_dates is None or len(canonical_dates) == 0):
+            raise RuntimeError("FATAL: require_canonical_calendar=True but canonical_dates was not provided!")
+
         if canonical_dates is not None and len(canonical_dates) > 0:
             s_ts = df["date"].min()
             e_ts = df["date"].max()
             cal_filtered = [pd.to_datetime(d) for d in canonical_dates if s_ts <= pd.to_datetime(d) <= e_ts]
-            market_dates = sorted(list(set(cal_filtered))) if cal_filtered else sorted(df["date"].unique())
+            if not cal_filtered:
+                raise RuntimeError("FATAL: Canonical calendar has zero overlap with research dataset!")
+            market_dates = sorted(list(set(cal_filtered)))
         else:
             market_dates = sorted(df["date"].unique())
 
         if len(market_dates) <= self.horizon:
-            # 数据天数不足以覆盖持有期: 连续标签置 NaN。
-            # 同时必须显式创建分类标签列(全 NaN)，否则下游 walk_forward 会因缺列直接 KeyError 崩溃。
             df[self.label_col] = np.nan
             if self.task_type == "classification" and self.label_col_clf not in df.columns:
                 df[self.label_col_clf] = np.nan
@@ -84,14 +102,12 @@ class TargetLabeler:
         merged = pd.merge(df, date_map, on="date", how="left")
         merged = pd.merge(merged, sub_stock, on=["symbol", "future_date"], how="left")
 
-        # 股票未来收益
         stock_ret = np.where(
             merged["future_price"].notna() & (merged[price_col] > 0),
             (merged["future_price"] / merged[price_col]) - 1.0,
             np.nan
         )
 
-        # 基准未来收益 (严格 Fail-Closed，基准有效时计算相对超额)
         bench_daily = df.groupby("date")["benchmark_close"].first().reset_index()
         bench_future = bench_daily.rename(columns={"date": "future_date", "benchmark_close": "future_bench_close"})
         merged = pd.merge(merged, bench_future, on="future_date", how="left")
@@ -103,45 +119,30 @@ class TargetLabeler:
 
         merged[self.label_col] = stock_ret - bench_ret
 
-        # 分类模式: 生成二分类标签 (1=涨/跑赢基准, 0=跌/跑输基准)
-        if self.task_type == "classification":
-            if self.threshold_mode == "cross_sectional_median":
-                # 市场中性: 每日截面内，超额收益 > 当日中位数 判定为 1 (相对强弱标签)
-                # 优点: 正负样本天然各占约 50%，消除大盘整体涨跌导致的标签偏斜
-                merged["_daily_median"] = merged.groupby("date")[self.label_col].transform("median")
-                merged[self.label_col_clf] = (merged[self.label_col] > merged["_daily_median"]).astype(int)
-                merged.loc[merged[self.label_col].isna() | merged["_daily_median"].isna(), self.label_col_clf] = np.nan
-                merged.drop(columns=["_daily_median"], inplace=True)
-                logger.info(
-                    f"已生成市场中性二分类标签 {self.label_col_clf} (横截面中位数阈值): "
-                    f"上涨占比={merged[self.label_col_clf].mean()*100:.1f}%"
-                )
-            elif self.threshold_mode == "cross_sectional_extreme":
-                # 极端分组: 每日截面按超额收益排名，top q 分位标 1、bottom q 分位标 0，
-                # 中间 1-2q 标 NaN (训练与评估均剔除)。拉大正负样本信号差距，
-                # 用于诊断模型对「强跑赢 vs 强跑输」的区分能力 (也即 Top-K 策略的实际可用空间)。
-                q = float(getattr(settings, "LABEL_EXTREME_QUANTILE", 0.30))
-                rank_pct = merged.groupby("date")[self.label_col].rank(pct=True)
-                merged[self.label_col_clf] = np.where(
-                    rank_pct > 1.0 - q, 1.0,
-                    np.where(rank_pct < q, 0.0, np.nan)
-                )
-                # 超额收益缺失时标签保持 NaN
-                merged.loc[merged[self.label_col].isna(), self.label_col_clf] = np.nan
-                logger.info(
-                    f"已生成极端分组二分类标签 {self.label_col_clf} (top/bottom {q:.0%} 分位): "
-                    f"上涨占比={merged[self.label_col_clf].mean()*100:.1f}%, "
-                    f"保留样本占比={merged[self.label_col_clf].notna().mean()*100:.1f}%"
-                )
-            else:
-                merged[self.label_col_clf] = (merged[self.label_col] > self.threshold).astype(int)
-                logger.info(
-                    f"已生成二分类标签 {self.label_col_clf}: "
-                    f"上涨占比={merged[self.label_col_clf].mean()*100:.1f}%, "
-                    f"阈值={self.threshold}"
-                )
+        # 二分类标签计算
+        if self.threshold_mode == "cross_sectional_median":
+            daily_med = merged.groupby("date")[self.label_col].transform("median")
+            merged[self.label_col_clf] = np.where(
+                merged[self.label_col].notna() & daily_med.notna(),
+                (merged[self.label_col] > daily_med).astype(float),
+                np.nan
+            )
+        elif self.threshold_mode == "cross_sectional_extreme":
+            daily_rank_pct = merged.groupby("date")[self.label_col].rank(pct=True)
+            extreme_q = float(getattr(settings, "LABEL_EXTREME_QUANTILE", 0.30))
+            is_top = daily_rank_pct > (1.0 - extreme_q)
+            is_bottom = daily_rank_pct < extreme_q
+            merged[self.label_col_clf] = np.nan
+            valid_mask = merged[self.label_col].notna()
+            merged.loc[valid_mask & is_top, self.label_col_clf] = 1.0
+            merged.loc[valid_mask & is_bottom, self.label_col_clf] = 0.0
+        else:
+            merged[self.label_col_clf] = np.where(
+                merged[self.label_col].notna(),
+                (merged[self.label_col] > self.threshold).astype(float),
+                np.nan
+            )
 
-        merged.drop(columns=["future_date", "future_price", "future_bench_close"], errors="ignore", inplace=True)
-        merged.sort_values(by=["date", "symbol"], inplace=True)
-        merged.reset_index(drop=True, inplace=True)
+        drop_cols = ["future_date", "future_price", "future_bench_close"]
+        merged.drop(columns=[c for c in drop_cols if c in merged.columns], inplace=True)
         return merged

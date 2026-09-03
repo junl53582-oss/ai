@@ -65,10 +65,13 @@ class PortfolioRebalancer:
         current_holdings = {sym: pos for sym, pos in positions.items() if pos.total_shares > 0}
         logger.info(f"当前持仓标的数: {len(current_holdings)} 只")
 
-        # 确定各标的最新参考价
+        # 确定各标的最新参考价 (Phase A 修复: 同步提取昨收价, 激活防线 5 涨停拦截)
         prices: Dict[str, float] = {}
+        pre_closes: Dict[str, Optional[float]] = {}
         for _, row in target_df.iterrows():
             prices[row["symbol"]] = float(row.get("close", 10.0))
+            pc = row.get("pre_close")
+            pre_closes[row["symbol"]] = float(pc) if (pc is not None and pd.notna(pc) and float(pc) > 0) else None
         for sym, pos in current_holdings.items():
             if sym not in prices:
                 prices[sym] = pos.current_price or pos.avg_cost_price or 10.0
@@ -113,8 +116,8 @@ class PortfolioRebalancer:
                 actual_sell = (actual_sell // 100) * 100
                 if actual_sell > 0:
                     p = prices.get(sym, pos.current_price)
-                    # 防线 5: 价格与涨跌停安全校验
-                    is_safe, msg = self.guard.validate_price_and_limit(sym, "SELL", p, p)
+                    # 防线 5: 价格与涨跌停安全校验 (传入真实昨收价)
+                    is_safe, msg = self.guard.validate_price_and_limit(sym, "SELL", p, p, pre_closes.get(sym))
                     if not is_safe:
                         logger.error(f"❌ 卖出拦截: {msg}")
                         continue
@@ -142,8 +145,8 @@ class PortfolioRebalancer:
                 delta_buy = (delta_buy // 100) * 100
                 if delta_buy > 0:
                     p = prices.get(sym, 10.0)
-                    # 防线 5: 价格偏离度与涨停防追高拦截
-                    is_safe, msg = self.guard.validate_price_and_limit(sym, "BUY", p, p)
+                    # 防线 5: 价格偏离度与涨停防追高拦截 (Phase A 修复: 传入真实昨收价, 此前恒不生效)
+                    is_safe, msg = self.guard.validate_price_and_limit(sym, "BUY", p, p, pre_closes.get(sym))
                     if not is_safe:
                         logger.error(f"❌ 买入拦截: {msg}")
                         continue
@@ -173,6 +176,29 @@ class PortfolioRebalancer:
         logger.info(f"===== 调仓执行完毕: 提交卖单 {len(sell_orders)} 笔, 买单 {len(buy_orders)} 笔 =====")
         logger.info(f"调仓后总资产: {final_acc.total_equity:,.2f} 元 | 剩余现金: {final_acc.cash:,.2f} 元")
 
+        # 记录受换手熔断/仓位硬顶裁剪而未完全建仓的次日待补齐份额
+        pending_tranches = {}
+        for sym, raw_s in raw_target_shares.items():
+            clamped_s = target_shares.get(sym, 0)
+            if raw_s > clamped_s:
+                pending_tranches[sym] = {
+                    "raw_target_shares": raw_s,
+                    "clamped_shares_today": clamped_s,
+                    "remaining_shares_to_fill": raw_s - clamped_s,
+                    "reference_price": prices.get(sym, 10.0),
+                    "pending_value": (raw_s - clamped_s) * prices.get(sym, 10.0)
+                }
+
+        if pending_tranches:
+            logger.info(f"📋 检测到 {len(pending_tranches)} 支标的受换手熔断保护触发分批建仓，已自动归档至次日补齐计划队列")
+            try:
+                queue_path = settings.BASE_DIR / "artifacts" / "pending_rebalance_queue.json"
+                queue_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(queue_path, "w", encoding="utf-8") as f:
+                    json.dump(pending_tranches, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"保存分批待补齐队列失败: {e}")
+
         return {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "initial_equity": total_equity,
@@ -183,7 +209,8 @@ class PortfolioRebalancer:
             "sell_orders_count": len(sell_orders),
             "buy_orders_count": len(buy_orders),
             "sell_orders": [o.__dict__ for o in sell_orders],
-            "buy_orders": [o.__dict__ for o in buy_orders]
+            "buy_orders": [o.__dict__ for o in buy_orders],
+            "pending_tranches": pending_tranches
         }
 
 
@@ -195,6 +222,7 @@ def run_trader_cli():
     parser.add_argument("--live-confirm", action="store_true", help="实盘交易显式二次确认开关 (未开启默认自动强制为 Dry-Run)")
     parser.add_argument("--qmt-path", type=str, default=r"D:\国金证券QMT交易端\userdata_mini", help="MiniQMT 用户数据路径")
     parser.add_argument("--account-id", type=str, default="5500123456", help="实盘/模拟资金账号")
+    parser.add_argument("--target-file", type=str, default=None, help="指定目标持仓CSV文件 (如 artifacts/latest_stock_picks.csv)")
     args = parser.parse_args()
 
     # 防线 4: 实盘双重显式确认拦截
@@ -208,32 +236,44 @@ def run_trader_cli():
     if args.broker == "miniqmt":
         broker = MiniQMTBroker(qmt_path=args.qmt_path, account_id=args.account_id)
         if not broker.connect():
-            logger.warning("连接 MiniQMT 失败，防线 7 自动熔断回退到本地 PaperBroker 仿真沙盒")
+            logger.critical("🛑 [防线7] MiniQMT 连接失败！已降级为 PaperBroker 仿真沙盒——本次会话所有'成交'均为模拟，绝无真实下单。")
+            print("\n" + "!" * 64)
+            print("⚠️  警告: 实盘通道 (MiniQMT) 不可用，本次已显式降级为模拟盘 (PAPER)。")
+            print("⚠️  当前会话不涉及任何真实资金，请勿据本次输出评估实盘表现。")
+            print("!" * 64 + "\n")
             broker = PaperBroker(initial_cash=args.initial_cash)
             broker.connect()
     else:
-        broker = PaperBroker(initial_cash=args.initial_cash)
+        broker = PaperBroker(initial_cash=args.initial_cash, persist=True)
         broker.connect()
+        broker.unlock_t1_shares()
 
-    # 构造最新决策目标持仓
-    from factors.processor import FactorProcessor
-    from models.walk_forward import WalkForwardTrainer
-    from strategy.portfolio import PortfolioBuilder
-    from data.data_manager import DataManager
-    from data.universe_provider import create_universe_provider
+    # 构造或加载最新决策目标持仓
+    if args.target_file and Path(args.target_file).exists():
+        logger.info(f"直接加载指定目标持仓清单: {args.target_file}")
+        top_df = pd.read_csv(args.target_file)
+        # 仅保留正权重买入标的
+        if "target_weight" in top_df.columns:
+            top_df = top_df[top_df["target_weight"] > 0].copy()
+    else:
+        from factors.processor import FactorProcessor
+        from models.walk_forward import WalkForwardTrainer
+        from strategy.portfolio import PortfolioBuilder
+        from data.data_manager import DataManager
+        from data.universe_provider import create_universe_provider
 
-    dm = DataManager(universe_provider=create_universe_provider(settings))
-    market_df = dm.load_dataset() if (settings.PARQUET_DIR / "market_data.parquet").exists() else dm.sync_and_build_dataset()
-    processor = FactorProcessor()
-    factor_df = processor.load_factor_matrix() if (settings.FACTOR_DIR / "factor_matrix.parquet").exists() else processor.build_and_save_factor_matrix(market_df)
+        dm = DataManager(universe_provider=create_universe_provider(settings))
+        market_df = dm.load_dataset() if (settings.PARQUET_DIR / "market_data.parquet").exists() else dm.sync_and_build_dataset()
+        processor = FactorProcessor()
+        factor_df = processor.load_factor_matrix() if (settings.FACTOR_DIR / "factor_matrix.parquet").exists() else processor.build_and_save_factor_matrix(market_df)
 
-    trainer = WalkForwardTrainer()
-    oos_df, _ = trainer.run_walk_forward(factor_df)
+        trainer = WalkForwardTrainer()
+        oos_df, _ = trainer.run_walk_forward(factor_df)
 
-    latest_date = oos_df["date"].max()
-    daily_df = oos_df[oos_df["date"] == latest_date].copy()
-    builder = PortfolioBuilder(top_k_buy=settings.TOP_K_BUY, top_k_hold=settings.TOP_K_HOLD)
-    top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
+        latest_date = oos_df["date"].max()
+        daily_df = oos_df[oos_df["date"] == latest_date].copy()
+        builder = PortfolioBuilder(top_k_buy=settings.TOP_K_BUY, top_k_hold=settings.TOP_K_HOLD)
+        top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
 
     rebalancer = PortfolioRebalancer(broker)
     res = rebalancer.execute_rebalance(target_df=top_df, dry_run=actual_dry_run)

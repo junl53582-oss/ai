@@ -1,0 +1,38 @@
+{
+  "requested_unique_symbols": 300,
+  "available_symbols_count": 300,
+  "accepted_unique_symbols": 300,
+  "rejected_unique_symbols": 0,
+  "accepted_symbols_count": 300,
+  "rejected_symbols_count": 0,
+  "daily_membership_rows_total": 349379,
+  "daily_membership_rows_active": 348536,
+  "daily_membership_rows_rejected": 843,
+  "rejected_daily_rows_by_reason": {
+    "subnew_under_60_trading_days": 843,
+    "st_risk_filtered": 0,
+    "suspended_filtered": 0
+  },
+  "rejected_by_reason": {
+    "subnew_listing_under_60_days": 843,
+    "st_risk_filtered": 0,
+    "suspended_filtered": 0
+  },
+  "daily_active_count_summary": {
+    "min": 279,
+    "p10": 284,
+    "median": 297,
+    "mean": 294.3,
+    "p90": 299,
+    "max": 300
+  },
+  "survivorship_bias_status": "AUDITED_POINT_IN_TIME",
+  "pit_universe_status": "VERIFIED_POINT_IN_TIME",
+  "historical_st_status": "ZERO_EVENT_VERIFIED",
+  "historical_industry_status": "OFFICIAL_SHENWAN_CLASSIFICATION",
+  "listing_delisting_status": "EXCHANGE_OFFICIAL_IPO_DATES",
+  "benchmark_symbol": "000300.SH",
+  "benchmark_timing_status": "VALID",
+  "benchmark_open_coverage": 1.0,
+  "benchmark_close_coverage": 1.0
+}

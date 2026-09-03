@@ -14,10 +14,16 @@ env/
 # Data storage & large datasets
 data_storage/raw/
 data_storage/oos_predictions.parquet
-data_storage/fundamentals/
+# Phase A: 基本面原始证据 (yjbb 季度报表, ~29MB) 入库以支撑 PIT 溯源与 CI 确定性重建
+data_storage/fundamentals/*
+!data_storage/fundamentals/yjbb_*.parquet
+# Phase A: 行情主数据集 (19.9MB) 入库; 311MB 因子矩阵不入库, 由 tools/build_factor_matrix_300.py 确定性重建
 data_storage/research/*.parquet
+!data_storage/research/market_daily_300.parquet
+!data_storage/research/market_daily_300_v2.parquet
 saved_models/*.pkl
 saved_models/*.txt
+saved_models/registry/
 
 # Logs and temporary files
 *.log
@@ -29,3 +35,29 @@ scratch/
 .vscode/
 .idea/
 *.swp
+
+# Reproducible large research runtime artifacts
+reports/**/*.parquet
+reports/**/common_execution_oos.parquet
+reports/**/common_objective_oos.parquet
+reports/**/models/**/*.pkl
+
+# Phase A: 复权因子事件表缓存 (每标的 ~KB 级, 不入版本控制)
+data_storage/adjust_factors/
+
+# Phase A: 公司行为事件缓存 (巨潮 cninfo, 每标的 KB 级, 不入库)
+data_storage/corporate_actions/
+
+# Phase A: ST 时间线缓存 (深市改名史, 不入库)
+data_storage/st_timeline/
+
+# Phase A: ST 时间线缓存 (深市改名史, 不入库)
+data_storage/st_timeline/
+
+# Secrets and Environment
+.env
+.env.*
+*.env
+
+# Local transient execution queues
+artifacts/pending_rebalance_queue.json

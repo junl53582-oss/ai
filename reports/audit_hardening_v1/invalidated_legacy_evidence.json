@@ -1,0 +1,15 @@
+{
+  "version": "audit_hardening_v1",
+  "created_at": "2026-08-31T12:27:12.481757",
+  "invalidated_artifacts": [
+    {
+      "artifact": "reports/phase2_0_2/trading_fold_stability.csv",
+      "historical_phase": "Phase 2.0.2",
+      "status": "SUPERSEDED_INVALID_FOLD_EVIDENCE",
+      "reason": "Rows were generated from global metrics and hardcoded candidate_excess_advantage='POSITIVE' across folds 1..20 rather than independent per-fold backtests.",
+      "remediation": "Replaced by real fold-specific BacktestEngine runs in tools/run_model_research.py recording actual per-fold excess return, trade count, transaction cost, and candidate_won.",
+      "historical_file_preserved": true,
+      "can_be_used_for_certification": false
+    }
+  ]
+}

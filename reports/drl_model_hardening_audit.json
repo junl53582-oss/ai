@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-09-04 01:13:03",
+  "model_generation": "Gen 4 (Deep Reinforcement Learning + Mega-Alpha Hybrid)",
+  "architecture": {
+    "base_feature_extractor": "DoubleEnsemble (55%) + TabularMLP (25%) + Ridge (20%)",
+    "reinforcement_agent": "Policy Gradient Actor-Critic with Differential Sharpe Reward",
+    "state_features": [
+      "pred_score",
+      "volatility",
+      "momentum",
+      "turnover"
+    ]
+  },
+  "performance_metrics": {
+    "baseline_sharpe": 0.3213390349173511,
+    "drl_enhanced_sharpe": 0.5446655621036115,
+    "sharpe_improvement_pct": 69.49872344133364,
+    "baseline_max_drawdown": 0.09711405876491709,
+    "drl_max_drawdown": 0.07394680883833132,
+    "drawdown_reduction_pct": 23.855711748868895,
+    "daily_win_rate": 0.5166666666666667
+  },
+  "feature_dim": 121,
+  "model_path": "saved_models/candidate_gen4_drl_model.pkl"
+}

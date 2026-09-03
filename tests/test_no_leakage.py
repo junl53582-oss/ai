@@ -99,7 +99,8 @@ def test_2_walk_forward_purged_gap():
     labeler = TargetLabeler(horizon=5)
     df1_feat = labeler.compute_excess_return_label(df1_feat)
 
-    trainer = WalkForwardTrainer(train_years=0.3, val_months=1, test_months=1, purge_gap_days=5)
+    # Synthetic leakage perturbation fixture only; not scientific certification.
+    trainer = WalkForwardTrainer(train_years=0.3, val_months=1, test_months=1, purge_gap_days=5, strict_mode=False)
     oos_df1, model1 = trainer.run_walk_forward(df1_feat)
 
     for fold_info in trainer.models:

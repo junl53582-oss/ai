@@ -1,0 +1,21 @@
+{
+ "source": "cninfo",
+ "source_class": "OFFICIAL_PRIMARY",
+ "symbol": "001280.SZ",
+ "fetched_at": "2026-09-01T13:57:34",
+ "events": [
+  {
+   "symbol": "001280.SZ",
+   "ex_date": "2026-07-06",
+   "action_type": "CASH_DIVIDEND",
+   "cash_dividend_per_share": 0.26,
+   "share_ratio": 0.0,
+   "rights_ratio": 0.0,
+   "rights_price": 0.0,
+   "source_id": "cninfo",
+   "source_class": "OFFICIAL_PRIMARY",
+   "source_file": "001280.json",
+   "source_sha256": null
+  }
+ ]
+}

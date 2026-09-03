@@ -1,0 +1,40 @@
+{
+  "before": {
+    "double_ensemble_latest.pkl": {
+      "size": 85642,
+      "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+    },
+    "latest_ensemble.pkl": {
+      "size": 181683,
+      "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+    },
+    "latest_lightgbm.pkl": {
+      "size": 11086,
+      "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+    },
+    "registry/index.json": {
+      "size": 5329,
+      "sha256": "42c15526102fc0d1557180dd9247414229ee3051fe80da5d077eaf7dd5c17eea"
+    }
+  },
+  "after": {
+    "double_ensemble_latest.pkl": {
+      "size": 85642,
+      "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+    },
+    "latest_ensemble.pkl": {
+      "size": 181683,
+      "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+    },
+    "latest_lightgbm.pkl": {
+      "size": 11086,
+      "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+    },
+    "registry/index.json": {
+      "size": 5329,
+      "sha256": "42c15526102fc0d1557180dd9247414229ee3051fe80da5d077eaf7dd5c17eea"
+    }
+  },
+  "file_sha_before": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900",
+  "file_sha_after": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+}

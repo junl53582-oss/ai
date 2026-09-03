@@ -1,0 +1,195 @@
+{
+  "timestamp": "2026-09-04 00:09:05",
+  "model_name": "candidate_gen3_mega_model.pkl",
+  "architecture": "Tri-Core Mega Ensemble (Qlib DoubleEnsemble 55% + TabularMLP 25% + L2 Ridge 20%)",
+  "global_metrics": {
+    "mean_rankic": 0.007480000000000002,
+    "rankic_ir": 0.31799195534247865,
+    "win_rate": 0.5375000000000001
+  },
+  "yearly_performance": {
+    "2023": {
+      "mean_rankic": 0.012499999999999999,
+      "win_rate": 0.6,
+      "folds": 3
+    },
+    "2024": {
+      "mean_rankic": -0.0025833333333333333,
+      "win_rate": 0.49583333333333335,
+      "folds": 6
+    },
+    "2025": {
+      "mean_rankic": 0.015816666666666666,
+      "win_rate": 0.5708333333333333,
+      "folds": 6
+    },
+    "2026": {
+      "mean_rankic": 0.00654,
+      "win_rate": 0.51,
+      "folds": 5
+    }
+  },
+  "fold_records": [
+    {
+      "fold": 1,
+      "test_start": "2023-07-03",
+      "test_end": "2023-08-25",
+      "samples": 11854,
+      "mean_rankic": 0.0423,
+      "win_rate": 0.825
+    },
+    {
+      "fold": 2,
+      "test_start": "2023-08-28",
+      "test_end": "2023-10-30",
+      "samples": 11880,
+      "mean_rankic": -0.0343,
+      "win_rate": 0.25
+    },
+    {
+      "fold": 3,
+      "test_start": "2023-10-31",
+      "test_end": "2023-12-25",
+      "samples": 11880,
+      "mean_rankic": 0.0295,
+      "win_rate": 0.725
+    },
+    {
+      "fold": 4,
+      "test_start": "2023-12-26",
+      "test_end": "2024-02-28",
+      "samples": 11870,
+      "mean_rankic": 0.0008,
+      "win_rate": 0.525
+    },
+    {
+      "fold": 5,
+      "test_start": "2024-02-29",
+      "test_end": "2024-04-26",
+      "samples": 11874,
+      "mean_rankic": -0.0054,
+      "win_rate": 0.425
+    },
+    {
+      "fold": 6,
+      "test_start": "2024-04-29",
+      "test_end": "2024-06-27",
+      "samples": 11871,
+      "mean_rankic": 0.0269,
+      "win_rate": 0.7
+    },
+    {
+      "fold": 7,
+      "test_start": "2024-06-28",
+      "test_end": "2024-08-22",
+      "samples": 11869,
+      "mean_rankic": 0.0055,
+      "win_rate": 0.6
+    },
+    {
+      "fold": 8,
+      "test_start": "2024-08-23",
+      "test_end": "2024-10-28",
+      "samples": 11843,
+      "mean_rankic": -0.0215,
+      "win_rate": 0.325
+    },
+    {
+      "fold": 9,
+      "test_start": "2024-10-29",
+      "test_end": "2024-12-23",
+      "samples": 11870,
+      "mean_rankic": -0.0218,
+      "win_rate": 0.4
+    },
+    {
+      "fold": 10,
+      "test_start": "2024-12-24",
+      "test_end": "2025-02-26",
+      "samples": 11906,
+      "mean_rankic": -0.0009,
+      "win_rate": 0.5
+    },
+    {
+      "fold": 11,
+      "test_start": "2025-02-27",
+      "test_end": "2025-04-24",
+      "samples": 11897,
+      "mean_rankic": 0.0271,
+      "win_rate": 0.575
+    },
+    {
+      "fold": 12,
+      "test_start": "2025-04-25",
+      "test_end": "2025-06-25",
+      "samples": 11900,
+      "mean_rankic": -0.0063,
+      "win_rate": 0.425
+    },
+    {
+      "fold": 13,
+      "test_start": "2025-06-26",
+      "test_end": "2025-08-20",
+      "samples": 11932,
+      "mean_rankic": 0.0327,
+      "win_rate": 0.625
+    },
+    {
+      "fold": 14,
+      "test_start": "2025-08-21",
+      "test_end": "2025-10-23",
+      "samples": 11944,
+      "mean_rankic": 0.0514,
+      "win_rate": 0.9
+    },
+    {
+      "fold": 15,
+      "test_start": "2025-10-24",
+      "test_end": "2025-12-18",
+      "samples": 11931,
+      "mean_rankic": -0.0091,
+      "win_rate": 0.4
+    },
+    {
+      "fold": 16,
+      "test_start": "2025-12-19",
+      "test_end": "2026-02-24",
+      "samples": 11975,
+      "mean_rankic": 0.0256,
+      "win_rate": 0.675
+    },
+    {
+      "fold": 17,
+      "test_start": "2026-02-25",
+      "test_end": "2026-04-22",
+      "samples": 11987,
+      "mean_rankic": -0.0021,
+      "win_rate": 0.425
+    },
+    {
+      "fold": 18,
+      "test_start": "2026-04-23",
+      "test_end": "2026-06-23",
+      "samples": 11993,
+      "mean_rankic": 0.0333,
+      "win_rate": 0.775
+    },
+    {
+      "fold": 19,
+      "test_start": "2026-06-24",
+      "test_end": "2026-08-18",
+      "samples": 11990,
+      "mean_rankic": -0.0119,
+      "win_rate": 0.425
+    },
+    {
+      "fold": 20,
+      "test_start": "2026-08-19",
+      "test_end": "2026-08-24",
+      "samples": 1200,
+      "mean_rankic": -0.0122,
+      "win_rate": 0.25
+    }
+  ],
+  "feature_count": 115
+}
