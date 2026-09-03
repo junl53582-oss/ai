@@ -1,0 +1,33 @@
+{
+  "promoted_at": "2026-09-04 01:45:56",
+  "model_generation": "Gen 5 DeepRank (Dual-Tower Cross-Attention + Multi-Horizon Target)",
+  "flow_features": [
+    "turnover",
+    "TURNOVER_SURGE_5",
+    "TURNOVER_SURGE_20",
+    "TURNOVER_STD_20",
+    "AMIHUD_20_LN",
+    "UPPER_SHADOW_RATIO",
+    "LOWER_SHADOW_RATIO",
+    "FLOW_NET_BUY_RATIO_5D",
+    "FLOW_ACCUMULATION_20D"
+  ],
+  "momentum_features": [
+    "MOM_ACC_20_60",
+    "MOM_ACC_60_120",
+    "YANG_ZHANG_VOL_20",
+    "VOLATILITY_SQUEEZE_20",
+    "DOWNSIDE_VOL_RATIO_20",
+    "ATR_RATIO_14",
+    "BOLL_PCT_B",
+    "ROC20"
+  ],
+  "metrics": {
+    "out_of_sample_eval_days": 159,
+    "mean_rankic": 0.025695026156706675,
+    "rankic_ir": 0.21576321499536014,
+    "win_rate": 0.5157232704402516,
+    "long_short_spread_5d_pct": 0.08679971697081697
+  },
+  "model_weights": "gen5_deep_rank_model.pt"
+}
