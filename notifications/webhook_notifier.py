@@ -31,7 +31,7 @@ class QuantWebhookNotifier:
         """格式化 Markdown 决策卡片"""
         lines = [
             f"## 🚀 A股多因子 AI 量化盘后决策卡片 ({date_str})",
-            f"> **模型状态**: 第二代混合异构高胜率模型 (RankIC +0.0258, 日胜率 56.6%)",
+            f"> **模型状态**: 第三代终极 Mega-Alpha (Qlib DoubleEnsemble + TabularMLP + Ridge, ICIR 0.3180, 2026年IC +0.0065)",
             f"> **执行规则**: T日信号 -> T+1日开盘买入 (7重资金安全风控锁定)",
             "",
             "### 🎯 最新 Top 买入决策标的:"
