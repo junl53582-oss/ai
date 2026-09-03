@@ -115,3 +115,12 @@ class TestExecutionSafetyGuard:
         assert res["cancelled_pending_orders"] >= 1
         assert res["buy_orders_count"] == 2
         assert len(res["safety_logs"]) >= 0
+
+    def test_miniqmt_disconnect_strictly_blocks_orders_without_fake_simulation(self):
+        """防线 7: MiniQMT 断线严禁假想仿真成交，必须阻断新订单以待对账"""
+        from execution.miniqmt_broker import MiniQMTBroker
+        broker = MiniQMTBroker()
+        broker.is_connected = False
+        order = broker.send_order("600519.SH", OrderSide.BUY, 100, 100.0)
+        assert order.status == ExecutionStatus.REJECTED
+        assert "实盘安全风控已阻断新订单并冻结状态" in order.error_msg
