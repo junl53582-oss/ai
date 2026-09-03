@@ -176,6 +176,29 @@ class PortfolioRebalancer:
         logger.info(f"===== 调仓执行完毕: 提交卖单 {len(sell_orders)} 笔, 买单 {len(buy_orders)} 笔 =====")
         logger.info(f"调仓后总资产: {final_acc.total_equity:,.2f} 元 | 剩余现金: {final_acc.cash:,.2f} 元")
 
+        # 记录受换手熔断/仓位硬顶裁剪而未完全建仓的次日待补齐份额
+        pending_tranches = {}
+        for sym, raw_s in raw_target_shares.items():
+            clamped_s = target_shares.get(sym, 0)
+            if raw_s > clamped_s:
+                pending_tranches[sym] = {
+                    "raw_target_shares": raw_s,
+                    "clamped_shares_today": clamped_s,
+                    "remaining_shares_to_fill": raw_s - clamped_s,
+                    "reference_price": prices.get(sym, 10.0),
+                    "pending_value": (raw_s - clamped_s) * prices.get(sym, 10.0)
+                }
+
+        if pending_tranches:
+            logger.info(f"📋 检测到 {len(pending_tranches)} 支标的受换手熔断保护触发分批建仓，已自动归档至次日补齐计划队列")
+            try:
+                queue_path = settings.BASE_DIR / "artifacts" / "pending_rebalance_queue.json"
+                queue_path.parent.mkdir(parents=True, exist_ok=True)
+                with open(queue_path, "w", encoding="utf-8") as f:
+                    json.dump(pending_tranches, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                logger.warning(f"保存分批待补齐队列失败: {e}")
+
         return {
             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "initial_equity": total_equity,
@@ -186,7 +209,8 @@ class PortfolioRebalancer:
             "sell_orders_count": len(sell_orders),
             "buy_orders_count": len(buy_orders),
             "sell_orders": [o.__dict__ for o in sell_orders],
-            "buy_orders": [o.__dict__ for o in buy_orders]
+            "buy_orders": [o.__dict__ for o in buy_orders],
+            "pending_tranches": pending_tranches
         }
 
 
@@ -220,7 +244,7 @@ def run_trader_cli():
             broker = PaperBroker(initial_cash=args.initial_cash)
             broker.connect()
     else:
-        broker = PaperBroker(initial_cash=args.initial_cash)
+        broker = PaperBroker(initial_cash=args.initial_cash, persist=True)
         broker.connect()
         broker.unlock_t1_shares()
 

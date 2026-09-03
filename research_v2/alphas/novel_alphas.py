@@ -101,3 +101,13 @@ class NovelAlphaFactory:
         df_sorted['__div_daily__'] = div_daily
         div_roll = df_sorted.groupby('symbol')['__div_daily__'].rolling(window).mean().reset_index(0, drop=True)
         return div_roll.reindex(df.index)
+
+    @staticmethod
+    def calc_tail_liquidity_bias(df: pd.DataFrame, window: int = 15) -> pd.Series:
+        """2026年近端高频与被动ETF资金流偏度: 换手率加权量价弹性因子"""
+        df_sorted = df.sort_values(['symbol', 'date']).copy()
+        df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
+        elasticity = df_sorted['pct_change'] / np.log1p(df_sorted['amount'] + 1e-4)
+        df_sorted['__elasticity__'] = elasticity
+        bias = df_sorted.groupby('symbol')['__elasticity__'].rolling(window).mean().reset_index(0, drop=True)
+        return bias.reindex(df.index)

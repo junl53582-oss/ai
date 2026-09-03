@@ -136,7 +136,7 @@ class DataFetcher:
                             break
                     except Exception as e:
                         logger.warning(f"从东方财富获取股票 {symbol} 行情失败 (尝试 {attempt}/{max_retries}): {e}")
-                        time.sleep(0.5)
+                        time.sleep(1.0 * (2 ** (attempt - 1)))
 
             # 3. 回退腾讯
             if df is None or df.empty:
@@ -350,7 +350,7 @@ class DataFetcher:
         return raw
 
     def _load_or_generate_fallback(self, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
-        """从本地 CSV 加载或在允许时生成仿真数据"""
+        """从本地 CSV/Parquet 缓存加载或在允许时生成仿真数据"""
         local_csv = self.raw_dir / f"{symbol.replace('.', '_')}.csv"
         if local_csv.exists():
             try:
@@ -362,6 +362,20 @@ class DataFetcher:
                 return res
             except Exception as e:
                 logger.warning(f"读取本地 CSV {local_csv} 失败: {e}")
+
+        # 优先从本地全量历史数据 Parquet 检索已有历史记录 (冷备兜底)
+        for ppath in [settings.PARQUET_DIR / "market_data.parquet", settings.DATA_DIR / "research" / "factor_matrix_300.parquet"]:
+            if ppath.exists():
+                try:
+                    cached_df = pd.read_parquet(ppath)
+                    if "symbol" in cached_df.columns:
+                        cached_stock = cached_df[cached_df["symbol"] == symbol]
+                        if not cached_stock.empty and len(cached_stock) >= 100:
+                            logger.info(f"网络受限，成功从本地历史高质量矩阵恢复股票 {symbol} 行情 ({len(cached_stock)} 条)")
+                            self.source_counts["local_parquet_cache"] = self.source_counts.get("local_parquet_cache", 0) + 1
+                            return cached_stock.copy()
+                except Exception as e:
+                    logger.debug(f"读取本地 Parquet 缓存失败: {e}")
 
         # 检查是否允许使用模拟仿真数据
         if not self.allow_synthetic:

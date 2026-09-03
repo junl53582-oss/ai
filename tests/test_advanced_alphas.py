@@ -1,4 +1,4 @@
-﻿import pytest
+import pytest
 import pandas as pd
 import numpy as np
 from research_v2.alphas.novel_alphas import NovelAlphaFactory
@@ -38,3 +38,7 @@ def test_novel_alphas_extended():
     div = NovelAlphaFactory.calc_money_flow_divergence(df, window=5)
     assert len(div) == len(df)
     assert not div.dropna().empty
+
+    tail_bias = NovelAlphaFactory.calc_tail_liquidity_bias(df, window=5)
+    assert len(tail_bias) == len(df)
+    assert not tail_bias.dropna().empty
