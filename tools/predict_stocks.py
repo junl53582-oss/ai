@@ -36,6 +36,18 @@ def run_latest_prediction():
     logger.info('正在加载多因子全量数据矩阵 (沪深300)...')
     df = pd.read_parquet(dataset_path)
     df['date'] = pd.to_datetime(df['date'])
+
+    # 动态注入 7 大高胜率异源 Alpha
+    logger.info('正在注入 7 大高胜率异源 Alpha 因子群...')
+    from research_v2.alphas.novel_alphas import NovelAlphaFactory
+    df['ALPHA_RESIDUAL_MOMENTUM_20'] = NovelAlphaFactory.calc_residual_momentum(df, window=20)
+    df['ALPHA_TURNOVER_SURPRISE_5_20'] = NovelAlphaFactory.calc_turnover_surprise(df, short_w=5, long_w=20)
+    df['ALPHA_QUALITY_X_MOMENTUM'] = NovelAlphaFactory.calc_quality_x_momentum(df)
+    df['ALPHA_LIQUIDITY_X_VOL'] = NovelAlphaFactory.calc_liquidity_x_volatility(df)
+    df['ALPHA_SHORT_REVERSAL_5'] = NovelAlphaFactory.calc_short_term_reversal(df, window=5)
+    df['ALPHA_IDIO_VOL_PENALTY'] = NovelAlphaFactory.calc_idio_vol_penalty(df, window=20)
+    df['ALPHA_MONEY_FLOW_DIV_10'] = NovelAlphaFactory.calc_money_flow_divergence(df, window=10)
+
     latest_date = df['date'].max()
     dt_str = latest_date.strftime("%Y-%m-%d")
     n_syms = df['symbol'].nunique()
@@ -49,24 +61,27 @@ def run_latest_prediction():
         if 'name' in sm_df.columns:
             name_map = dict(zip(sm_df['symbol'], sm_df['name']))
 
-    # 获取特征列
-    feature_cols = [c for c in df.columns if c not in [
-        'date', 'symbol', 'in_universe', 'label_excess_20d', 'label_up_down_20d',
-        'is_suspended', 'is_limit_up_locked', 'is_limit_down_locked', 'benchmark_open',
-        'benchmark_close', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change',
-        'is_st', 'limit_up_price', 'limit_down_price', 'industry', 'list_date', 'days_since_listing'
-    ] and np.issubdtype(df[c].dtype, np.number)]
-
-    # 加载或训练最新截面模型
+    # 加载生产注册模型
     prod_model_path = root_dir / 'saved_models' / 'latest_lightgbm.pkl'
     latest_model = None
     if prod_model_path.exists():
         try:
             with open(prod_model_path, 'rb') as f:
                 latest_model = pickle.load(f)
-            logger.info('成功加载生产注册模型: latest_lightgbm.pkl')
+            logger.info('成功加载最新生产模型: latest_lightgbm.pkl')
         except Exception as e:
             logger.warning(f'加载生产模型失败: {e}')
+
+    # 获取特征列 (若生产模型已明确指定特征列则严格对齐)
+    if latest_model is not None and hasattr(latest_model, 'feature_names') and latest_model.feature_names:
+        feature_cols = [f for f in latest_model.feature_names if f in df.columns]
+    else:
+        feature_cols = [c for c in df.columns if c not in [
+            'date', 'symbol', 'in_universe', 'label_excess_20d', 'label_up_down_20d',
+            'is_suspended', 'is_limit_up_locked', 'is_limit_down_locked', 'benchmark_open',
+            'benchmark_close', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change',
+            'is_st', 'limit_up_price', 'limit_down_price', 'industry', 'list_date', 'days_since_listing'
+        ] and np.issubdtype(df[c].dtype, np.number)]
 
     latest_slice = df[df['date'] == latest_date].copy()
     X_latest = latest_slice[feature_cols].fillna(0.0)
