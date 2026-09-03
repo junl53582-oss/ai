@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 class PaperBroker(BaseBroker):
     """本地仿真交易沙盒网关 (支持跨日/跨调仓真实持久化)"""
 
-    def __init__(self, initial_cash: float = 1_000_000.0, commission_rate: float = 0.00025, stamp_duty: float = 0.0005, persist: bool = True):
+    def __init__(self, initial_cash: float = 1_000_000.0, commission_rate: float = 0.00025, stamp_duty: float = 0.0005, persist: bool = False):
         self.account_id = "PAPER_ACCOUNT_01"
         self.initial_cash = initial_cash
         self.cash = initial_cash
