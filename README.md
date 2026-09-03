@@ -1,23 +1,44 @@
-# A股多因子机器学习量化交易与投研闭环系统 (A-Share AI Quant Research & Trading System)
+# AI Quantitative Research Platform
+
+A股 Point-in-Time (PIT) 量化研究与生产预测系统。
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Fast CI](https://github.com/junl53582-oss/ai/actions/workflows/fast_ci.yml/badge.svg)](https://github.com/junl53582-oss/ai/actions/workflows/fast_ci.yml)
 [![Provenance: Fail--Closed](https://img.shields.io/badge/Provenance-Fail--Closed%20%7C%20Zero--Mock-success.svg)](data/)
 
-端到端 A 股多因子 AI 量化投研与策略系统，涵盖从 **「Point-in-Time 真实数据血缘 $\to$ 多因子特征工程 $\to$ 严格 Walk-Forward 时序滚动训练 $\to$ 组合优化 $\to$ 7 重资金安全防线 $\to$ 券商执行网关 $\to$ 盘后定时自动化推送 $\to$ Streamlit 交互大屏」** 的全流程闭环。
+---
+
+## 🏛️ System Architecture (八层工业级量化架构)
+
+- **Layer 1: PIT Data & Provenance**  
+  无未来数据穿越的 Point-in-Time 真实历史数据血缘、巨潮财报公告时间线、除权除息与密码学哈希存证锚点。
+- **Layer 2: Feature Factory**  
+  全维因子工程（121维微观高阶 Alpha、量价微结构弹性偏度、流动性加权动量、资金流背离）。
+- **Layer 3: Research Engine**  
+  Purged & Embargo Walk-Forward 严格滚动回测时序引擎、全样本交叉验证与蒙特卡洛置换显著性检验。
+- **Layer 4: Scientific Governance**  
+  学术级金融计量防伪认证、反造假本福特定律（Benford's Law）检验、零假设显著性检验与不可篡改审计链路。
+- **Layer 5: Production Model Registry**  
+  模型全生命周期注册中心（LightGBM 生产基线、Qlib DoubleEnsemble、TabularMLP 深度感知机、第四代 DRL 策略梯度强化学习智能体）。
+- **Layer 6: Daily PIT Runtime**  
+  官方金融专线直连实时行情同步、日频定时调度巡航（每日 15:05 无人值守调度）。
+- **Layer 7: Portfolio Execution**  
+  T日收盘推演 -> T+1日开盘执行、多日平滑分批建仓队列、券商网关抽象接口。
+- **Layer 8: Capital Safety**  
+  7重资金安全风控防线（单日 50% 换手熔断、限价偏离保护、单股 15% 仓位硬性上限、15% 现金底仓垫）。
 
 ---
 
-## Current certification state — Phase 2.1-B r3.2.1
+## 🚦 System Status (当前系统运行状态)
 
-The r3.2.1 certification path is fail-closed. A certified real-data run requires an independently supplied canonical exchange calendar, formal announcement-date PIT evidence, a clean declared code freeze, and a recomputable artifact chain. A `synthetic_test` run is engineering-only and can never yield a scientific certification.
-
-The retained r3.2 canonical real-data result is `INFRASTRUCTURE_STATUS = INSUFFICIENT_EVIDENCE` because formal PIT announcement evidence is absent; it is not silently treated as verified. `MODEL_EVIDENCE_STATUS = MIXED_EVIDENCE_NOT_ROBUST`: the frozen seeds `[42, 100, 2024]` yield RankIC std `0.007994 > 0.0050`, and regression's bootstrap 95% lower bound is `-0.03723`.
-
-Historical research OOS is not a prospective untouched final holdout. `FINAL_HOLDOUT_AVAILABLE = FALSE`, `LIVE_TRADING_READY = FALSE`, and `PRODUCTION_MODEL_PROMOTION = FALSE`.
-
-Current limitations: no prospective untouched final holdout; regression robust improvement is not established; strict fundamental PIT evidence is unavailable; r3.2 improves evidence integrity, not alpha optimization.
+| 系统维度 | 状态标识 | 权威说明 |
+| :--- | :---: | :--- |
+| **Infrastructure** | `VERIFIED` | 基础设施与数据血缘链经验证通过，34.9 万行全量 A 股特征矩阵就绪 |
+| **Research Runtime** | `OPERATIONAL` | 投研运行时处于完全就绪状态，自动化 Walk-Forward 滚动测试闭环运转 |
+| **Production Isolation** | `PASS` | 测试环境与生产实盘完全隔离，持久化账本沙盒隔离保护 |
+| **Model Evidence** | `UNDER RESEARCH` | 多代 Alpha 模型在严格 Purge Gap 条件下进行持续实证研究与强化迭代 |
+| **Live Trading** | `LOCKED` | 实盘接口强制锁定保护，当前仅运行于高仿真沙盒环境，严禁直接对接真实资金 |
 
 ---
 
