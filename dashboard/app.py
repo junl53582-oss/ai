@@ -73,15 +73,15 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.markdown("""
-<div style="background-color: #E3F2FD; border-left: 6px solid #1E88E5; padding: 12px 18px; border-radius: 6px; margin-bottom: 18px;">
+<div style="background-color: #FCE4EC; border-left: 6px solid #E91E63; padding: 12px 18px; border-radius: 6px; margin-bottom: 18px;">
     <div style="display: flex; align-items: center; justify-content: space-between;">
         <div>
-            <span style="font-size: 16px; font-weight: bold; color: #0D47A1;">🕒 官方行情直连 · 数据基准日: <strong>2026-09-03 (已收盘)</strong></span>
+            <span style="font-size: 16px; font-weight: bold; color: #880E4F;">🕒 官方行情直连 · 数据基准日: <strong>2026-09-03 (已收盘)</strong></span>
             <span style="background-color: #4CAF50; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 10px;">真实已核验</span>
-            <span style="background-color: #9C27B0; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 6px;">生产主模: Gen 5 DeepRank 深度双塔引擎</span>
+            <span style="background-color: #E91E63; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 6px;">生产主模: 高弹性进取型主升浪 Alpha 引擎</span>
         </div>
         <div style="font-size: 13px; color: #555;">
-            兆易创新 (603986) 实盘基准: <strong>383.20 元</strong> | 截面 RankIC: <strong>+0.0257</strong>
+            中远海能 (+8.77%) | 工业富联 (+2.27%) | 股票总仓位: <strong>95.0% 满仓进攻</strong>
         </div>
     </div>
 </div>
@@ -135,6 +135,15 @@ profile_map = {
 prof_label = st.sidebar.selectbox("🎯 选股股票池 Profile", list(profile_map.keys()), index=0)
 selected_profile = profile_map[prof_label]
 settings.set_universe_profile(selected_profile)
+
+strategy_style = st.sidebar.selectbox(
+    "🔥 策略风格引擎 (Strategy Style)",
+    [
+        "🚀 高弹性进取型 (半导体/算力/新能源/高弹性主升浪)",
+        "🛡️ 稳健防御型 (低波红利/中特估避险)"
+    ],
+    index=0
+)
 
 optimizer_map = {
     "等权基准 (Equal)": "equal",
@@ -290,8 +299,15 @@ else:
         st.subheader("🎯 最新交易日 Top-K 选股池与调仓建议")
         builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
 
-        # 优先读取第四代强化生产模型实时推荐清单 (artifacts/latest_stock_picks.csv)
-        prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+        # 根据侧边栏所选策略风格加载对应清单 (进取进攻型 vs 稳健防御型)
+        if "高弹性进取型" in strategy_style:
+            prod_picks_file = settings.BASE_DIR / "artifacts" / "aggressive_stock_picks.csv"
+        else:
+            prod_picks_file = settings.BASE_DIR / "artifacts" / "gen5_stock_picks.csv"
+
+        if not prod_picks_file.exists():
+            prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+
         if prod_picks_file.exists():
             top_df = pd.read_csv(prod_picks_file)
             latest_date = pd.to_datetime(top_df["date"].iloc[0]) if "date" in top_df.columns else pd.to_datetime("2026-09-03")
@@ -631,7 +647,14 @@ else:
     # ==========================================
     with tab6:
         st.subheader("📦 实盘/模拟券商交易网关与指令下发 (Execution & Dispatch)")
-        prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+        if "高弹性进取型" in strategy_style:
+            prod_picks_file = settings.BASE_DIR / "artifacts" / "aggressive_stock_picks.csv"
+        else:
+            prod_picks_file = settings.BASE_DIR / "artifacts" / "gen5_stock_picks.csv"
+
+        if not prod_picks_file.exists():
+            prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+
         if prod_picks_file.exists():
             top_df = pd.read_csv(prod_picks_file)
             latest_date = pd.to_datetime(top_df["date"].iloc[0]) if "date" in top_df.columns else pd.to_datetime("2026-09-03")
