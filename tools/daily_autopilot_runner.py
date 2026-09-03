@@ -53,6 +53,13 @@ def run_daily_autopilot():
         res = subprocess.run([sys.executable, "tools/predict_gen4_drl_picks.py"], capture_output=True, text=True)
         if res.returncode == 0:
             logger.info("[+] 步骤 2 完成: 第四代 DRL 强化模型推演与动态权重落盘成功")
+            # 自动直连官方 API 同步最新实时行情与 7x24 财经快讯
+            from data.live_market_and_news_api import AutoSyncEngine
+            picks_f = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+            AutoSyncEngine.sync_picks_and_news(picks_f)
+            agg_f = settings.BASE_DIR / "artifacts" / "aggressive_stock_picks.csv"
+            AutoSyncEngine.sync_picks_and_news(agg_f)
+            logger.info("[+] 步骤 2 增强: 自动实时行情与7x24新闻已嵌入决策清单")
         else:
             logger.warning(f"[-] 步骤 2 告警: {res.stderr[:200]}")
     except Exception as e:

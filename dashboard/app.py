@@ -296,7 +296,21 @@ else:
     # Tab 1: 今日选股决策
     # ==========================================
     with tab1:
-        st.subheader("🎯 最新交易日 Top-K 选股池与调仓建议")
+        col_sync1, col_sync2 = st.columns([3, 1])
+        with col_sync1:
+            st.subheader("🎯 最新交易日 Top-K 选股池与调仓建议")
+            st.caption("🌐 数据源状态: 直连官方高速行情 CDN 与 7x24 实时财经电报流 (秒级自动获取)")
+        with col_sync2:
+            if st.button("🔄 自动获取最新行情与消息", type="primary", use_container_width=True):
+                from data.live_market_and_news_api import AutoSyncEngine
+                with st.spinner("正在直连官方 API 获取最新行情与实时快讯..."):
+                    picks_f = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+                    AutoSyncEngine.sync_picks_and_news(picks_f)
+                    agg_f = settings.BASE_DIR / "artifacts" / "aggressive_stock_picks.csv"
+                    AutoSyncEngine.sync_picks_and_news(agg_f)
+                    st.success("✅ 已自动获取最新行情与消息！")
+                    st.rerun()
+
         builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
 
         # 根据侧边栏所选策略风格加载对应清单 (进取进攻型 vs 稳健防御型)
@@ -407,6 +421,20 @@ else:
                 color_discrete_sequence=px.colors.qualitative.Safe
             )
             st.plotly_chart(fig_pie, use_container_width=True)
+
+            st.markdown("---")
+            with st.expander("📡 7x24 全球与 A股实时财经快讯直播流 (直连官方实时新闻 API)", expanded=True):
+                tele_path = settings.BASE_DIR / "artifacts" / "live_telegraph_stream.json"
+                if tele_path.exists():
+                    try:
+                        with open(tele_path, "r", encoding="utf-8") as f:
+                            tele_data = json.load(f)
+                        for item in tele_data[:10]:
+                            st.markdown(f"⏱️ **`[{item['time']}]`** &nbsp; {item['content']}")
+                    except Exception as e:
+                        st.info("快讯加载中...")
+                else:
+                    st.info("暂无快讯流缓存，点击上方【🔄 自动获取最新行情与消息】即可一键刷新！")
         else:
             st.warning("最新交易日无可交易标的")
 
