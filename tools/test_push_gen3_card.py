@@ -27,7 +27,7 @@ for _, row in picks_df.iterrows():
     sym = row['symbol']
     top_list.append({
         'symbol': sym,
-        'name': stock_names.get(sym, row.get('name', '优质标的')),
+        'name': row.get('name', '优质标的'),
         'industry': row.get('industry', '主板'),
         'close': float(row.get('close', 0.0)),
         'pred_score': float(row.get('pred_score', 0.0)),
@@ -41,20 +41,21 @@ if acc_path.exists():
     with open(acc_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
         acc_info = {
-            'total_equity': data.get('total_equity', 1278239.70),
-            'cash': data.get('cash', 800028.70),
+            'total_equity': data.get('total_equity', 1277364.70),
+            'cash': data.get('cash', 789173.70),
             'holding_count': len(data.get('positions', {}))
         }
 
 safety_logs = [
-    '防线3(日换手50%熔断): 拟买入131.4万元已自动裁剪至63.9万元',
-    '防线5(限价偏离保护): 严格以最新收盘价限价挂单，严防追高'
+    '防线3(日换手50%熔断): 拟买入85.5万元已自动安全裁剪至41.2万元',
+    '防线5(限价偏离保护): 严格以最新收盘价(兆易创新383.20元等)挂单，严禁追高',
+    '防线7(待建仓分批队列): 剩余份额已持久化入队，次日开盘自动平滑补齐'
 ]
 
 notifier = QuantWebhookNotifier()
 # 格式化卡片
 card_md = notifier.format_markdown_report(
-    date_str='2026-08-24',
+    date_str='2026-09-03',
     top_stocks=top_list,
     account_info=acc_info,
     safety_events=safety_logs
