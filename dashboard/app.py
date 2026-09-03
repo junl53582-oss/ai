@@ -419,7 +419,7 @@ else:
         col1, col2, col3, col4 = st.columns(4)
         col1.metric("📅 信号产生日期 (T日收盘)", latest_date.strftime("%Y-%m-%d"))
         col2.metric("⏱️ 预计撮合日期 (T+1 真实交易日)", exec_str)
-        col3.metric("🏆 目标买入标的数", f"{len(top_df)} 只")
+        col3.metric("🏆 优选决策标的池", f"{len(top_df)} 只 (Top-8 实盘主攻)")
         col4.metric("📊 行业上限约束", "已启用 (30%硬上限)" if builder.sector_cap_enabled else "已关闭")
 
         st.markdown("---")
@@ -463,12 +463,24 @@ else:
                 </div>
             </div>
             <div style="font-size: 11px; color: #92400E; margin-top: 6px; border-top: 1px dashed #FDE68A; padding-top: 4px;">
-                📌 <strong>统计口径说明</strong>：上方数据为 <strong>2026-09-03 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多模态模型严格选拔出的 <strong>Top-8 投资组合重仓进攻持仓（8支精选龙头）</strong>，二者为“大盘环境 vs 组合选股”的母子层级关系，绝无遗漏！
+                📌 <strong>统计口径说明</strong>：上方数据为 <strong>2026-09-03 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多模态模型严格选拔出的 <strong>全景优选标的池 (前 8 支实盘买入满仓 95%，第 9 支及后续为战略储备观察池)</strong>！
             </div>
         </div>
         """, unsafe_allow_html=True)
 
         if not top_df.empty:
+            col_bar1, col_bar2 = st.columns([3, 1])
+            with col_bar1:
+                st.markdown("#### 🎯 策略优选全景标的池 (按综合动量与胜率排序)")
+                st.caption(f"💡 当前数据库共收录 **{len(top_df)} 只高弹性成长主线龙头**，前 8 支执行实盘买入，其余作为战略储备观察池")
+            with col_bar2:
+                display_depth = st.selectbox(
+                    "📋 榜单展示深度",
+                    [8, 15, 20, 30],
+                    index=2,  # 默认展示 Top-20 只标的！
+                    format_func=lambda x: f"展示 Top-{x} 只标的"
+                )
+
             cols_to_show = ["symbol"]
             if "name" in top_df.columns:
                 cols_to_show.append("name")
@@ -482,7 +494,7 @@ else:
             if "catalyst_score" in top_df.columns:
                 cols_to_show.append("catalyst_score")
 
-            display_df = top_df[[c for c in cols_to_show if c in top_df.columns]].copy()
+            display_df = top_df.head(display_depth)[[c for c in cols_to_show if c in top_df.columns]].copy()
 
             _prob_col = f"{settings.LABEL_HORIZON}日上涨概率"
             _excess_col = f"{settings.LABEL_HORIZON}日预期超额收益"
@@ -523,16 +535,17 @@ else:
                 column_config=col_cfg,
                 use_container_width=True,
                 hide_index=True,
-                height=350
+                height=520
             )
 
             col_pie1, col_pie2 = st.columns([3, 2])
             with col_pie1:
+                pie_data = top_df[top_df['target_weight'] > 0].copy()
                 fig_pie = px.pie(
-                    top_df,
+                    pie_data,
                     values="target_weight",
-                    names="name" if "name" in top_df.columns else "symbol",
-                    title="🎯 目标组合持仓权重分布 (非对称满仓进攻)",
+                    names="name" if "name" in pie_data.columns else "symbol",
+                    title="🎯 实盘核心组合持仓权重分布 (95% 满仓进攻)",
                     hole=0.45,
                     color_discrete_sequence=px.colors.qualitative.Prism
                 )
