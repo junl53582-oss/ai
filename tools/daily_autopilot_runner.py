@@ -1,4 +1,4 @@
-﻿"""
+"""
 A股 AI 量化全自动无人值守日常巡航主调度程序 (tools/daily_autopilot_runner.py)
 每日收盘后 15:05 由系统调度触发，自动执行四步闭环:
 1. 官方金融专线直连同步全市场最新收盘行情
@@ -46,13 +46,13 @@ def run_daily_autopilot():
     except Exception as e:
         logger.error(f"[-] 步骤 1 异常: {e}")
 
-    # 2. 第三代 Mega-Alpha 大模型推演选股
-    logger.info("[Step 2/4] 启动第三代 Mega-Alpha 模型执行最新截面打分...")
+    # 2. 第四代 DRL 强化模型推演选股与动态权重优化
+    logger.info("[Step 2/4] 启动第四代 DRL 强化模型执行最新截面打分与动态仓位优化...")
     try:
         import subprocess
-        res = subprocess.run([sys.executable, "tools/predict_gen3_stocks.py"], capture_output=True, text=True)
+        res = subprocess.run([sys.executable, "tools/predict_gen4_drl_picks.py"], capture_output=True, text=True)
         if res.returncode == 0:
-            logger.info("[+] 步骤 2 完成: 第三代终极预测模型打分落盘成功")
+            logger.info("[+] 步骤 2 完成: 第四代 DRL 强化模型推演与动态权重落盘成功")
         else:
             logger.warning(f"[-] 步骤 2 告警: {res.stderr[:200]}")
     except Exception as e:
