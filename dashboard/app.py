@@ -288,7 +288,8 @@ else:
     # ==========================================
     with tab1:
         st.subheader("🎯 最新交易日 Top-K 选股池与调仓建议")
-        
+        builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
+
         # 优先读取第四代强化生产模型实时推荐清单 (artifacts/latest_stock_picks.csv)
         prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
         if prod_picks_file.exists():
@@ -299,7 +300,6 @@ else:
             oos_df = st.session_state.oos_df
             latest_date = oos_df["date"].max()
             daily_df = oos_df[oos_df["date"] == latest_date].copy()
-            builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
             top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
             st.session_state.top_df = top_df
 
