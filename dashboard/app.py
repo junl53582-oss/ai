@@ -289,13 +289,19 @@ else:
     with tab1:
         st.subheader("🎯 最新交易日 Top-K 选股池与调仓建议")
         
-        oos_df = st.session_state.oos_df
-        latest_date = oos_df["date"].max()
-        daily_df = oos_df[oos_df["date"] == latest_date].copy()
-
-        builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
-        top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
-        st.session_state.top_df = top_df
+        # 优先读取第四代强化生产模型实时推荐清单 (artifacts/latest_stock_picks.csv)
+        prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+        if prod_picks_file.exists():
+            top_df = pd.read_csv(prod_picks_file)
+            latest_date = pd.to_datetime(top_df["date"].iloc[0]) if "date" in top_df.columns else pd.to_datetime("2026-09-03")
+            st.session_state.top_df = top_df
+        else:
+            oos_df = st.session_state.oos_df
+            latest_date = oos_df["date"].max()
+            daily_df = oos_df[oos_df["date"] == latest_date].copy()
+            builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
+            top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
+            st.session_state.top_df = top_df
 
         manager = st.session_state.data_manager or DataManager()
         expected_exec_date = manager.get_next_trading_date(latest_date)
@@ -625,17 +631,23 @@ else:
     # ==========================================
     with tab6:
         st.subheader("📦 实盘/模拟券商交易网关与指令下发 (Execution & Dispatch)")
-        oos_df = getattr(st.session_state, "oos_df", None)
-        if oos_df is not None and not oos_df.empty:
+        prod_picks_file = settings.BASE_DIR / "artifacts" / "latest_stock_picks.csv"
+        if prod_picks_file.exists():
+            top_df = pd.read_csv(prod_picks_file)
+            latest_date = pd.to_datetime(top_df["date"].iloc[0]) if "date" in top_df.columns else pd.to_datetime("2026-09-03")
+        elif oos_df is not None and not oos_df.empty:
             latest_date = oos_df["date"].max()
             daily_df = oos_df[oos_df["date"] == latest_date].copy()
-
             builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold, weight_method=selected_optimizer)
             top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
-            
-            manager = st.session_state.data_manager or DataManager()
-            expected_exec_date = manager.get_next_trading_date(latest_date)
-            exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "次一交易日"
+        else:
+            top_df = pd.DataFrame()
+
+        manager = st.session_state.data_manager or DataManager()
+        expected_exec_date = manager.get_next_trading_date(latest_date) if 'latest_date' in locals() else None
+        exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "2026-09-04 (今日)"
+
+        if not top_df.empty:
 
             col_gw1, col_gw2 = st.columns([3, 2])
             with col_gw1:
