@@ -331,13 +331,40 @@ else:
 
         st.markdown("---")
 
+        # 注入全市场短线情绪周期与赚钱效应度量
+        from factors.sentiment_engine import MarketSentimentDetector
+        factor_df_ref = getattr(st.session_state, "factor_df", None)
+        if factor_df_ref is None:
+            factor_df_ref = getattr(st.session_state, "oos_df", None)
+        sent_info = MarketSentimentDetector.evaluate_market_temperature(factor_df_ref if factor_df_ref is not None else pd.DataFrame(), latest_date.strftime("%Y-%m-%d"))
+
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%); border-left: 6px solid #FF9800; padding: 12px 18px; border-radius: 6px; margin-bottom: 15px;">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div>
+                    <span style="font-size: 15px; font-weight: bold; color: #E65100;">🔥 全市场短线情绪周期: <strong>{sent_info['stage']}</strong></span>
+                    <span style="background-color: #FF5722; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px;">情绪温度: {sent_info['temperature']}°C</span>
+                </div>
+                <div style="font-size: 13px; color: #555;">
+                    涨停家数: <strong>{sent_info['limit_up_count']} 家</strong> | 炸板率: <strong>{sent_info['broken_ratio']}</strong> | 赚钱效应: <strong>{sent_info['profit_effect']}</strong>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
         if not top_df.empty:
             cols_to_show = ["symbol"]
             if "name" in top_df.columns:
                 cols_to_show.append("name")
             if "industry" in top_df.columns:
                 cols_to_show.append("industry")
-            cols_to_show.extend(["close", "pred_score", "target_weight", "is_suspended", "is_limit_up_locked", "TURNOVER_SURGE_5"])
+            cols_to_show.extend(["close", "pred_score", "target_weight"])
+            if "sentiment_stage" in top_df.columns:
+                cols_to_show.append("sentiment_stage")
+            if "news_catalyst" in top_df.columns:
+                cols_to_show.append("news_catalyst")
+            if "catalyst_score" in top_df.columns:
+                cols_to_show.append("catalyst_score")
 
             display_df = top_df[[c for c in cols_to_show if c in top_df.columns]].copy()
 
@@ -350,9 +377,9 @@ else:
                 "close": "T日基准收盘价 (元)",
                 "pred_score": (_prob_col if settings.is_classification else _excess_col),
                 "target_weight": "目标分配权重",
-                "is_suspended": "是否停牌",
-                "is_limit_up_locked": "是否一字涨停",
-                "TURNOVER_SURGE_5": "换手率异动倍数"
+                "sentiment_stage": "情绪阶段",
+                "news_catalyst": "📢 核心重大利好催化剂消息",
+                "catalyst_score": "舆情热度"
             }
             display_df.rename(columns=rename_map, inplace=True)
 
