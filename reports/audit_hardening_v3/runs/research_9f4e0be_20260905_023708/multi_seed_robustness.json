@@ -1,0 +1,35 @@
+{
+  "seed_set": [
+    42,
+    100,
+    2024
+  ],
+  "seed_rankic_each": {
+    "42": 0.022313,
+    "100": 0.010397,
+    "2024": 0.01764
+  },
+  "seed_rankic_mean": 0.016783,
+  "seed_rankic_std": 0.004902,
+  "seed_rankic_min": 0.010397,
+  "seed_rankic_max": 0.022313,
+  "seed_rankic_range": 0.011916,
+  "seed_param_evidence": {
+    "42": {
+      "random_state": 42,
+      "mean_rank_ic": 0.022313,
+      "prediction_hash": "49ab1db6d4f1ac63882a53b4bb84d9ea9ea5a407f5c1186d8ac142b17760be3f"
+    },
+    "100": {
+      "random_state": 100,
+      "mean_rank_ic": 0.010397,
+      "prediction_hash": "08bfe6fe110a686c85745d8a0c25c97c75ea9c64c7d59c96593cf6e1820a3235"
+    },
+    "2024": {
+      "random_state": 2024,
+      "mean_rank_ic": 0.01764,
+      "prediction_hash": "bbb1f523475a2ddedb22d96de149bfb35d1f1bab82f25a7b212f9aa8e2ab52d7"
+    }
+  },
+  "all_runs_successful": true
+}

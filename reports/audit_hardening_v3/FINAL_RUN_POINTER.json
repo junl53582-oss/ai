@@ -1,11 +1,11 @@
 {
-  "run_id": "research_c90c490_20260905_021645",
-  "code_freeze_sha": "c90c490fcf0c6edd0c7a5a37d258a6c6bfdef8a9",
+  "run_id": "research_9f4e0be_20260905_023708",
+  "code_freeze_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
   "dataset_sha256": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
   "calendar_sha256": "cf08829d987632359ac12537a2d8659354aa1acc71057670ad81af2921eb0c23",
-  "config_hash": "2a9df1bc38f5238ca1b3569b3d230b17cb190663235aaf532f37e8da8232d620",
-  "artifact_manifest_sha256": "ead1a226b002c5e4f2410638dfb768ca0fc38aca2ddbd852db31b47e31132918",
-  "gate_matrix_sha256": "7914008dce844af5343c85d4757edd573ecc817de6ab068fe686480eed1bdc8c",
-  "created_at": "2026-09-05T02:21:30Z",
-  "run_status": "FAILED: INSUFFICIENT_EVIDENCE_FOR_QUANTILE_EVALUATION_INTEGRITY"
+  "config_hash": "a74d681f479ecc80592e12b0389effc0daf0d1c403b785bcc26df4758119ac88",
+  "artifact_manifest_sha256": "c690d05a6a3973cf1c66bbae7c7f78edba6734490eb63296bd46c058a774e62f",
+  "gate_matrix_sha256": "46efe52c7f2803551295266863366b47d31a2637d6531dfdbde9d989e66315af",
+  "created_at": "2026-09-05T02:41:27Z",
+  "run_status": "CERTIFIED: INFRASTRUCTURE_VERIFIED_MODEL_EVIDENCE_MIXED"
 }

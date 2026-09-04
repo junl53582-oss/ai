@@ -1,0 +1,126 @@
+{
+  "backup_latest_gen2_20260904_001144.pkl": {
+    "size": 94384,
+    "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+  },
+  "backup_latest_gen3_20260904_012802.pkl": {
+    "size": 16938793,
+    "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+  },
+  "backup_latest_lightgbm_20260903_191744.pkl": {
+    "size": 11086,
+    "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+  },
+  "backup_latest_lightgbm_20260903_194757.pkl": {
+    "size": 45468,
+    "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+  },
+  "candidate_deep_optimized.pkl": {
+    "size": 94384,
+    "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+  },
+  "candidate_gen3_mega_model.pkl": {
+    "size": 16938793,
+    "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+  },
+  "candidate_gen4_drl_model.pkl": {
+    "size": 16725957,
+    "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+  },
+  "candidate_next_gen.pkl": {
+    "size": 18379,
+    "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21"
+  },
+  "candidate_optimized_ensemble.pkl": {
+    "size": 45468,
+    "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+  },
+  "double_ensemble_latest.pkl": {
+    "size": 85642,
+    "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+  },
+  "gen5_deep_rank_model.pt": {
+    "size": 55747,
+    "sha256": "a1721169251e530d53c03a3cd35ba71fbd7658724c3ab141b8616e5d403b9396"
+  },
+  "latest_ensemble.pkl": {
+    "size": 181683,
+    "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+  },
+  "latest_lightgbm.pkl": {
+    "size": 16725957,
+    "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+  },
+  "legacy/candidate_deep_optimized.pkl": {
+    "size": 94384,
+    "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+  },
+  "legacy/candidate_gen3_mega_model.pkl": {
+    "size": 16938793,
+    "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+  },
+  "legacy/candidate_gen4_drl_model.pkl": {
+    "size": 16725957,
+    "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+  },
+  "legacy/candidate_next_gen.pkl": {
+    "size": 18379,
+    "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21"
+  },
+  "legacy/candidate_optimized_ensemble.pkl": {
+    "size": 45468,
+    "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+  },
+  "legacy/double_ensemble_latest.pkl": {
+    "size": 85642,
+    "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+  },
+  "legacy/latest_ensemble.pkl": {
+    "size": 181683,
+    "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+  },
+  "legacy/latest_lightgbm.pkl": {
+    "size": 16725957,
+    "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+  },
+  "legacy/manifest.json": {
+    "size": 1800,
+    "sha256": "141299ff54fea75a89a23be18f5b0894d6a75e316bea1c43db899883be154bd3"
+  },
+  "legacy/README.md": {
+    "size": 604,
+    "sha256": "0b16f8b1af1b683f1377f297d9aa47f1d3fd155c8860f9f50e164db06e6c67ed"
+  },
+  "production/m_20260903_194757_hybrid_bagging_ridge/manifest.json": {
+    "size": 1459,
+    "sha256": "dc7fad2ae5627d8b4dbcbde75e788fb78c078dbb4d562633b14fa743123c94c7"
+  },
+  "production/m_20260903_194757_hybrid_bagging_ridge/metadata.json": {
+    "size": 2122,
+    "sha256": "01afe13045df8bb4ee12645ae0eae321b264d211d2e13191ef2ea0ac3d6f79fd"
+  },
+  "production/m_20260903_194757_hybrid_bagging_ridge/model.pkl": {
+    "size": 94384,
+    "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+  },
+  "production_model_meta.json": {
+    "size": 661,
+    "sha256": "89766dff4d996998f58ea5d8c3705606b822ce85baaced8770132597b673716e"
+  },
+  "registry/index.json": {
+    "size": 37039,
+    "sha256": "220d1c2bd9786a4e737b338a3d84e1e456d060e7e780297a8b2bef5b01322ca2"
+  },
+  "registry/m_20260903_191744_bagging_ensemble/model.pkl": {
+    "size": 45468,
+    "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+  },
+  "registry/m_20260903_194757_hybrid_bagging_ridge/model.pkl": {
+    "size": 94384,
+    "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+  },
+  "temporal_transformer_alpha.pt": {
+    "size": 85574,
+    "sha256": "943aab0d05e8d565fb6afd711825e166ef60e82b4eefbc26760591445c19abd2"
+  }
+}
