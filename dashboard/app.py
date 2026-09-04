@@ -713,6 +713,8 @@ else:
                     ), row=3, col=1)
 
                     cur_stock_row = top_df[top_df['symbol'] == selected_symbol].iloc[0] if not top_df[top_df['symbol'] == selected_symbol].empty else None
+                    s_name = cur_stock_row['name'] if cur_stock_row is not None and 'name' in cur_stock_row else selected_symbol
+                    
                     # 计算未来 5 个交易日预期价格推演轨迹 (Forward Forecast Projection)
                     last_date = sym_history['date'].iloc[-1]
                     last_close = sym_history['close'].iloc[-1]
