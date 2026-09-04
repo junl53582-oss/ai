@@ -1,0 +1,5732 @@
+{
+  "INFRASTRUCTURE_STATUS": "INSUFFICIENT_EVIDENCE",
+  "MODEL_EVIDENCE_STATUS": "MIXED_EVIDENCE_NOT_ROBUST",
+  "GOVERNANCE_STATUS": "PASS",
+  "OVERALL_RESEARCH_STATUS": "FAILED",
+  "OVERALL_STATUS": "FAILED",
+  "RESEARCH_INTEGRITY_VERIFIED": false,
+  "FINAL_HOLDOUT_AVAILABLE": false,
+  "LIVE_TRADING_READY": false,
+  "PRODUCTION_MODEL_PROMOTION": false,
+  "GATES": {
+    "FORMAL_RESEARCH_RUNNER_EXECUTABLE": {
+      "gate_id": "FORMAL_RESEARCH_RUNNER_EXECUTABLE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "complete persisted candidate and baseline fold trace",
+      "threshold": "all required provenance fields",
+      "actual_value": {
+        "folds": 20,
+        "issue": ""
+      },
+      "reason": "Fold trace verified.",
+      "evidence_artifacts": [
+        "fold_backtest_provenance.json"
+      ],
+      "evidence_sha256": {
+        "fold_backtest_provenance.json": "03d3c81dcb14514a41d4a488c1de0c524c5fbfbc927fcc28c72db185b4f6396d"
+      }
+    },
+    "REAL_FOLD_BACKTEST_PROVENANCE": {
+      "gate_id": "REAL_FOLD_BACKTEST_PROVENANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "complete persisted candidate and baseline fold trace",
+      "threshold": "all required provenance fields",
+      "actual_value": {
+        "folds": 20,
+        "issue": ""
+      },
+      "reason": "Fold trace verified.",
+      "evidence_artifacts": [
+        "fold_backtest_provenance.json"
+      ],
+      "evidence_sha256": {
+        "fold_backtest_provenance.json": "03d3c81dcb14514a41d4a488c1de0c524c5fbfbc927fcc28c72db185b4f6396d"
+      }
+    },
+    "PRODUCTION_MODEL_ISOLATION": {
+      "gate_id": "PRODUCTION_MODEL_ISOLATION",
+      "status": "PASS",
+      "passed": true,
+      "condition": "production snapshots are byte-identical",
+      "threshold": "before == after",
+      "actual_value": {
+        "before": {
+          "backup_latest_gen2_20260904_001144.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "backup_latest_gen3_20260904_012802.pkl": {
+            "size": 16938793,
+            "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+          },
+          "backup_latest_lightgbm_20260903_191744.pkl": {
+            "size": 11086,
+            "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+          },
+          "backup_latest_lightgbm_20260903_194757.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "candidate_deep_optimized.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "candidate_gen3_mega_model.pkl": {
+            "size": 16938793,
+            "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+          },
+          "candidate_gen4_drl_model.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "candidate_next_gen.pkl": {
+            "size": 18379,
+            "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21"
+          },
+          "candidate_optimized_ensemble.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "double_ensemble_latest.pkl": {
+            "size": 85642,
+            "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+          },
+          "gen5_deep_rank_model.pt": {
+            "size": 55747,
+            "sha256": "a1721169251e530d53c03a3cd35ba71fbd7658724c3ab141b8616e5d403b9396"
+          },
+          "latest_ensemble.pkl": {
+            "size": 181683,
+            "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+          },
+          "latest_lightgbm.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "legacy/candidate_deep_optimized.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "legacy/candidate_gen3_mega_model.pkl": {
+            "size": 16938793,
+            "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+          },
+          "legacy/candidate_gen4_drl_model.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "legacy/candidate_next_gen.pkl": {
+            "size": 18379,
+            "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21"
+          },
+          "legacy/candidate_optimized_ensemble.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "legacy/double_ensemble_latest.pkl": {
+            "size": 85642,
+            "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+          },
+          "legacy/latest_ensemble.pkl": {
+            "size": 181683,
+            "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+          },
+          "legacy/latest_lightgbm.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "legacy/manifest.json": {
+            "size": 1800,
+            "sha256": "141299ff54fea75a89a23be18f5b0894d6a75e316bea1c43db899883be154bd3"
+          },
+          "legacy/README.md": {
+            "size": 604,
+            "sha256": "0b16f8b1af1b683f1377f297d9aa47f1d3fd155c8860f9f50e164db06e6c67ed"
+          },
+          "production/m_20260903_194757_hybrid_bagging_ridge/manifest.json": {
+            "size": 1459,
+            "sha256": "dc7fad2ae5627d8b4dbcbde75e788fb78c078dbb4d562633b14fa743123c94c7"
+          },
+          "production/m_20260903_194757_hybrid_bagging_ridge/metadata.json": {
+            "size": 2122,
+            "sha256": "01afe13045df8bb4ee12645ae0eae321b264d211d2e13191ef2ea0ac3d6f79fd"
+          },
+          "production/m_20260903_194757_hybrid_bagging_ridge/model.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "production_model_meta.json": {
+            "size": 661,
+            "sha256": "89766dff4d996998f58ea5d8c3705606b822ce85baaced8770132597b673716e"
+          },
+          "registry/index.json": {
+            "size": 34376,
+            "sha256": "14bf4cf3f7d6362c24effb85488fd0783070bed6c8038c2a35c6c47c3a23cdf9"
+          },
+          "registry/m_20260903_191744_bagging_ensemble/model.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "registry/m_20260903_194757_hybrid_bagging_ridge/model.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "temporal_transformer_alpha.pt": {
+            "size": 85574,
+            "sha256": "943aab0d05e8d565fb6afd711825e166ef60e82b4eefbc26760591445c19abd2"
+          }
+        },
+        "after": {
+          "backup_latest_gen2_20260904_001144.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "backup_latest_gen3_20260904_012802.pkl": {
+            "size": 16938793,
+            "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+          },
+          "backup_latest_lightgbm_20260903_191744.pkl": {
+            "size": 11086,
+            "sha256": "93575e2dfd644ee2701ef50376ac612537fb52c07f9c119379bd3b17bea74900"
+          },
+          "backup_latest_lightgbm_20260903_194757.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "candidate_deep_optimized.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "candidate_gen3_mega_model.pkl": {
+            "size": 16938793,
+            "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+          },
+          "candidate_gen4_drl_model.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "candidate_next_gen.pkl": {
+            "size": 18379,
+            "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21"
+          },
+          "candidate_optimized_ensemble.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "double_ensemble_latest.pkl": {
+            "size": 85642,
+            "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+          },
+          "gen5_deep_rank_model.pt": {
+            "size": 55747,
+            "sha256": "a1721169251e530d53c03a3cd35ba71fbd7658724c3ab141b8616e5d403b9396"
+          },
+          "latest_ensemble.pkl": {
+            "size": 181683,
+            "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+          },
+          "latest_lightgbm.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "legacy/candidate_deep_optimized.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "legacy/candidate_gen3_mega_model.pkl": {
+            "size": 16938793,
+            "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79"
+          },
+          "legacy/candidate_gen4_drl_model.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "legacy/candidate_next_gen.pkl": {
+            "size": 18379,
+            "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21"
+          },
+          "legacy/candidate_optimized_ensemble.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "legacy/double_ensemble_latest.pkl": {
+            "size": 85642,
+            "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71"
+          },
+          "legacy/latest_ensemble.pkl": {
+            "size": 181683,
+            "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496"
+          },
+          "legacy/latest_lightgbm.pkl": {
+            "size": 16725957,
+            "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+          },
+          "legacy/manifest.json": {
+            "size": 1800,
+            "sha256": "141299ff54fea75a89a23be18f5b0894d6a75e316bea1c43db899883be154bd3"
+          },
+          "legacy/README.md": {
+            "size": 604,
+            "sha256": "0b16f8b1af1b683f1377f297d9aa47f1d3fd155c8860f9f50e164db06e6c67ed"
+          },
+          "production/m_20260903_194757_hybrid_bagging_ridge/manifest.json": {
+            "size": 1459,
+            "sha256": "dc7fad2ae5627d8b4dbcbde75e788fb78c078dbb4d562633b14fa743123c94c7"
+          },
+          "production/m_20260903_194757_hybrid_bagging_ridge/metadata.json": {
+            "size": 2122,
+            "sha256": "01afe13045df8bb4ee12645ae0eae321b264d211d2e13191ef2ea0ac3d6f79fd"
+          },
+          "production/m_20260903_194757_hybrid_bagging_ridge/model.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "production_model_meta.json": {
+            "size": 661,
+            "sha256": "89766dff4d996998f58ea5d8c3705606b822ce85baaced8770132597b673716e"
+          },
+          "registry/index.json": {
+            "size": 34376,
+            "sha256": "14bf4cf3f7d6362c24effb85488fd0783070bed6c8038c2a35c6c47c3a23cdf9"
+          },
+          "registry/m_20260903_191744_bagging_ensemble/model.pkl": {
+            "size": 45468,
+            "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f"
+          },
+          "registry/m_20260903_194757_hybrid_bagging_ridge/model.pkl": {
+            "size": 94384,
+            "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5"
+          },
+          "temporal_transformer_alpha.pt": {
+            "size": 85574,
+            "sha256": "943aab0d05e8d565fb6afd711825e166ef60e82b4eefbc26760591445c19abd2"
+          }
+        },
+        "file_sha_before": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1",
+        "file_sha_after": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1"
+      },
+      "reason": "Production directory unchanged.",
+      "evidence_artifacts": [
+        "production_isolation.json"
+      ],
+      "evidence_sha256": {
+        "production_isolation.json": "4da5cdaca8bf741d55bd911c6192bc4c199899ba4ac89e3b5ab28c7f8464df82"
+      }
+    },
+    "WALKFORWARD_PURGE_GATE": {
+      "gate_id": "WALKFORWARD_PURGE_GATE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "all trading-day gaps meet label horizon and configured purge",
+      "threshold": "actual gaps >= max(label_horizon, configured_purge)",
+      "actual_value": {
+        "folds": 60,
+        "issue": ""
+      },
+      "reason": "Purge evidence verified.",
+      "evidence_artifacts": [
+        "walk_forward_purge_audit.json"
+      ],
+      "evidence_sha256": {
+        "walk_forward_purge_audit.json": "30d292c77cc438a5044c9f19f68f9331f8dc97181831b954b15cc097716a74e2"
+      }
+    },
+    "CANONICAL_CALENDAR_PROVENANCE": {
+      "gate_id": "CANONICAL_CALENDAR_PROVENANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "unique ascending canonical dates overlap dataset",
+      "threshold": "valid source, SHA, source SHA and overlap > 0",
+      "actual_value": {
+        "dates": 1187,
+        "issue": ""
+      },
+      "reason": "Calendar facts verified.",
+      "evidence_artifacts": [
+        "calendar_metadata.json"
+      ],
+      "evidence_sha256": {
+        "calendar_metadata.json": "46c0b120f087c7363d9572ddbada615d5434f469d3ac4ad488afedb967edf4fa"
+      }
+    },
+    "ARTIFACT_HASH_CHAIN": {
+      "gate_id": "ARTIFACT_HASH_CHAIN",
+      "status": "PASS",
+      "passed": true,
+      "condition": "every manifest file and provenance field recomputes",
+      "threshold": "all entries hash, size and provenance match",
+      "actual_value": {
+        "issue": ""
+      },
+      "reason": "Artifact hash chain verified.",
+      "evidence_artifacts": [
+        "artifact_manifest.json"
+      ],
+      "evidence_sha256": {
+        "artifact_manifest.json": "ead1a226b002c5e4f2410638dfb768ca0fc38aca2ddbd852db31b47e31132918"
+      }
+    },
+    "SOURCE_CODE_PROVENANCE": {
+      "gate_id": "SOURCE_CODE_PROVENANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "clean runtime git SHA equals artifact source SHA",
+      "threshold": "clean worktree and CODE_FREEZE_SHA match",
+      "actual_value": {
+        "issue": ""
+      },
+      "reason": "Source provenance verified.",
+      "evidence_artifacts": [
+        "artifact_manifest.json"
+      ],
+      "evidence_sha256": {
+        "artifact_manifest.json": "ead1a226b002c5e4f2410638dfb768ca0fc38aca2ddbd852db31b47e31132918"
+      }
+    },
+    "STRICT_FUNDAMENTAL_PIT": {
+      "gate_id": "STRICT_FUNDAMENTAL_PIT",
+      "status": "PASS",
+      "passed": true,
+      "condition": "official PIT chronology is independently recorded",
+      "threshold": "zero synthetic-certified and chronology violations",
+      "actual_value": {
+        "source_code_sha": "c90c490fcf0c6edd0c7a5a37d258a6c6bfdef8a9",
+        "synthetic_delay_certified_count": 0,
+        "invalid_chronology_count": 0,
+        "official_announcement_rows": 116701,
+        "official_coverage_ratio": 0.423044,
+        "timeline_artifact_sha256": "8a7aa38aec382e590aa86487e3b0941a8e4b8ffad86a5ec2293b4ee7a0244569",
+        "certification_note": "Official fundamental PIT timeline independently extracted and verified from exchange disclosure records."
+      },
+      "reason": "PIT facts verified.",
+      "evidence_artifacts": [
+        "fundamental_provenance_manifest.json"
+      ],
+      "evidence_sha256": {
+        "fundamental_provenance_manifest.json": "b7c0dc9ed7527e3df576c05e67deb2c16fba4f9e512e874accae20b2361992a1"
+      }
+    },
+    "QUANTILE_EVALUATION_INTEGRITY": {
+      "gate_id": "QUANTILE_EVALUATION_INTEGRITY",
+      "status": "INSUFFICIENT_EVIDENCE",
+      "passed": false,
+      "condition": "tie-preserving ranks and equal-date weighting verified",
+      "threshold": "average ranking + invariant checks",
+      "actual_value": {
+        "ranking_method": "average",
+        "expected_n_groups": 5,
+        "total_dates": null,
+        "valid_quantile_dates": 744,
+        "invalid_quantile_dates": 0,
+        "invalid_tie_dates": 0,
+        "dates_missing_required_groups": 0,
+        "daily_group_counts": {
+          "2023-07-03": {
+            "Q1": 57,
+            "Q2": 64,
+            "Q3": 54,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2023-07-04": {
+            "Q1": 54,
+            "Q2": 60,
+            "Q3": 62,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2023-07-05": {
+            "Q1": 58,
+            "Q2": 62,
+            "Q3": 55,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2023-07-06": {
+            "Q1": 57,
+            "Q2": 62,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 57
+          },
+          "2023-07-07": {
+            "Q1": 56,
+            "Q2": 62,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 58
+          },
+          "2023-07-10": {
+            "Q1": 57,
+            "Q2": 62,
+            "Q3": 59,
+            "Q4": 58,
+            "Q5": 59
+          },
+          "2023-07-11": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 61,
+            "Q4": 58,
+            "Q5": 58
+          },
+          "2023-07-12": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 58
+          },
+          "2023-07-13": {
+            "Q1": 64,
+            "Q2": 52,
+            "Q3": 61,
+            "Q4": 60,
+            "Q5": 58
+          },
+          "2023-07-14": {
+            "Q1": 64,
+            "Q2": 46,
+            "Q3": 68,
+            "Q4": 56,
+            "Q5": 61
+          },
+          "2023-07-17": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 58,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2023-07-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2023-07-19": {
+            "Q1": 55,
+            "Q2": 63,
+            "Q3": 61,
+            "Q4": 59,
+            "Q5": 57
+          },
+          "2023-07-20": {
+            "Q1": 60,
+            "Q2": 56,
+            "Q3": 60,
+            "Q4": 64,
+            "Q5": 55
+          },
+          "2023-07-21": {
+            "Q1": 58,
+            "Q2": 58,
+            "Q3": 62,
+            "Q4": 66,
+            "Q5": 51
+          },
+          "2023-07-24": {
+            "Q1": 57,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 65,
+            "Q5": 52
+          },
+          "2023-07-25": {
+            "Q1": 61,
+            "Q2": 53,
+            "Q3": 63,
+            "Q4": 60,
+            "Q5": 58
+          },
+          "2023-07-26": {
+            "Q1": 59,
+            "Q2": 50,
+            "Q3": 70,
+            "Q4": 57,
+            "Q5": 59
+          },
+          "2023-07-27": {
+            "Q1": 61,
+            "Q2": 48,
+            "Q3": 67,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-07-28": {
+            "Q1": 59,
+            "Q2": 44,
+            "Q3": 74,
+            "Q4": 61,
+            "Q5": 57
+          },
+          "2023-07-31": {
+            "Q1": 63,
+            "Q2": 47,
+            "Q3": 65,
+            "Q4": 67,
+            "Q5": 53
+          },
+          "2023-08-01": {
+            "Q1": 53,
+            "Q2": 58,
+            "Q3": 62,
+            "Q4": 69,
+            "Q5": 53
+          },
+          "2023-08-02": {
+            "Q1": 62,
+            "Q2": 51,
+            "Q3": 65,
+            "Q4": 64,
+            "Q5": 53
+          },
+          "2023-08-03": {
+            "Q1": 63,
+            "Q2": 53,
+            "Q3": 63,
+            "Q4": 59,
+            "Q5": 57
+          },
+          "2023-08-04": {
+            "Q1": 59,
+            "Q2": 52,
+            "Q3": 66,
+            "Q4": 63,
+            "Q5": 55
+          },
+          "2023-08-07": {
+            "Q1": 65,
+            "Q2": 51,
+            "Q3": 62,
+            "Q4": 59,
+            "Q5": 58
+          },
+          "2023-08-08": {
+            "Q1": 64,
+            "Q2": 50,
+            "Q3": 64,
+            "Q4": 66,
+            "Q5": 52
+          },
+          "2023-08-09": {
+            "Q1": 58,
+            "Q2": 74,
+            "Q3": 46,
+            "Q4": 69,
+            "Q5": 49
+          },
+          "2023-08-10": {
+            "Q1": 61,
+            "Q2": 46,
+            "Q3": 70,
+            "Q4": 69,
+            "Q5": 50
+          },
+          "2023-08-11": {
+            "Q1": 59,
+            "Q2": 46,
+            "Q3": 73,
+            "Q4": 63,
+            "Q5": 55
+          },
+          "2023-08-14": {
+            "Q1": 56,
+            "Q2": 50,
+            "Q3": 71,
+            "Q4": 63,
+            "Q5": 56
+          },
+          "2023-08-15": {
+            "Q1": 56,
+            "Q2": 47,
+            "Q3": 74,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-08-16": {
+            "Q1": 53,
+            "Q2": 77,
+            "Q3": 49,
+            "Q4": 62,
+            "Q5": 55
+          },
+          "2023-08-17": {
+            "Q1": 65,
+            "Q2": 38,
+            "Q3": 74,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2023-08-18": {
+            "Q1": 54,
+            "Q2": 77,
+            "Q3": 46,
+            "Q4": 63,
+            "Q5": 56
+          },
+          "2023-08-21": {
+            "Q1": 57,
+            "Q2": 71,
+            "Q3": 49,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2023-08-22": {
+            "Q1": 54,
+            "Q2": 73,
+            "Q3": 50,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2023-08-23": {
+            "Q1": 63,
+            "Q2": 63,
+            "Q3": 53,
+            "Q4": 55,
+            "Q5": 62
+          },
+          "2023-08-24": {
+            "Q1": 55,
+            "Q2": 50,
+            "Q3": 72,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-08-25": {
+            "Q1": 56,
+            "Q2": 59,
+            "Q3": 62,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2023-08-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-08-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-08-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-08-31": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-09-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-10-31": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-02": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-11-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2023-12-26": {
+            "Q1": 58,
+            "Q2": 42,
+            "Q3": 81,
+            "Q4": 54,
+            "Q5": 61
+          },
+          "2023-12-27": {
+            "Q1": 57,
+            "Q2": 41,
+            "Q3": 83,
+            "Q4": 56,
+            "Q5": 59
+          },
+          "2023-12-28": {
+            "Q1": 60,
+            "Q2": 74,
+            "Q3": 45,
+            "Q4": 52,
+            "Q5": 65
+          },
+          "2023-12-29": {
+            "Q1": 61,
+            "Q2": 39,
+            "Q3": 79,
+            "Q4": 56,
+            "Q5": 61
+          },
+          "2024-01-02": {
+            "Q1": 58,
+            "Q2": 41,
+            "Q3": 76,
+            "Q4": 54,
+            "Q5": 67
+          },
+          "2024-01-03": {
+            "Q1": 55,
+            "Q2": 83,
+            "Q3": 43,
+            "Q4": 53,
+            "Q5": 62
+          },
+          "2024-01-04": {
+            "Q1": 59,
+            "Q2": 75,
+            "Q3": 44,
+            "Q4": 54,
+            "Q5": 64
+          },
+          "2024-01-05": {
+            "Q1": 58,
+            "Q2": 73,
+            "Q3": 48,
+            "Q4": 53,
+            "Q5": 64
+          },
+          "2024-01-08": {
+            "Q1": 58,
+            "Q2": 78,
+            "Q3": 42,
+            "Q4": 57,
+            "Q5": 61
+          },
+          "2024-01-09": {
+            "Q1": 59,
+            "Q2": 78,
+            "Q3": 39,
+            "Q4": 53,
+            "Q5": 67
+          },
+          "2024-01-10": {
+            "Q1": 59,
+            "Q2": 77,
+            "Q3": 41,
+            "Q4": 65,
+            "Q5": 55
+          },
+          "2024-01-11": {
+            "Q1": 56,
+            "Q2": 76,
+            "Q3": 46,
+            "Q4": 63,
+            "Q5": 56
+          },
+          "2024-01-12": {
+            "Q1": 58,
+            "Q2": 77,
+            "Q3": 43,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2024-01-15": {
+            "Q1": 56,
+            "Q2": 80,
+            "Q3": 41,
+            "Q4": 63,
+            "Q5": 57
+          },
+          "2024-01-16": {
+            "Q1": 60,
+            "Q2": 75,
+            "Q3": 44,
+            "Q4": 60,
+            "Q5": 58
+          },
+          "2024-01-17": {
+            "Q1": 60,
+            "Q2": 72,
+            "Q3": 46,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2024-01-18": {
+            "Q1": 57,
+            "Q2": 73,
+            "Q3": 45,
+            "Q4": 62,
+            "Q5": 60
+          },
+          "2024-01-19": {
+            "Q1": 61,
+            "Q2": 39,
+            "Q3": 79,
+            "Q4": 63,
+            "Q5": 55
+          },
+          "2024-01-22": {
+            "Q1": 58,
+            "Q2": 51,
+            "Q3": 69,
+            "Q4": 64,
+            "Q5": 55
+          },
+          "2024-01-23": {
+            "Q1": 56,
+            "Q2": 47,
+            "Q3": 78,
+            "Q4": 59,
+            "Q5": 57
+          },
+          "2024-01-24": {
+            "Q1": 58,
+            "Q2": 46,
+            "Q3": 72,
+            "Q4": 59,
+            "Q5": 62
+          },
+          "2024-01-25": {
+            "Q1": 55,
+            "Q2": 50,
+            "Q3": 73,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2024-01-26": {
+            "Q1": 61,
+            "Q2": 40,
+            "Q3": 78,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-01-29": {
+            "Q1": 60,
+            "Q2": 77,
+            "Q3": 44,
+            "Q4": 58,
+            "Q5": 58
+          },
+          "2024-01-30": {
+            "Q1": 62,
+            "Q2": 47,
+            "Q3": 69,
+            "Q4": 63,
+            "Q5": 56
+          },
+          "2024-01-31": {
+            "Q1": 59,
+            "Q2": 50,
+            "Q3": 69,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2024-02-01": {
+            "Q1": 59,
+            "Q2": 55,
+            "Q3": 66,
+            "Q4": 61,
+            "Q5": 56
+          },
+          "2024-02-02": {
+            "Q1": 57,
+            "Q2": 61,
+            "Q3": 65,
+            "Q4": 57,
+            "Q5": 57
+          },
+          "2024-02-05": {
+            "Q1": 60,
+            "Q2": 55,
+            "Q3": 70,
+            "Q4": 55,
+            "Q5": 57
+          },
+          "2024-02-06": {
+            "Q1": 67,
+            "Q2": 56,
+            "Q3": 64,
+            "Q4": 44,
+            "Q5": 66
+          },
+          "2024-02-07": {
+            "Q1": 68,
+            "Q2": 55,
+            "Q3": 44,
+            "Q4": 74,
+            "Q5": 56
+          },
+          "2024-02-08": {
+            "Q1": 69,
+            "Q2": 53,
+            "Q3": 42,
+            "Q4": 75,
+            "Q5": 58
+          },
+          "2024-02-19": {
+            "Q1": 66,
+            "Q2": 52,
+            "Q3": 65,
+            "Q4": 50,
+            "Q5": 64
+          },
+          "2024-02-20": {
+            "Q1": 64,
+            "Q2": 52,
+            "Q3": 70,
+            "Q4": 48,
+            "Q5": 63
+          },
+          "2024-02-21": {
+            "Q1": 65,
+            "Q2": 56,
+            "Q3": 42,
+            "Q4": 75,
+            "Q5": 58
+          },
+          "2024-02-22": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 74,
+            "Q4": 43,
+            "Q5": 59
+          },
+          "2024-02-23": {
+            "Q1": 63,
+            "Q2": 55,
+            "Q3": 72,
+            "Q4": 46,
+            "Q5": 60
+          },
+          "2024-02-26": {
+            "Q1": 60,
+            "Q2": 72,
+            "Q3": 41,
+            "Q4": 67,
+            "Q5": 56
+          },
+          "2024-02-27": {
+            "Q1": 57,
+            "Q2": 58,
+            "Q3": 75,
+            "Q4": 44,
+            "Q5": 62
+          },
+          "2024-02-28": {
+            "Q1": 57,
+            "Q2": 55,
+            "Q3": 72,
+            "Q4": 46,
+            "Q5": 67
+          },
+          "2024-02-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-18": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-19": {
+            "Q1": 58,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-03-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-02": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-12": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-04-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 58,
+            "Q5": 60
+          },
+          "2024-05-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-28": {
+            "Q1": 59,
+            "Q2": 64,
+            "Q3": 55,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-05-31": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-06": {
+            "Q1": 58,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-13": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2024-06-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2024-06-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2024-06-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-24": {
+            "Q1": 57,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-26": {
+            "Q1": 58,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2024-06-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-06-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-02": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2024-07-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-07-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-07-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-07-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-07-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-07-31": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-01": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-02": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-08-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-08-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-08-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-08-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-08-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-08-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-02": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-09-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-09-20": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-09-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-09-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-10-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-10-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-10-10": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-10-11": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-16": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-22": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-23": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-10-29": {
+            "Q1": 54,
+            "Q2": 66,
+            "Q3": 56,
+            "Q4": 64,
+            "Q5": 56
+          },
+          "2024-10-30": {
+            "Q1": 53,
+            "Q2": 64,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2024-10-31": {
+            "Q1": 54,
+            "Q2": 63,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2024-11-01": {
+            "Q1": 56,
+            "Q2": 60,
+            "Q3": 65,
+            "Q4": 56,
+            "Q5": 59
+          },
+          "2024-11-04": {
+            "Q1": 58,
+            "Q2": 62,
+            "Q3": 55,
+            "Q4": 61,
+            "Q5": 60
+          },
+          "2024-11-05": {
+            "Q1": 50,
+            "Q2": 70,
+            "Q3": 58,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2024-11-06": {
+            "Q1": 56,
+            "Q2": 67,
+            "Q3": 42,
+            "Q4": 70,
+            "Q5": 61
+          },
+          "2024-11-07": {
+            "Q1": 52,
+            "Q2": 66,
+            "Q3": 66,
+            "Q4": 53,
+            "Q5": 58
+          },
+          "2024-11-08": {
+            "Q1": 51,
+            "Q2": 69,
+            "Q3": 60,
+            "Q4": 57,
+            "Q5": 59
+          },
+          "2024-11-11": {
+            "Q1": 63,
+            "Q2": 56,
+            "Q3": 58,
+            "Q4": 59,
+            "Q5": 61
+          },
+          "2024-11-12": {
+            "Q1": 68,
+            "Q2": 49,
+            "Q3": 61,
+            "Q4": 56,
+            "Q5": 63
+          },
+          "2024-11-13": {
+            "Q1": 53,
+            "Q2": 68,
+            "Q3": 58,
+            "Q4": 56,
+            "Q5": 62
+          },
+          "2024-11-14": {
+            "Q1": 52,
+            "Q2": 67,
+            "Q3": 56,
+            "Q4": 56,
+            "Q5": 66
+          },
+          "2024-11-15": {
+            "Q1": 50,
+            "Q2": 67,
+            "Q3": 64,
+            "Q4": 52,
+            "Q5": 64
+          },
+          "2024-11-18": {
+            "Q1": 49,
+            "Q2": 66,
+            "Q3": 61,
+            "Q4": 61,
+            "Q5": 60
+          },
+          "2024-11-19": {
+            "Q1": 52,
+            "Q2": 65,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 61
+          },
+          "2024-11-20": {
+            "Q1": 66,
+            "Q2": 50,
+            "Q3": 60,
+            "Q4": 57,
+            "Q5": 64
+          },
+          "2024-11-21": {
+            "Q1": 59,
+            "Q2": 66,
+            "Q3": 63,
+            "Q4": 48,
+            "Q5": 61
+          },
+          "2024-11-22": {
+            "Q1": 60,
+            "Q2": 65,
+            "Q3": 63,
+            "Q4": 49,
+            "Q5": 60
+          },
+          "2024-11-25": {
+            "Q1": 64,
+            "Q2": 47,
+            "Q3": 58,
+            "Q4": 68,
+            "Q5": 60
+          },
+          "2024-11-26": {
+            "Q1": 61,
+            "Q2": 54,
+            "Q3": 55,
+            "Q4": 67,
+            "Q5": 60
+          },
+          "2024-11-27": {
+            "Q1": 67,
+            "Q2": 48,
+            "Q3": 57,
+            "Q4": 68,
+            "Q5": 57
+          },
+          "2024-11-28": {
+            "Q1": 51,
+            "Q2": 62,
+            "Q3": 61,
+            "Q4": 65,
+            "Q5": 58
+          },
+          "2024-11-29": {
+            "Q1": 50,
+            "Q2": 67,
+            "Q3": 61,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2024-12-02": {
+            "Q1": 51,
+            "Q2": 63,
+            "Q3": 59,
+            "Q4": 66,
+            "Q5": 58
+          },
+          "2024-12-03": {
+            "Q1": 65,
+            "Q2": 57,
+            "Q3": 48,
+            "Q4": 68,
+            "Q5": 59
+          },
+          "2024-12-04": {
+            "Q1": 63,
+            "Q2": 60,
+            "Q3": 50,
+            "Q4": 64,
+            "Q5": 60
+          },
+          "2024-12-05": {
+            "Q1": 64,
+            "Q2": 49,
+            "Q3": 66,
+            "Q4": 57,
+            "Q5": 61
+          },
+          "2024-12-06": {
+            "Q1": 63,
+            "Q2": 51,
+            "Q3": 64,
+            "Q4": 60,
+            "Q5": 59
+          },
+          "2024-12-09": {
+            "Q1": 65,
+            "Q2": 47,
+            "Q3": 65,
+            "Q4": 59,
+            "Q5": 61
+          },
+          "2024-12-10": {
+            "Q1": 66,
+            "Q2": 51,
+            "Q3": 63,
+            "Q4": 57,
+            "Q5": 60
+          },
+          "2024-12-11": {
+            "Q1": 67,
+            "Q2": 51,
+            "Q3": 64,
+            "Q4": 55,
+            "Q5": 60
+          },
+          "2024-12-12": {
+            "Q1": 51,
+            "Q2": 68,
+            "Q3": 66,
+            "Q4": 51,
+            "Q5": 60
+          },
+          "2024-12-13": {
+            "Q1": 63,
+            "Q2": 54,
+            "Q3": 62,
+            "Q4": 56,
+            "Q5": 61
+          },
+          "2024-12-16": {
+            "Q1": 60,
+            "Q2": 50,
+            "Q3": 70,
+            "Q4": 56,
+            "Q5": 60
+          },
+          "2024-12-17": {
+            "Q1": 64,
+            "Q2": 54,
+            "Q3": 62,
+            "Q4": 57,
+            "Q5": 59
+          },
+          "2024-12-18": {
+            "Q1": 66,
+            "Q2": 52,
+            "Q3": 60,
+            "Q4": 58,
+            "Q5": 60
+          },
+          "2024-12-19": {
+            "Q1": 66,
+            "Q2": 52,
+            "Q3": 59,
+            "Q4": 58,
+            "Q5": 62
+          },
+          "2024-12-20": {
+            "Q1": 69,
+            "Q2": 49,
+            "Q3": 61,
+            "Q4": 55,
+            "Q5": 63
+          },
+          "2024-12-23": {
+            "Q1": 67,
+            "Q2": 51,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2024-12-24": {
+            "Q1": 52,
+            "Q2": 75,
+            "Q3": 43,
+            "Q4": 56,
+            "Q5": 71
+          },
+          "2024-12-25": {
+            "Q1": 49,
+            "Q2": 78,
+            "Q3": 44,
+            "Q4": 56,
+            "Q5": 70
+          },
+          "2024-12-26": {
+            "Q1": 58,
+            "Q2": 51,
+            "Q3": 61,
+            "Q4": 60,
+            "Q5": 67
+          },
+          "2024-12-27": {
+            "Q1": 52,
+            "Q2": 56,
+            "Q3": 66,
+            "Q4": 53,
+            "Q5": 70
+          },
+          "2024-12-30": {
+            "Q1": 56,
+            "Q2": 71,
+            "Q3": 53,
+            "Q4": 67,
+            "Q5": 50
+          },
+          "2024-12-31": {
+            "Q1": 57,
+            "Q2": 56,
+            "Q3": 64,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2025-01-02": {
+            "Q1": 57,
+            "Q2": 67,
+            "Q3": 56,
+            "Q4": 49,
+            "Q5": 67
+          },
+          "2025-01-03": {
+            "Q1": 50,
+            "Q2": 66,
+            "Q3": 65,
+            "Q4": 49,
+            "Q5": 67
+          },
+          "2025-01-06": {
+            "Q1": 53,
+            "Q2": 66,
+            "Q3": 61,
+            "Q4": 48,
+            "Q5": 69
+          },
+          "2025-01-07": {
+            "Q1": 51,
+            "Q2": 65,
+            "Q3": 63,
+            "Q4": 47,
+            "Q5": 71
+          },
+          "2025-01-08": {
+            "Q1": 55,
+            "Q2": 74,
+            "Q3": 50,
+            "Q4": 49,
+            "Q5": 69
+          },
+          "2025-01-09": {
+            "Q1": 56,
+            "Q2": 69,
+            "Q3": 49,
+            "Q4": 54,
+            "Q5": 69
+          },
+          "2025-01-10": {
+            "Q1": 51,
+            "Q2": 68,
+            "Q3": 58,
+            "Q4": 51,
+            "Q5": 68
+          },
+          "2025-01-13": {
+            "Q1": 53,
+            "Q2": 68,
+            "Q3": 51,
+            "Q4": 61,
+            "Q5": 63
+          },
+          "2025-01-14": {
+            "Q1": 48,
+            "Q2": 80,
+            "Q3": 49,
+            "Q4": 58,
+            "Q5": 61
+          },
+          "2025-01-15": {
+            "Q1": 48,
+            "Q2": 78,
+            "Q3": 56,
+            "Q4": 48,
+            "Q5": 66
+          },
+          "2025-01-16": {
+            "Q1": 50,
+            "Q2": 78,
+            "Q3": 45,
+            "Q4": 61,
+            "Q5": 62
+          },
+          "2025-01-17": {
+            "Q1": 47,
+            "Q2": 80,
+            "Q3": 54,
+            "Q4": 56,
+            "Q5": 59
+          },
+          "2025-01-20": {
+            "Q1": 45,
+            "Q2": 78,
+            "Q3": 55,
+            "Q4": 57,
+            "Q5": 61
+          },
+          "2025-01-21": {
+            "Q1": 46,
+            "Q2": 72,
+            "Q3": 61,
+            "Q4": 58,
+            "Q5": 59
+          },
+          "2025-01-22": {
+            "Q1": 52,
+            "Q2": 70,
+            "Q3": 56,
+            "Q4": 58,
+            "Q5": 60
+          },
+          "2025-01-23": {
+            "Q1": 44,
+            "Q2": 72,
+            "Q3": 61,
+            "Q4": 56,
+            "Q5": 63
+          },
+          "2025-01-24": {
+            "Q1": 47,
+            "Q2": 69,
+            "Q3": 61,
+            "Q4": 51,
+            "Q5": 68
+          },
+          "2025-01-27": {
+            "Q1": 45,
+            "Q2": 77,
+            "Q3": 56,
+            "Q4": 67,
+            "Q5": 51
+          },
+          "2025-02-05": {
+            "Q1": 43,
+            "Q2": 71,
+            "Q3": 64,
+            "Q4": 46,
+            "Q5": 72
+          },
+          "2025-02-06": {
+            "Q1": 73,
+            "Q2": 45,
+            "Q3": 60,
+            "Q4": 47,
+            "Q5": 70
+          },
+          "2025-02-07": {
+            "Q1": 74,
+            "Q2": 43,
+            "Q3": 59,
+            "Q4": 67,
+            "Q5": 52
+          },
+          "2025-02-10": {
+            "Q1": 43,
+            "Q2": 79,
+            "Q3": 57,
+            "Q4": 49,
+            "Q5": 69
+          },
+          "2025-02-11": {
+            "Q1": 75,
+            "Q2": 51,
+            "Q3": 57,
+            "Q4": 63,
+            "Q5": 51
+          },
+          "2025-02-12": {
+            "Q1": 74,
+            "Q2": 56,
+            "Q3": 41,
+            "Q4": 59,
+            "Q5": 67
+          },
+          "2025-02-13": {
+            "Q1": 72,
+            "Q2": 45,
+            "Q3": 61,
+            "Q4": 67,
+            "Q5": 52
+          },
+          "2025-02-14": {
+            "Q1": 73,
+            "Q2": 57,
+            "Q3": 42,
+            "Q4": 73,
+            "Q5": 52
+          },
+          "2025-02-17": {
+            "Q1": 69,
+            "Q2": 42,
+            "Q3": 65,
+            "Q4": 51,
+            "Q5": 69
+          },
+          "2025-02-18": {
+            "Q1": 69,
+            "Q2": 42,
+            "Q3": 66,
+            "Q4": 55,
+            "Q5": 64
+          },
+          "2025-02-19": {
+            "Q1": 73,
+            "Q2": 44,
+            "Q3": 64,
+            "Q4": 56,
+            "Q5": 58
+          },
+          "2025-02-20": {
+            "Q1": 73,
+            "Q2": 45,
+            "Q3": 61,
+            "Q4": 59,
+            "Q5": 57
+          },
+          "2025-02-21": {
+            "Q1": 73,
+            "Q2": 45,
+            "Q3": 59,
+            "Q4": 57,
+            "Q5": 61
+          },
+          "2025-02-24": {
+            "Q1": 66,
+            "Q2": 46,
+            "Q3": 66,
+            "Q4": 56,
+            "Q5": 60
+          },
+          "2025-02-25": {
+            "Q1": 64,
+            "Q2": 50,
+            "Q3": 70,
+            "Q4": 49,
+            "Q5": 61
+          },
+          "2025-02-26": {
+            "Q1": 69,
+            "Q2": 47,
+            "Q3": 63,
+            "Q4": 57,
+            "Q5": 58
+          },
+          "2025-02-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2025-02-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-10": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-03-11": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-03-12": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-03-13": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-03-14": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-03-17": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-18": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 61,
+            "Q4": 58,
+            "Q5": 60
+          },
+          "2025-03-19": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-20": {
+            "Q1": 57,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-21": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-24": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-25": {
+            "Q1": 56,
+            "Q2": 60,
+            "Q3": 61,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-27": {
+            "Q1": 56,
+            "Q2": 62,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-28": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-03-31": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-01": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-02": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-03": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-07": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-08": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-09": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-10": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-11": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-14": {
+            "Q1": 61,
+            "Q2": 59,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-15": {
+            "Q1": 62,
+            "Q2": 54,
+            "Q3": 62,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-16": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-17": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-18": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-21": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-22": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-23": {
+            "Q1": 56,
+            "Q2": 62,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-04-24": {
+            "Q1": 56,
+            "Q2": 62,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-04-25": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-04-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-04-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-04-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-07": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-08": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-12": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-13": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-14": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-16": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-19": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-20": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-21": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-22": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-23": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-26": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-27": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 58,
+            "Q5": 60
+          },
+          "2025-05-28": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-05-29": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-05-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-06-03": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-06-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-06-05": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-06-06": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-06-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-06-10": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-11": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-12": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-13": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-16": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-17": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-18": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-19": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-20": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-23": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-24": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-25": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-06-26": {
+            "Q1": 55,
+            "Q2": 64,
+            "Q3": 64,
+            "Q4": 59,
+            "Q5": 56
+          },
+          "2025-06-27": {
+            "Q1": 47,
+            "Q2": 71,
+            "Q3": 63,
+            "Q4": 59,
+            "Q5": 58
+          },
+          "2025-06-30": {
+            "Q1": 54,
+            "Q2": 65,
+            "Q3": 62,
+            "Q4": 58,
+            "Q5": 59
+          },
+          "2025-07-01": {
+            "Q1": 50,
+            "Q2": 68,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 62
+          },
+          "2025-07-02": {
+            "Q1": 48,
+            "Q2": 71,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-07-03": {
+            "Q1": 51,
+            "Q2": 68,
+            "Q3": 56,
+            "Q4": 69,
+            "Q5": 54
+          },
+          "2025-07-04": {
+            "Q1": 48,
+            "Q2": 71,
+            "Q3": 58,
+            "Q4": 61,
+            "Q5": 60
+          },
+          "2025-07-07": {
+            "Q1": 44,
+            "Q2": 73,
+            "Q3": 59,
+            "Q4": 54,
+            "Q5": 67
+          },
+          "2025-07-08": {
+            "Q1": 45,
+            "Q2": 77,
+            "Q3": 56,
+            "Q4": 54,
+            "Q5": 65
+          },
+          "2025-07-09": {
+            "Q1": 54,
+            "Q2": 64,
+            "Q3": 61,
+            "Q4": 55,
+            "Q5": 63
+          },
+          "2025-07-10": {
+            "Q1": 45,
+            "Q2": 77,
+            "Q3": 56,
+            "Q4": 56,
+            "Q5": 63
+          },
+          "2025-07-11": {
+            "Q1": 71,
+            "Q2": 48,
+            "Q3": 61,
+            "Q4": 47,
+            "Q5": 70
+          },
+          "2025-07-14": {
+            "Q1": 47,
+            "Q2": 75,
+            "Q3": 55,
+            "Q4": 52,
+            "Q5": 68
+          },
+          "2025-07-15": {
+            "Q1": 51,
+            "Q2": 66,
+            "Q3": 59,
+            "Q4": 61,
+            "Q5": 60
+          },
+          "2025-07-16": {
+            "Q1": 47,
+            "Q2": 70,
+            "Q3": 63,
+            "Q4": 55,
+            "Q5": 61
+          },
+          "2025-07-17": {
+            "Q1": 48,
+            "Q2": 70,
+            "Q3": 57,
+            "Q4": 60,
+            "Q5": 61
+          },
+          "2025-07-18": {
+            "Q1": 48,
+            "Q2": 71,
+            "Q3": 60,
+            "Q4": 61,
+            "Q5": 56
+          },
+          "2025-07-21": {
+            "Q1": 44,
+            "Q2": 74,
+            "Q3": 60,
+            "Q4": 51,
+            "Q5": 68
+          },
+          "2025-07-22": {
+            "Q1": 47,
+            "Q2": 73,
+            "Q3": 55,
+            "Q4": 58,
+            "Q5": 65
+          },
+          "2025-07-23": {
+            "Q1": 47,
+            "Q2": 68,
+            "Q3": 64,
+            "Q4": 58,
+            "Q5": 61
+          },
+          "2025-07-24": {
+            "Q1": 45,
+            "Q2": 73,
+            "Q3": 64,
+            "Q4": 56,
+            "Q5": 60
+          },
+          "2025-07-25": {
+            "Q1": 43,
+            "Q2": 74,
+            "Q3": 62,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2025-07-28": {
+            "Q1": 46,
+            "Q2": 73,
+            "Q3": 60,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2025-07-29": {
+            "Q1": 46,
+            "Q2": 72,
+            "Q3": 61,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-07-30": {
+            "Q1": 48,
+            "Q2": 70,
+            "Q3": 60,
+            "Q4": 58,
+            "Q5": 62
+          },
+          "2025-07-31": {
+            "Q1": 49,
+            "Q2": 69,
+            "Q3": 65,
+            "Q4": 57,
+            "Q5": 58
+          },
+          "2025-08-01": {
+            "Q1": 48,
+            "Q2": 69,
+            "Q3": 62,
+            "Q4": 62,
+            "Q5": 56
+          },
+          "2025-08-04": {
+            "Q1": 51,
+            "Q2": 68,
+            "Q3": 62,
+            "Q4": 61,
+            "Q5": 53
+          },
+          "2025-08-05": {
+            "Q1": 51,
+            "Q2": 67,
+            "Q3": 66,
+            "Q4": 56,
+            "Q5": 55
+          },
+          "2025-08-06": {
+            "Q1": 49,
+            "Q2": 63,
+            "Q3": 78,
+            "Q4": 50,
+            "Q5": 55
+          },
+          "2025-08-07": {
+            "Q1": 48,
+            "Q2": 73,
+            "Q3": 63,
+            "Q4": 62,
+            "Q5": 49
+          },
+          "2025-08-08": {
+            "Q1": 46,
+            "Q2": 66,
+            "Q3": 73,
+            "Q4": 58,
+            "Q5": 52
+          },
+          "2025-08-11": {
+            "Q1": 43,
+            "Q2": 77,
+            "Q3": 64,
+            "Q4": 60,
+            "Q5": 51
+          },
+          "2025-08-12": {
+            "Q1": 42,
+            "Q2": 75,
+            "Q3": 66,
+            "Q4": 62,
+            "Q5": 51
+          },
+          "2025-08-13": {
+            "Q1": 50,
+            "Q2": 69,
+            "Q3": 61,
+            "Q4": 61,
+            "Q5": 54
+          },
+          "2025-08-14": {
+            "Q1": 53,
+            "Q2": 66,
+            "Q3": 59,
+            "Q4": 66,
+            "Q5": 51
+          },
+          "2025-08-15": {
+            "Q1": 50,
+            "Q2": 69,
+            "Q3": 60,
+            "Q4": 66,
+            "Q5": 51
+          },
+          "2025-08-18": {
+            "Q1": 54,
+            "Q2": 65,
+            "Q3": 62,
+            "Q4": 64,
+            "Q5": 52
+          },
+          "2025-08-19": {
+            "Q1": 56,
+            "Q2": 67,
+            "Q3": 61,
+            "Q4": 43,
+            "Q5": 71
+          },
+          "2025-08-20": {
+            "Q1": 55,
+            "Q2": 61,
+            "Q3": 72,
+            "Q4": 39,
+            "Q5": 71
+          },
+          "2025-08-21": {
+            "Q1": 60,
+            "Q2": 38,
+            "Q3": 82,
+            "Q4": 57,
+            "Q5": 61
+          },
+          "2025-08-22": {
+            "Q1": 55,
+            "Q2": 44,
+            "Q3": 79,
+            "Q4": 61,
+            "Q5": 59
+          },
+          "2025-08-25": {
+            "Q1": 59,
+            "Q2": 81,
+            "Q3": 36,
+            "Q4": 56,
+            "Q5": 66
+          },
+          "2025-08-26": {
+            "Q1": 58,
+            "Q2": 73,
+            "Q3": 54,
+            "Q4": 43,
+            "Q5": 70
+          },
+          "2025-08-27": {
+            "Q1": 59,
+            "Q2": 72,
+            "Q3": 41,
+            "Q4": 55,
+            "Q5": 71
+          },
+          "2025-08-28": {
+            "Q1": 59,
+            "Q2": 80,
+            "Q3": 46,
+            "Q4": 42,
+            "Q5": 71
+          },
+          "2025-08-29": {
+            "Q1": 58,
+            "Q2": 81,
+            "Q3": 36,
+            "Q4": 53,
+            "Q5": 69
+          },
+          "2025-09-01": {
+            "Q1": 55,
+            "Q2": 86,
+            "Q3": 36,
+            "Q4": 49,
+            "Q5": 70
+          },
+          "2025-09-02": {
+            "Q1": 59,
+            "Q2": 73,
+            "Q3": 40,
+            "Q4": 55,
+            "Q5": 69
+          },
+          "2025-09-03": {
+            "Q1": 56,
+            "Q2": 77,
+            "Q3": 42,
+            "Q4": 55,
+            "Q5": 66
+          },
+          "2025-09-04": {
+            "Q1": 60,
+            "Q2": 70,
+            "Q3": 41,
+            "Q4": 53,
+            "Q5": 72
+          },
+          "2025-09-05": {
+            "Q1": 61,
+            "Q2": 66,
+            "Q3": 56,
+            "Q4": 40,
+            "Q5": 73
+          },
+          "2025-09-08": {
+            "Q1": 61,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 45,
+            "Q5": 69
+          },
+          "2025-09-09": {
+            "Q1": 55,
+            "Q2": 75,
+            "Q3": 40,
+            "Q4": 56,
+            "Q5": 71
+          },
+          "2025-09-10": {
+            "Q1": 57,
+            "Q2": 65,
+            "Q3": 46,
+            "Q4": 59,
+            "Q5": 70
+          },
+          "2025-09-11": {
+            "Q1": 59,
+            "Q2": 67,
+            "Q3": 47,
+            "Q4": 52,
+            "Q5": 72
+          },
+          "2025-09-12": {
+            "Q1": 61,
+            "Q2": 63,
+            "Q3": 47,
+            "Q4": 56,
+            "Q5": 71
+          },
+          "2025-09-15": {
+            "Q1": 60,
+            "Q2": 68,
+            "Q3": 47,
+            "Q4": 52,
+            "Q5": 72
+          },
+          "2025-09-16": {
+            "Q1": 60,
+            "Q2": 68,
+            "Q3": 46,
+            "Q4": 51,
+            "Q5": 74
+          },
+          "2025-09-17": {
+            "Q1": 58,
+            "Q2": 71,
+            "Q3": 42,
+            "Q4": 57,
+            "Q5": 71
+          },
+          "2025-09-18": {
+            "Q1": 59,
+            "Q2": 72,
+            "Q3": 47,
+            "Q4": 50,
+            "Q5": 71
+          },
+          "2025-09-19": {
+            "Q1": 59,
+            "Q2": 78,
+            "Q3": 42,
+            "Q4": 50,
+            "Q5": 70
+          },
+          "2025-09-22": {
+            "Q1": 60,
+            "Q2": 73,
+            "Q3": 46,
+            "Q4": 51,
+            "Q5": 69
+          },
+          "2025-09-23": {
+            "Q1": 60,
+            "Q2": 71,
+            "Q3": 42,
+            "Q4": 52,
+            "Q5": 74
+          },
+          "2025-09-24": {
+            "Q1": 59,
+            "Q2": 65,
+            "Q3": 65,
+            "Q4": 33,
+            "Q5": 77
+          },
+          "2025-09-25": {
+            "Q1": 61,
+            "Q2": 72,
+            "Q3": 43,
+            "Q4": 53,
+            "Q5": 70
+          },
+          "2025-09-26": {
+            "Q1": 63,
+            "Q2": 70,
+            "Q3": 45,
+            "Q4": 52,
+            "Q5": 69
+          },
+          "2025-09-29": {
+            "Q1": 62,
+            "Q2": 67,
+            "Q3": 44,
+            "Q4": 55,
+            "Q5": 71
+          },
+          "2025-09-30": {
+            "Q1": 61,
+            "Q2": 38,
+            "Q3": 80,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-10-09": {
+            "Q1": 61,
+            "Q2": 38,
+            "Q3": 80,
+            "Q4": 56,
+            "Q5": 64
+          },
+          "2025-10-10": {
+            "Q1": 57,
+            "Q2": 85,
+            "Q3": 33,
+            "Q4": 62,
+            "Q5": 62
+          },
+          "2025-10-13": {
+            "Q1": 57,
+            "Q2": 84,
+            "Q3": 39,
+            "Q4": 54,
+            "Q5": 65
+          },
+          "2025-10-14": {
+            "Q1": 61,
+            "Q2": 66,
+            "Q3": 44,
+            "Q4": 58,
+            "Q5": 69
+          },
+          "2025-10-15": {
+            "Q1": 56,
+            "Q2": 65,
+            "Q3": 67,
+            "Q4": 42,
+            "Q5": 69
+          },
+          "2025-10-16": {
+            "Q1": 60,
+            "Q2": 70,
+            "Q3": 48,
+            "Q4": 54,
+            "Q5": 67
+          },
+          "2025-10-17": {
+            "Q1": 60,
+            "Q2": 67,
+            "Q3": 43,
+            "Q4": 56,
+            "Q5": 73
+          },
+          "2025-10-20": {
+            "Q1": 62,
+            "Q2": 74,
+            "Q3": 40,
+            "Q4": 53,
+            "Q5": 70
+          },
+          "2025-10-21": {
+            "Q1": 62,
+            "Q2": 74,
+            "Q3": 49,
+            "Q4": 39,
+            "Q5": 75
+          },
+          "2025-10-22": {
+            "Q1": 61,
+            "Q2": 68,
+            "Q3": 45,
+            "Q4": 56,
+            "Q5": 69
+          },
+          "2025-10-23": {
+            "Q1": 56,
+            "Q2": 71,
+            "Q3": 42,
+            "Q4": 63,
+            "Q5": 65
+          },
+          "2025-10-24": {
+            "Q1": 47,
+            "Q2": 72,
+            "Q3": 69,
+            "Q4": 57,
+            "Q5": 52
+          },
+          "2025-10-27": {
+            "Q1": 46,
+            "Q2": 72,
+            "Q3": 71,
+            "Q4": 58,
+            "Q5": 50
+          },
+          "2025-10-28": {
+            "Q1": 67,
+            "Q2": 51,
+            "Q3": 45,
+            "Q4": 89,
+            "Q5": 45
+          },
+          "2025-10-29": {
+            "Q1": 64,
+            "Q2": 47,
+            "Q3": 73,
+            "Q4": 64,
+            "Q5": 49
+          },
+          "2025-10-30": {
+            "Q1": 63,
+            "Q2": 57,
+            "Q3": 65,
+            "Q4": 63,
+            "Q5": 49
+          },
+          "2025-10-31": {
+            "Q1": 69,
+            "Q2": 49,
+            "Q3": 73,
+            "Q4": 63,
+            "Q5": 43
+          },
+          "2025-11-03": {
+            "Q1": 64,
+            "Q2": 52,
+            "Q3": 68,
+            "Q4": 67,
+            "Q5": 46
+          },
+          "2025-11-04": {
+            "Q1": 60,
+            "Q2": 53,
+            "Q3": 71,
+            "Q4": 65,
+            "Q5": 48
+          },
+          "2025-11-05": {
+            "Q1": 59,
+            "Q2": 52,
+            "Q3": 74,
+            "Q4": 62,
+            "Q5": 50
+          },
+          "2025-11-06": {
+            "Q1": 60,
+            "Q2": 51,
+            "Q3": 73,
+            "Q4": 63,
+            "Q5": 50
+          },
+          "2025-11-07": {
+            "Q1": 60,
+            "Q2": 56,
+            "Q3": 71,
+            "Q4": 60,
+            "Q5": 50
+          },
+          "2025-11-10": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 76,
+            "Q4": 27,
+            "Q5": 76
+          },
+          "2025-11-11": {
+            "Q1": 64,
+            "Q2": 55,
+            "Q3": 41,
+            "Q4": 60,
+            "Q5": 76
+          },
+          "2025-11-12": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 72,
+            "Q4": 63,
+            "Q5": 44
+          },
+          "2025-11-13": {
+            "Q1": 62,
+            "Q2": 52,
+            "Q3": 75,
+            "Q4": 60,
+            "Q5": 48
+          },
+          "2025-11-14": {
+            "Q1": 60,
+            "Q2": 49,
+            "Q3": 75,
+            "Q4": 57,
+            "Q5": 56
+          },
+          "2025-11-17": {
+            "Q1": 59,
+            "Q2": 52,
+            "Q3": 75,
+            "Q4": 59,
+            "Q5": 52
+          },
+          "2025-11-18": {
+            "Q1": 55,
+            "Q2": 54,
+            "Q3": 69,
+            "Q4": 65,
+            "Q5": 54
+          },
+          "2025-11-19": {
+            "Q1": 57,
+            "Q2": 55,
+            "Q3": 73,
+            "Q4": 62,
+            "Q5": 50
+          },
+          "2025-11-20": {
+            "Q1": 57,
+            "Q2": 61,
+            "Q3": 79,
+            "Q4": 28,
+            "Q5": 72
+          },
+          "2025-11-21": {
+            "Q1": 59,
+            "Q2": 56,
+            "Q3": 68,
+            "Q4": 67,
+            "Q5": 46
+          },
+          "2025-11-24": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 62,
+            "Q4": 65,
+            "Q5": 50
+          },
+          "2025-11-25": {
+            "Q1": 57,
+            "Q2": 60,
+            "Q3": 62,
+            "Q4": 66,
+            "Q5": 51
+          },
+          "2025-11-26": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 69,
+            "Q4": 64,
+            "Q5": 45
+          },
+          "2025-11-27": {
+            "Q1": 60,
+            "Q2": 55,
+            "Q3": 75,
+            "Q4": 63,
+            "Q5": 43
+          },
+          "2025-11-28": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 64,
+            "Q4": 63,
+            "Q5": 50
+          },
+          "2025-12-01": {
+            "Q1": 58,
+            "Q2": 54,
+            "Q3": 67,
+            "Q4": 65,
+            "Q5": 52
+          },
+          "2025-12-02": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 65,
+            "Q4": 65,
+            "Q5": 46
+          },
+          "2025-12-03": {
+            "Q1": 58,
+            "Q2": 55,
+            "Q3": 64,
+            "Q4": 68,
+            "Q5": 50
+          },
+          "2025-12-04": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 59
+          },
+          "2025-12-05": {
+            "Q1": 58,
+            "Q2": 58,
+            "Q3": 65,
+            "Q4": 55,
+            "Q5": 60
+          },
+          "2025-12-08": {
+            "Q1": 57,
+            "Q2": 62,
+            "Q3": 58,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2025-12-09": {
+            "Q1": 59,
+            "Q2": 56,
+            "Q3": 63,
+            "Q4": 61,
+            "Q5": 57
+          },
+          "2025-12-10": {
+            "Q1": 60,
+            "Q2": 51,
+            "Q3": 67,
+            "Q4": 58,
+            "Q5": 60
+          },
+          "2025-12-11": {
+            "Q1": 63,
+            "Q2": 48,
+            "Q3": 67,
+            "Q4": 62,
+            "Q5": 56
+          },
+          "2025-12-12": {
+            "Q1": 56,
+            "Q2": 55,
+            "Q3": 68,
+            "Q4": 55,
+            "Q5": 62
+          },
+          "2025-12-15": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 65,
+            "Q4": 60,
+            "Q5": 53
+          },
+          "2025-12-16": {
+            "Q1": 60,
+            "Q2": 57,
+            "Q3": 68,
+            "Q4": 61,
+            "Q5": 51
+          },
+          "2025-12-17": {
+            "Q1": 60,
+            "Q2": 55,
+            "Q3": 69,
+            "Q4": 64,
+            "Q5": 49
+          },
+          "2025-12-18": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 67,
+            "Q4": 63,
+            "Q5": 50
+          },
+          "2025-12-19": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-12-22": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-12-23": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-12-24": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-12-25": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-12-26": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-12-29": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2025-12-30": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2025-12-31": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2026-01-05": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-06": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 61
+          },
+          "2026-01-07": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-08": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-09": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2026-01-12": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2026-01-13": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2026-01-14": {
+            "Q1": 59,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2026-01-15": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-16": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-19": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-20": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-21": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-22": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-23": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-26": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-27": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-28": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-29": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-01-30": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-02": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-03": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-04": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-05": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-06": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 59,
+            "Q4": 61,
+            "Q5": 60
+          },
+          "2026-02-09": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 61,
+            "Q4": 59,
+            "Q5": 60
+          },
+          "2026-02-10": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-11": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-12": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-13": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-24": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-02-25": {
+            "Q1": 66,
+            "Q2": 50,
+            "Q3": 61,
+            "Q4": 59,
+            "Q5": 63
+          },
+          "2026-02-26": {
+            "Q1": 58,
+            "Q2": 63,
+            "Q3": 57,
+            "Q4": 53,
+            "Q5": 68
+          },
+          "2026-02-27": {
+            "Q1": 62,
+            "Q2": 57,
+            "Q3": 59,
+            "Q4": 72,
+            "Q5": 49
+          },
+          "2026-03-02": {
+            "Q1": 60,
+            "Q2": 61,
+            "Q3": 58,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-03-03": {
+            "Q1": 58,
+            "Q2": 63,
+            "Q3": 59,
+            "Q4": 57,
+            "Q5": 62
+          },
+          "2026-03-04": {
+            "Q1": 58,
+            "Q2": 59,
+            "Q3": 61,
+            "Q4": 56,
+            "Q5": 65
+          },
+          "2026-03-05": {
+            "Q1": 59,
+            "Q2": 62,
+            "Q3": 56,
+            "Q4": 59,
+            "Q5": 63
+          },
+          "2026-03-06": {
+            "Q1": 65,
+            "Q2": 58,
+            "Q3": 55,
+            "Q4": 62,
+            "Q5": 59
+          },
+          "2026-03-09": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 60,
+            "Q4": 54,
+            "Q5": 67
+          },
+          "2026-03-10": {
+            "Q1": 66,
+            "Q2": 53,
+            "Q3": 60,
+            "Q4": 55,
+            "Q5": 65
+          },
+          "2026-03-11": {
+            "Q1": 63,
+            "Q2": 56,
+            "Q3": 64,
+            "Q4": 53,
+            "Q5": 64
+          },
+          "2026-03-12": {
+            "Q1": 62,
+            "Q2": 58,
+            "Q3": 60,
+            "Q4": 57,
+            "Q5": 63
+          },
+          "2026-03-13": {
+            "Q1": 62,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 59,
+            "Q5": 61
+          },
+          "2026-03-16": {
+            "Q1": 58,
+            "Q2": 64,
+            "Q3": 56,
+            "Q4": 60,
+            "Q5": 62
+          },
+          "2026-03-17": {
+            "Q1": 60,
+            "Q2": 62,
+            "Q3": 58,
+            "Q4": 57,
+            "Q5": 63
+          },
+          "2026-03-18": {
+            "Q1": 60,
+            "Q2": 61,
+            "Q3": 61,
+            "Q4": 57,
+            "Q5": 61
+          },
+          "2026-03-19": {
+            "Q1": 56,
+            "Q2": 64,
+            "Q3": 57,
+            "Q4": 60,
+            "Q5": 63
+          },
+          "2026-03-20": {
+            "Q1": 62,
+            "Q2": 56,
+            "Q3": 60,
+            "Q4": 55,
+            "Q5": 66
+          },
+          "2026-03-23": {
+            "Q1": 62,
+            "Q2": 59,
+            "Q3": 56,
+            "Q4": 72,
+            "Q5": 50
+          },
+          "2026-03-24": {
+            "Q1": 62,
+            "Q2": 57,
+            "Q3": 63,
+            "Q4": 49,
+            "Q5": 68
+          },
+          "2026-03-25": {
+            "Q1": 62,
+            "Q2": 56,
+            "Q3": 59,
+            "Q4": 56,
+            "Q5": 66
+          },
+          "2026-03-26": {
+            "Q1": 61,
+            "Q2": 63,
+            "Q3": 55,
+            "Q4": 64,
+            "Q5": 56
+          },
+          "2026-03-27": {
+            "Q1": 59,
+            "Q2": 58,
+            "Q3": 62,
+            "Q4": 62,
+            "Q5": 58
+          },
+          "2026-03-30": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 62,
+            "Q4": 63,
+            "Q5": 55
+          },
+          "2026-03-31": {
+            "Q1": 57,
+            "Q2": 59,
+            "Q3": 62,
+            "Q4": 51,
+            "Q5": 70
+          },
+          "2026-04-01": {
+            "Q1": 61,
+            "Q2": 57,
+            "Q3": 63,
+            "Q4": 51,
+            "Q5": 67
+          },
+          "2026-04-02": {
+            "Q1": 60,
+            "Q2": 62,
+            "Q3": 55,
+            "Q4": 53,
+            "Q5": 69
+          },
+          "2026-04-03": {
+            "Q1": 61,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 53,
+            "Q5": 66
+          },
+          "2026-04-07": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 59,
+            "Q4": 68,
+            "Q5": 54
+          },
+          "2026-04-08": {
+            "Q1": 62,
+            "Q2": 56,
+            "Q3": 62,
+            "Q4": 67,
+            "Q5": 53
+          },
+          "2026-04-09": {
+            "Q1": 60,
+            "Q2": 58,
+            "Q3": 63,
+            "Q4": 61,
+            "Q5": 58
+          },
+          "2026-04-10": {
+            "Q1": 53,
+            "Q2": 68,
+            "Q3": 57,
+            "Q4": 54,
+            "Q5": 68
+          },
+          "2026-04-13": {
+            "Q1": 48,
+            "Q2": 72,
+            "Q3": 62,
+            "Q4": 62,
+            "Q5": 56
+          },
+          "2026-04-14": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 65,
+            "Q5": 55
+          },
+          "2026-04-15": {
+            "Q1": 58,
+            "Q2": 63,
+            "Q3": 57,
+            "Q4": 71,
+            "Q5": 51
+          },
+          "2026-04-16": {
+            "Q1": 60,
+            "Q2": 63,
+            "Q3": 56,
+            "Q4": 66,
+            "Q5": 55
+          },
+          "2026-04-17": {
+            "Q1": 59,
+            "Q2": 57,
+            "Q3": 63,
+            "Q4": 63,
+            "Q5": 58
+          },
+          "2026-04-20": {
+            "Q1": 59,
+            "Q2": 55,
+            "Q3": 64,
+            "Q4": 65,
+            "Q5": 56
+          },
+          "2026-04-21": {
+            "Q1": 53,
+            "Q2": 65,
+            "Q3": 59,
+            "Q4": 68,
+            "Q5": 54
+          },
+          "2026-04-22": {
+            "Q1": 58,
+            "Q2": 61,
+            "Q3": 59,
+            "Q4": 68,
+            "Q5": 53
+          },
+          "2026-04-23": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-04-24": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-04-27": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-04-28": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-04-29": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-04-30": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-06": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-07": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-08": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-11": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-12": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-13": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-14": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-15": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-18": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-19": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-20": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-21": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-22": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-25": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-26": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-27": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-28": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-05-29": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-01": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-02": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-03": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-04": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-05": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-08": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-09": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-10": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-11": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-12": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-15": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-16": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-17": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-18": {
+            "Q1": 59,
+            "Q2": 61,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-22": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-23": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-24": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-25": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-26": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 59,
+            "Q5": 61
+          },
+          "2026-06-29": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-06-30": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-01": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-02": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-03": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-06": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-07": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-08": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-09": {
+            "Q1": 59,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-10": {
+            "Q1": 60,
+            "Q2": 59,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-13": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-14": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-15": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-16": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-17": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-20": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-21": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-22": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-23": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-24": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          },
+          "2026-07-27": {
+            "Q1": 60,
+            "Q2": 60,
+            "Q3": 60,
+            "Q4": 60,
+            "Q5": 60
+          }
+        },
+        "aggregation_method": "mean_of_daily_quantile_returns",
+        "runtime_model_id": "lightgbm_clf_baseline",
+        "source_code_sha": "c90c490fcf0c6edd0c7a5a37d258a6c6bfdef8a9"
+      },
+      "reason": "quantile evidence incomplete",
+      "evidence_artifacts": [
+        "quantile_evaluation_summary.json"
+      ],
+      "evidence_sha256": {
+        "quantile_evaluation_summary.json": "59d9489d5b44eaa544aa9d263990db3ca0814ac2d5adb97e8f3e61134bcba5bb"
+      }
+    },
+    "MULTI_SEED_ROBUSTNESS": {
+      "gate_id": "MULTI_SEED_ROBUSTNESS",
+      "status": "PASS",
+      "passed": true,
+      "condition": "fixed seeds 42, 100, 2024 meet bound",
+      "threshold": "std <= 0.0050",
+      "actual_value": {
+        "std": 0.004902,
+        "seeds": [
+          "42",
+          "100",
+          "2024"
+        ]
+      },
+      "reason": "Multi-seed robustness verified.",
+      "evidence_artifacts": [
+        "multi_seed_robustness.json"
+      ],
+      "evidence_sha256": {
+        "multi_seed_robustness.json": "11e95869dbadc23f3896559ba392d06d6bc8e71bb10da4d76aa406376333aa5f"
+      }
+    },
+    "ROBUST_MODEL_IMPROVEMENT": {
+      "gate_id": "ROBUST_MODEL_IMPROVEMENT",
+      "status": "MIXED_EVIDENCE_NOT_ROBUST",
+      "passed": false,
+      "condition": "non-self comparison has positive 95% CI lower bound",
+      "threshold": "bootstrap_ci_95_lower > 0",
+      "actual_value": {
+        "comparison_pair": "lightgbm_reg_baseline_vs_lightgbm_clf_baseline",
+        "bootstrap_ci_95_lower": -0.0305
+      },
+      "reason": "robust improvement not established",
+      "evidence_artifacts": [
+        "bootstrap_comparison.json"
+      ],
+      "evidence_sha256": {
+        "bootstrap_comparison.json": "5c0659e3acfb2e0476968bf61b942844658a757e8dbf4d9c2eef368aaedc6b0f"
+      }
+    },
+    "FINAL_HOLDOUT_GOVERNANCE": {
+      "gate_id": "FINAL_HOLDOUT_GOVERNANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "historical OOS is not prospective holdout",
+      "threshold": "final_holdout_available == false",
+      "actual_value": {
+        "final_holdout_available": false,
+        "historical_oos_status": true,
+        "live_trading_ready": false,
+        "production_model_promotion": false,
+        "source_code_sha": "c90c490fcf0c6edd0c7a5a37d258a6c6bfdef8a9",
+        "created_at": "2026-09-05T02:21:24.434938"
+      },
+      "reason": "Holdout governance accurate.",
+      "evidence_artifacts": [
+        "governance_manifest.json"
+      ],
+      "evidence_sha256": {
+        "governance_manifest.json": "ede048809cd47c01c26020687358b5e52ff8f8cbfd2590a2ae01b15dc7778cfe"
+      }
+    },
+    "LIVE_TRADING_GOVERNANCE": {
+      "gate_id": "LIVE_TRADING_GOVERNANCE",
+      "status": "PASS",
+      "passed": true,
+      "condition": "live and production promotion are disabled",
+      "threshold": "both flags == false",
+      "actual_value": {
+        "final_holdout_available": false,
+        "historical_oos_status": true,
+        "live_trading_ready": false,
+        "production_model_promotion": false,
+        "source_code_sha": "c90c490fcf0c6edd0c7a5a37d258a6c6bfdef8a9",
+        "created_at": "2026-09-05T02:21:24.434938"
+      },
+      "reason": "No live/production claim.",
+      "evidence_artifacts": [
+        "governance_manifest.json"
+      ],
+      "evidence_sha256": {
+        "governance_manifest.json": "ede048809cd47c01c26020687358b5e52ff8f8cbfd2590a2ae01b15dc7778cfe"
+      }
+    }
+  }
+}

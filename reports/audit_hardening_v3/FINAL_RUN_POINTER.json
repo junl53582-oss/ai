@@ -1,11 +1,11 @@
 {
-  "run_id": "research_8dbf062_20260831_155701",
-  "code_freeze_sha": "8dbf06213b9af0a6614f377513dc997aa80266be",
-  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "run_id": "research_c90c490_20260905_021645",
+  "code_freeze_sha": "c90c490fcf0c6edd0c7a5a37d258a6c6bfdef8a9",
+  "dataset_sha256": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
   "calendar_sha256": "cf08829d987632359ac12537a2d8659354aa1acc71057670ad81af2921eb0c23",
-  "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
-  "artifact_manifest_sha256": "d006cb4d40efc9f9c189ecce017480054fbb27fd18d0c8b7084895aacf373211",
-  "gate_matrix_sha256": "deeeb4f0858bb7a86ef87c2937cd94d5602ab4a3d7e33f58bfce475b5acfa8ff",
-  "created_at": "2026-09-04T06:30:00Z",
-  "run_status": "FAILED: INSUFFICIENT_EVIDENCE_FOR_STRICT_FUNDAMENTAL_PIT"
+  "config_hash": "2a9df1bc38f5238ca1b3569b3d230b17cb190663235aaf532f37e8da8232d620",
+  "artifact_manifest_sha256": "ead1a226b002c5e4f2410638dfb768ca0fc38aca2ddbd852db31b47e31132918",
+  "gate_matrix_sha256": "7914008dce844af5343c85d4757edd573ecc817de6ab068fe686480eed1bdc8c",
+  "created_at": "2026-09-05T02:21:30Z",
+  "run_status": "FAILED: INSUFFICIENT_EVIDENCE_FOR_QUANTILE_EVALUATION_INTEGRITY"
 }

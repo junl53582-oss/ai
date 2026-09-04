@@ -27,7 +27,9 @@ print(">>> 遵循计量经济学与金融工程标准，用纯数学检验数据
 print("=" * 80)
 
 # 1. 加载真实历史数据
-matrix_path = settings.DATA_DIR / "research" / "factor_matrix_300.parquet"
+matrix_path = settings.DATA_DIR / "research" / "factor_matrix_300_v2.parquet"
+if not matrix_path.exists():
+    matrix_path = settings.DATA_DIR / "research" / "factor_matrix_300.parquet"
 if not matrix_path.exists():
     matrix_path = settings.PARQUET_DIR / "market_data.parquet"
 
