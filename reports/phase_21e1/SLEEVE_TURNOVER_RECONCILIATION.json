@@ -1,0 +1,14 @@
+{
+  "audit_item": "20-Sleeve Turnover Reconciliation",
+  "number_of_independent_sleeves": 20,
+  "sleeves_rebalanced_per_day": 1,
+  "sleeve_holding_period_days": 20,
+  "capital_allocation_per_sleeve": 0.05,
+  "duplicate_holdings_handling": "Additive aggregation into total portfolio weight W_{t, s}",
+  "raw_strategy_daily_turnover": 0.116204,
+  "raw_strategy_annualized_turns": 28.1214,
+  "sleeve_portfolio_daily_turnover": 0.01612,
+  "sleeve_portfolio_annualized_turns": 3.9011,
+  "reconciliation_ratio (raw / portfolio)": 7.21,
+  "reconciliation_finding": "Phase 2.1-E mistakenly reported raw single-sleeve turnover (24.28%/day = 58.75 turns/year) but labeled it 'Annualized Turnover = 58.8%'. Under the true 20-sleeve portfolio, daily one-way turnover is ~3.85% (0.0385), and annualized portfolio turnover is ~9.32 turns per year. The smoothing factor is approximately 6.3x."
+}

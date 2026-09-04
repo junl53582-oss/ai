@@ -1,0 +1,14 @@
+{
+  "audit_item": "Phase 2.1-E Delta Q5-Q1 = 0 anomaly investigation",
+  "prediction_series_equal": false,
+  "rank_series_equal": false,
+  "same_q5_membership_fraction": 0.5936,
+  "same_q1_membership_fraction": 0.5992,
+  "same_top5_fraction": 0.209,
+  "same_top10_fraction": 0.3015,
+  "same_top20_fraction": 0.4083,
+  "q5q1_series_equal": false,
+  "max_abs_q5q1_delta": 0.010398,
+  "root_cause": "In scripts/phase21e_pipeline.py line 659, compute_sleeve_overlapping_returns hardcoded sub['pred_score'] and did not take pred_col, causing sleeve_res_base to evaluate candidate predictions instead of baseline predictions. This made baseline and candidate sleeve return series identical, producing zero delta.",
+  "remediation_status": "FIXED_IN_PHASE21E1"
+}

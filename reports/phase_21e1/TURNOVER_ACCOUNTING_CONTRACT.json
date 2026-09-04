@@ -1,0 +1,38 @@
+{
+  "definitions": {
+    "daily_one_way_turnover": {
+      "formula": "0.5 * (buy_notional + sell_notional) / NAV = 0.5 * sum(|W_{t, s} - W_{t-1, s}|)",
+      "unit": "decimal (e.g. 0.0385 represents 3.85% per day)",
+      "frequency": "daily",
+      "source_file": "scripts/phase21e1_reconciliation_pipeline.py",
+      "source_function": "compute_20sleeve_portfolio_holdings_and_returns"
+    },
+    "daily_two_way_turnover": {
+      "formula": "(buy_notional + sell_notional) / NAV = 2.0 * daily_one_way_turnover",
+      "unit": "decimal (e.g. 0.0770 represents 7.70% per day)",
+      "frequency": "daily",
+      "source_file": "scripts/phase21e1_reconciliation_pipeline.py",
+      "source_function": "compute_20sleeve_portfolio_holdings_and_returns"
+    },
+    "annualized_one_way_turnover": {
+      "formula": "mean(daily_one_way_turnover) * 242",
+      "unit": "decimal turns per year (e.g. 9.32 represents 9.32 turns/year = 932%)",
+      "annualization_method": "multiplication by 242 trading days",
+      "interpretation": "Total portfolio fraction turned over in one year"
+    },
+    "raw_single_sleeve_turnover": {
+      "formula": "Turnover of un-smoothed daily-rebalanced single basket",
+      "unit": "decimal",
+      "interpretation": "Single cohort daily churn (~24.28%/day = 58.75 turns/year)"
+    }
+  },
+  "recalculated_values": {
+    "sleeve_portfolio_mean_daily_one_way": 0.01612,
+    "sleeve_portfolio_median_daily_one_way": 0.015,
+    "sleeve_portfolio_p90_daily_one_way": 0.021667,
+    "sleeve_portfolio_p95_daily_one_way": 0.025,
+    "sleeve_portfolio_annualized_one_way_turns": 3.9011,
+    "raw_strategy_mean_daily_one_way": 0.116204,
+    "raw_strategy_annualized_turns": 28.1214
+  }
+}

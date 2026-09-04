@@ -1,0 +1,15 @@
+{
+  "standard_rules": {
+    "internal_processing": "All quantitative computations, returns, turnovers, costs, and alpha spreads must be stored and computed in pure DECIMAL form (e.g., 0.01 for 1%, 0.001 for 10 bps, 0.0385 for 3.85% turnover).",
+    "display_layer": "Outputs presented in tables/markdown must explicitly denote units with % or bps (e.g., 9.31%, 20 bps). Annualized turnover must be reported as turns/year (e.g. 9.32x) or percentage (e.g. 932%), never conflating a multiplier with a fractional percentage."
+  },
+  "unit_mappings": {
+    "1_bps": 0.0001,
+    "10_bps": 0.001,
+    "20_bps": 0.002,
+    "30_bps": 0.003,
+    "50_bps": 0.005,
+    "1_percent": 0.01,
+    "100_percent": 1.0
+  }
+}
