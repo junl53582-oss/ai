@@ -1,0 +1,50 @@
+[
+  {
+    "interaction_id": "INTERACTION_MOM_VOL_COMPRESS",
+    "discovery_rank_ic": 0.0184,
+    "discovery_icir": 0.1,
+    "positive_ic_ratio": 0.5393,
+    "status": "SCREENED",
+    "decision_reason": "Passes discovery threshold"
+  },
+  {
+    "interaction_id": "INTERACTION_REV_LIQUIDITY_SURGE",
+    "discovery_rank_ic": -0.0004,
+    "discovery_icir": -0.0022,
+    "positive_ic_ratio": 0.5105,
+    "status": "REJECTED",
+    "decision_reason": "Below IC/pos ratio threshold"
+  },
+  {
+    "interaction_id": "INTERACTION_SIZE_MOM_NEUT",
+    "discovery_rank_ic": -0.0539,
+    "discovery_icir": -0.2781,
+    "positive_ic_ratio": 0.4311,
+    "status": "REJECTED",
+    "decision_reason": "Below IC/pos ratio threshold"
+  },
+  {
+    "interaction_id": "INTERACTION_TURNOVER_ACCEL_TREND",
+    "discovery_rank_ic": -0.0082,
+    "discovery_icir": -0.0763,
+    "positive_ic_ratio": 0.4652,
+    "status": "REJECTED",
+    "decision_reason": "Below IC/pos ratio threshold"
+  },
+  {
+    "interaction_id": "INTERACTION_RESIDUAL_ASYM_VOL",
+    "discovery_rank_ic": -0.0495,
+    "discovery_icir": -0.2544,
+    "positive_ic_ratio": 0.438,
+    "status": "REJECTED",
+    "decision_reason": "Below IC/pos ratio threshold"
+  },
+  {
+    "interaction_id": "INTERACTION_MOM_CSI300_RATIO",
+    "discovery_rank_ic": -0.0548,
+    "discovery_icir": -0.2815,
+    "positive_ic_ratio": 0.4276,
+    "status": "REJECTED",
+    "decision_reason": "Below IC/pos ratio threshold"
+  }
+]

@@ -1,0 +1,12 @@
+{
+  "baseline_model_id": "lightgbm_clf_baseline",
+  "baseline_code_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
+  "canonical_run_id": "research_9f4e0be_20260905_023708",
+  "dataset_sha": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
+  "baseline_rank_ic": 0.03595,
+  "baseline_icir": 1.371457,
+  "baseline_icir_nw20": 0.404077,
+  "baseline_positive_ic_ratio": 0.6518817204301075,
+  "baseline_q5_minus_q1": 4.65,
+  "baseline_monotonicity": 0.7
+}
