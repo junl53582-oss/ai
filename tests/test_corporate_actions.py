@@ -114,12 +114,18 @@ class TestPanelAndCache:
 
 
 class TestCrossSourceConsistency:
+    @pytest.mark.live_network
     def test_cninfo_ex_dates_match_hfq_factor_events(self):
         """真数据交叉验证 (网络): 600519 的 cninfo 除权日 == hfq-factor 事件日"""
         import akshare as ak
+        import requests
+
         prov = CorporateActionProvider()
-        ev = prov.fetch_events("600519.SH")
-        fac = ak.stock_zh_a_daily(symbol="sh600519", adjust="hfq-factor")
+        try:
+            ev = prov.fetch_events("600519.SH")
+            fac = ak.stock_zh_a_daily(symbol="sh600519", adjust="hfq-factor")
+        except requests.RequestException as exc:
+            pytest.skip(f"live cross-source endpoint unavailable: {type(exc).__name__}")
         fac["date"] = pd.to_datetime(fac["date"])
         factor_dates = set(fac["date"].dt.date)
         cninfo_dates = set(ev["ex_date"].dropna().dt.date)

@@ -2,9 +2,13 @@ name: Audit Hardening Certification & Integrity Regression Suite
 
 on:
   push:
-    branches: [ main, "phase2.1-*", "codex/*" ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+
+concurrency:
+  group: integrity-audit-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   integrity-audit-certification:
@@ -12,12 +16,12 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v7
         with:
           python-version: '3.11'
           cache: 'pip'
