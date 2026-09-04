@@ -113,14 +113,26 @@ class ModelRegistry:
         self.root.mkdir(parents=True, exist_ok=True)
         self.index_path = self.root / "index.json"
 
-    # ------------------------------------------------------------ 索引读写
     def _load_index(self) -> Dict[str, Dict[str, Any]]:
+        index: Dict[str, Dict[str, Any]] = {}
         if self.index_path.exists():
             try:
-                return json.loads(self.index_path.read_text(encoding="utf-8"))
+                index = json.loads(self.index_path.read_text(encoding="utf-8"))
             except Exception as e:
                 raise RuntimeError(f"模型注册表索引损坏: {self.index_path} ({e})")
-        return {}
+
+        # 兼容全新 clone 仓库: 自动从标准生产目录 saved_models/production/*/metadata.json 发现并装载已上线模型
+        prod_root = self.root.parent / "production"
+        if prod_root.exists():
+            for meta_file in prod_root.glob("*/metadata.json"):
+                try:
+                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                    mid = meta.get("model_id")
+                    if mid and (mid not in index or index[mid].get("state") != ModelState.PRODUCTION):
+                        index[mid] = meta
+                except Exception:
+                    pass
+        return index
 
     def _save_index(self, index: Dict[str, Dict[str, Any]]):
         self.index_path.write_text(
@@ -322,7 +334,7 @@ class ModelRegistry:
         return sorted(recs, key=lambda r: r.created_at, reverse=True)
 
     def resolve_artifact(self, model_id: str) -> Path:
-        """返回可用于推理的制品路径 (优先标准生产制品目录，其次注册表内制品, 回退研究制品)"""
+        """返回可用于推理的制品路径 (优先标准生产制品目录，其次注册表内制品, 回退源制品)"""
         rec = self.get(model_id)
         if rec is None:
             raise PromotionError(f"模型不存在: {model_id}")
@@ -331,10 +343,17 @@ class ModelRegistry:
         if prod_path.exists():
             return prod_path
         # 2. 检查注册表制品
-        if rec.registry_artifact and Path(rec.registry_artifact).exists():
-            return Path(rec.registry_artifact)
+        if rec.registry_artifact:
+            p = Path(rec.registry_artifact)
+            if not p.is_absolute():
+                p = Path(settings.BASE_DIR) / p
+            if p.exists():
+                return p
         # 3. 回退源制品
-        src = Path(rec.source_artifact)
-        if not src.exists():
-            raise FileNotFoundError(f"模型制品缺失: {src}")
-        return src
+        if rec.source_artifact:
+            src = Path(rec.source_artifact)
+            if not src.is_absolute():
+                src = Path(settings.BASE_DIR) / src
+            if src.exists():
+                return src
+        raise FileNotFoundError(f"模型制品缺失: {model_id}")

@@ -4,10 +4,10 @@
   "model_type": "hybrid_bagging_ridge",
   "task_type": "classification",
   "state": "PRODUCTION",
-  "source_artifact": "C:\\Users\\lin\\Documents\\股票预测\\saved_models\\candidate_deep_optimized.pkl",
-  "registry_artifact": "C:\\Users\\lin\\Documents\\股票预测\\saved_models\\registry\\m_20260903_194757_hybrid_bagging_ridge\\model.pkl",
+  "source_artifact": "saved_models/candidate_deep_optimized.pkl",
+  "registry_artifact": "saved_models/production/m_20260903_194757_hybrid_bagging_ridge/model.pkl",
   "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
-  "dataset_path": "C:\\Users\\lin\\Documents\\股票预测\\data_storage\\research\\factor_matrix_300.parquet",
+  "dataset_path": "data_storage/research/factor_matrix_300.parquet",
   "code_commit": "1bfca363255e9971a196e6cd5906cb726b0808d7",
   "config_snapshot": {},
   "metrics": {
