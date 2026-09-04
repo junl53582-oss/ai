@@ -181,6 +181,7 @@ class ModelEvaluator:
             "legacy_row_weighted_q5_minus_q1": quantile_info.get("legacy_row_weighted_q5_minus_q1", quantile_info["Q5_minus_Q1"]),
             "monotonicity_score": quantile_info["monotonicity_score"],
             "quantile_observation_count": quantile_info["quantile_observation_count"],
+            "total_dates": quantile_info.get("total_dates", 0),
             "invalid_tie_dates": quantile_info.get("invalid_tie_dates", 0),
             "valid_quantile_dates": quantile_info.get("valid_quantile_dates", 0),
             "invalid_quantile_dates": quantile_info.get("invalid_quantile_dates", 0),
