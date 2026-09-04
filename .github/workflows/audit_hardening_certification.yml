@@ -9,6 +9,7 @@ on:
 jobs:
   integrity-audit-certification:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4

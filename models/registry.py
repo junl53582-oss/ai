@@ -121,17 +121,19 @@ class ModelRegistry:
             except Exception as e:
                 raise RuntimeError(f"模型注册表索引损坏: {self.index_path} ({e})")
 
-        # 兼容全新 clone 仓库: 自动从标准生产目录 saved_models/production/*/metadata.json 发现并装载已上线模型
-        prod_root = self.root.parent / "production"
-        if prod_root.exists():
-            for meta_file in prod_root.glob("*/metadata.json"):
-                try:
-                    meta = json.loads(meta_file.read_text(encoding="utf-8"))
-                    mid = meta.get("model_id")
-                    if mid and (mid not in index or index[mid].get("state") != ModelState.PRODUCTION):
-                        index[mid] = meta
-                except Exception:
-                    pass
+        # 兼容全新 clone 仓库: 若索引中无任何生产模型，自动从标准生产目录 saved_models/production/*/metadata.json 发现并装载已上线模型
+        has_production = any(r.get("state") == ModelState.PRODUCTION for r in index.values())
+        if not has_production:
+            prod_root = self.root.parent / "production"
+            if prod_root.exists():
+                for meta_file in prod_root.glob("*/metadata.json"):
+                    try:
+                        meta = json.loads(meta_file.read_text(encoding="utf-8"))
+                        mid = meta.get("model_id")
+                        if mid and mid not in index:
+                            index[mid] = meta
+                    except Exception:
+                        pass
         return index
 
     def _save_index(self, index: Dict[str, Dict[str, Any]]):
