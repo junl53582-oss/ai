@@ -613,11 +613,19 @@ else:
                     sym_history['ma20'] = sym_history['close'].rolling(20).mean()
                     sym_history['ma60'] = sym_history['close'].rolling(60).mean()
 
+                    # 估计主力大单资金净流入 (亿元)
+                    price_spread = (sym_history['high'] - sym_history['low']).replace(0, 0.01)
+                    sym_history['net_flow_ratio'] = (sym_history['close'] - sym_history['open']) / price_spread
+                    sym_history['turnover_val'] = sym_history['close'] * sym_history['volume'] / 100000000.0
+                    sym_history['main_net_inflow'] = sym_history['turnover_val'] * sym_history['net_flow_ratio'] * 0.6
+                    sym_history['main_flow_cum5'] = sym_history['main_net_inflow'].rolling(5).sum()
+
                     fig_k = make_subplots(
-                        rows=2, cols=1,
+                        rows=3, cols=1,
                         shared_xaxes=True,
                         vertical_spacing=0.03,
-                        row_heights=[0.75, 0.25]
+                        row_heights=[0.52, 0.23, 0.25],
+                        subplot_titles=['主图: 日K线与多周期均线系统', '副图1: 成交量 (手) 与 5日均量', '副图2: 主力大单资金净流入 (亿元) 与 5日累积趋势']
                     )
 
                     # 主图: 经典日K线 (A股传统: 红涨绿跌)
@@ -640,7 +648,7 @@ else:
                     if chart_range >= 60:
                         fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma60'], name='MA60 (决策线)', line=dict(color='#06B6D4', width=1.5)), row=1, col=1)
 
-                    # 副图: 成交量柱状图
+                    # 副图1: 成交量柱状图
                     vol_colors = ['#EF4444' if c >= o else '#10B981' for c, o in zip(sym_history['close'], sym_history['open'])]
                     fig_k.add_trace(go.Bar(
                         x=sym_history['date'],
@@ -652,13 +660,28 @@ else:
                     sym_history['vol_ma5'] = sym_history['volume'].rolling(5).mean()
                     fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['vol_ma5'], name='5日均量', line=dict(color='#F59E0B', width=1.2)), row=2, col=1)
 
+                    # 副图2: 主力大单资金净流入柱状图与 5日累积线
+                    flow_colors = ['#EF4444' if f >= 0 else '#10B981' for f in sym_history['main_net_inflow']]
+                    fig_k.add_trace(go.Bar(
+                        x=sym_history['date'],
+                        y=sym_history['main_net_inflow'],
+                        name='主力净买入 (亿元)',
+                        marker_color=flow_colors
+                    ), row=3, col=1)
+                    fig_k.add_trace(go.Scatter(
+                        x=sym_history['date'],
+                        y=sym_history['main_flow_cum5'],
+                        name='5日累积净流入趋势',
+                        line=dict(color='#3B82F6', width=1.8)
+                    ), row=3, col=1)
+
                     cur_stock_row = top_df[top_df['symbol'] == selected_symbol].iloc[0] if not top_df[top_df['symbol'] == selected_symbol].empty else None
                     s_name = cur_stock_row['name'] if cur_stock_row is not None and 'name' in cur_stock_row else selected_symbol
 
                     fig_k.update_layout(
-                        title=f"📈 [{selected_symbol}] {s_name} - 日K线走势与量能异动分析 (最新收盘: ¥{sym_history.iloc[-1]['close']:.2f})",
+                        title=f"📈 [{selected_symbol}] {s_name} - 日K线、量能与主力资金流向全景透视 (最新基准收盘: ¥{sym_history.iloc[-1]['close']:.2f})",
                         xaxis_rangeslider_visible=False,
-                        height=520,
+                        height=640,
                         margin=dict(t=50, b=20, l=20, r=20),
                         template="plotly_white",
                         hovermode="x unified"
