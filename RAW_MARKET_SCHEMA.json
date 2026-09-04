@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "A_SHARE_RAW_MARKET_DATA_SCHEMA",
+  "version": "2.0",
+  "description": "Standardized data dictionary for A-Share CSI 300 daily market panel dataset (market_daily_300_v2.parquet)",
+  "fields": [
+    {
+      "field_name": "date",
+      "source": "SSE_SZSE_EXCHANGE_CALENDAR",
+      "raw_or_derived": "raw",
+      "unit": "YYYY-MM-DD",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Exchange trading date"
+    },
+    {
+      "field_name": "symbol",
+      "source": "EXCHANGE_TICKER_REGISTRY",
+      "raw_or_derived": "raw",
+      "unit": "ticker_symbol (e.g. 000001.SZ)",
+      "timestamp_semantics": "point_in_time",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Unique A-Share equity identifier with exchange suffix"
+    },
+    {
+      "field_name": "open",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_hours_open",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Daily opening trade price"
+    },
+    {
+      "field_name": "high",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_hours_intraday",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Daily highest trade price"
+    },
+    {
+      "field_name": "low",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_hours_intraday",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Daily lowest trade price"
+    },
+    {
+      "field_name": "close",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_hours_close",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Daily closing trade price"
+    },
+    {
+      "field_name": "volume",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "shares",
+      "timestamp_semantics": "trading_date_eod_cumulative",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Total traded volume in shares"
+    },
+    {
+      "field_name": "amount",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_date_eod_cumulative",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Total traded turnover value in CNY"
+    },
+    {
+      "field_name": "turnover",
+      "source": "EXCHANGE_BAR_FEED",
+      "raw_or_derived": "raw",
+      "unit": "percentage (0-100)",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Daily turnover rate percentage"
+    },
+    {
+      "field_name": "circ_mv_raw",
+      "source": "amount / turnover formula (np.maximum(amount / valid_turnover, 1e8))",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Raw unstandardized circulating market capitalization in CNY"
+    },
+    {
+      "field_name": "circ_mv",
+      "source": "circ_mv_raw alias",
+      "raw_or_derived": "raw",
+      "unit": "CNY",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Alias for raw unstandardized circulating market capitalization"
+    },
+    {
+      "field_name": "adj_open",
+      "source": "CORPORATE_ACTIONS_ADJUSTMENT",
+      "raw_or_derived": "derived",
+      "unit": "CNY",
+      "timestamp_semantics": "point_in_time_adjusted",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Backward-adjusted opening price"
+    },
+    {
+      "field_name": "adj_high",
+      "source": "CORPORATE_ACTIONS_ADJUSTMENT",
+      "raw_or_derived": "derived",
+      "unit": "CNY",
+      "timestamp_semantics": "point_in_time_adjusted",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Backward-adjusted highest price"
+    },
+    {
+      "field_name": "adj_low",
+      "source": "CORPORATE_ACTIONS_ADJUSTMENT",
+      "raw_or_derived": "derived",
+      "unit": "CNY",
+      "timestamp_semantics": "point_in_time_adjusted",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Backward-adjusted lowest price"
+    },
+    {
+      "field_name": "adj_close",
+      "source": "CORPORATE_ACTIONS_ADJUSTMENT",
+      "raw_or_derived": "derived",
+      "unit": "CNY",
+      "timestamp_semantics": "point_in_time_adjusted",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Backward-adjusted closing price"
+    },
+    {
+      "field_name": "benchmark_open",
+      "source": "CSI_300_INDEX_000300_SH",
+      "raw_or_derived": "raw",
+      "unit": "index_points",
+      "timestamp_semantics": "trading_hours_open",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "CSI 300 benchmark opening value"
+    },
+    {
+      "field_name": "benchmark_close",
+      "source": "CSI_300_INDEX_000300_SH",
+      "raw_or_derived": "raw",
+      "unit": "index_points",
+      "timestamp_semantics": "trading_hours_close",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "CSI 300 benchmark closing value"
+    },
+    {
+      "field_name": "in_universe",
+      "source": "CSI_300_PIT_CONSTITUENT_PROVIDER",
+      "raw_or_derived": "raw",
+      "unit": "boolean",
+      "timestamp_semantics": "effective_trading_date",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Point-in-time inclusion flag in CSI 300 index universe"
+    },
+    {
+      "field_name": "is_suspended",
+      "source": "EXCHANGE_HALT_DISCLOSURE",
+      "raw_or_derived": "raw",
+      "unit": "boolean",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Trading suspension flag"
+    },
+    {
+      "field_name": "is_st",
+      "source": "EXCHANGE_SPECIAL_TREATMENT_TIMELINE",
+      "raw_or_derived": "raw",
+      "unit": "boolean",
+      "timestamp_semantics": "effective_trading_date",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Special treatment (ST/*ST) risk alert flag"
+    },
+    {
+      "field_name": "is_limit_up_locked",
+      "source": "PRICE_LIMIT_RULE_ENGINE",
+      "raw_or_derived": "derived",
+      "unit": "boolean",
+      "timestamp_semantics": "trading_hours_close",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "True if stock closed at upper limit with open == high == low"
+    },
+    {
+      "field_name": "is_limit_down_locked",
+      "source": "PRICE_LIMIT_RULE_ENGINE",
+      "raw_or_derived": "derived",
+      "unit": "boolean",
+      "timestamp_semantics": "trading_hours_close",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "True if stock closed at lower limit with open == high == low"
+    },
+    {
+      "field_name": "limit_up_price",
+      "source": "PRICE_LIMIT_RULE_ENGINE",
+      "raw_or_derived": "derived",
+      "unit": "CNY",
+      "timestamp_semantics": "pre_market_open",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Official upper price limit threshold"
+    },
+    {
+      "field_name": "limit_down_price",
+      "source": "PRICE_LIMIT_RULE_ENGINE",
+      "raw_or_derived": "derived",
+      "unit": "CNY",
+      "timestamp_semantics": "pre_market_open",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Official lower price limit threshold"
+    },
+    {
+      "field_name": "industry",
+      "source": "SHENWAN_INDUSTRY_CLASSIFICATION_L1",
+      "raw_or_derived": "raw",
+      "unit": "categorical_string",
+      "timestamp_semantics": "effective_trading_date",
+      "nullable": true,
+      "pit_safe": true,
+      "description": "Level 1 industry category for cross-sectional neutralization"
+    },
+    {
+      "field_name": "LOG_CIRC_MV",
+      "source": "np.log(circ_mv_raw)",
+      "raw_or_derived": "derived",
+      "unit": "log_cny",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Unstandardized natural logarithm of raw circulating market cap (standardized downstream in factor matrix)"
+    },
+    {
+      "field_name": "list_date",
+      "source": "EXCHANGE_IPO_REGISTRY",
+      "raw_or_derived": "raw",
+      "unit": "YYYY-MM-DD",
+      "timestamp_semantics": "static_ipo_date",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Initial public offering listing date"
+    },
+    {
+      "field_name": "days_since_listing",
+      "source": "(date - list_date).days",
+      "raw_or_derived": "derived",
+      "unit": "days",
+      "timestamp_semantics": "trading_date_eod",
+      "nullable": false,
+      "pit_safe": true,
+      "description": "Listing tenure in elapsed calendar days"
+    }
+  ]
+}

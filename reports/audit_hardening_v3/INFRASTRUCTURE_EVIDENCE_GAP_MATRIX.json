@@ -1,0 +1,92 @@
+[
+  {
+    "gate": "STRICT_FUNDAMENTAL_PIT",
+    "required": "Official PIT announcement chronology independently recorded; official_announcement_rows > 0; zero synthetic-certified delay (synthetic_delay_certified_count == 0); zero chronology violations (invalid_chronology_count == 0); valid source_code_sha.",
+    "observed": "official_announcement_rows = 0; certification_note: 'No formal fundamental evidence was supplied for this run.' Raw quarterly earnings (yjbb_*.parquet) exist in data_storage/ but lack independent official announcement timestamping pipeline.",
+    "status": "INSUFFICIENT_EVIDENCE",
+    "reason": "Official announcement chronology timeline evidence missing in canonical research runner; fundamental point-in-time facts cannot be verified.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/fundamental_provenance_manifest.json",
+    "sha256": "826e72234de5dddb9253f31449c206b670be6782f0aeb1415e91f7679aad42e7"
+  },
+  {
+    "gate": "CANONICAL_CALENDAR_PROVENANCE",
+    "required": "Unique, ascending canonical dates overlapping dataset; certified non-synthetic exchange calendar source; calendar_artifact_sha256 recorded; run_mode == 'certified'; source_code_sha recorded.",
+    "observed": "In historical run research_8dbf062_20260831_155701, calendar_source is SSE_SZSE_CANONICAL_CALENDAR with 1187 dates and valid SHA, but schema fields run_mode and calendar_artifact_sha256 were omitted; in active runtime_audit.json, third-party unauthenticated akshare_sina calendar was used.",
+    "status": "INSUFFICIENT_EVIDENCE",
+    "reason": "Historical calendar artifact lacks hardened schema fields (run_mode, calendar_artifact_sha256); runtime environment relies on unauthenticated third-party calendar provider.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/calendar_metadata.json",
+    "sha256": "1702c133e3bf82fdc3516b970b7588d6d7b8e3705ba3df69e5e2b3a54351436c"
+  },
+  {
+    "gate": "SOURCE_CODE_PROVENANCE",
+    "required": "Clean runtime git worktree before run; runtime_git_sha equals artifact source_code_sha; current main HEAD equals expected source_code_sha (POST_MERGE_MAIN_SHA = 7183459e2ce3bf7151db79cce1b862be0924a38d).",
+    "observed": "Historical canonical evidence is bound to commit 8dbf06213b9af0a6614f377513dc997aa80266be; runtime_audit.json is bound to c9e45e1586135fe28fe01876dbbecba031bd3667; current canonical main HEAD is 7183459e2ce3bf7151db79cce1b862be0924a38d.",
+    "status": "INSUFFICIENT_EVIDENCE",
+    "reason": "Evidence was generated on historical commits and cannot certify post-merge canonical main commit 7183459e.",
+    "evidence_path": "reports/audit_hardening_v3/FINAL_RUN_POINTER.json",
+    "sha256": "7edbfc26487e4125b2a0c6a85859caebfbf95747b003a3d2e9da6cf346c48325"
+  },
+  {
+    "gate": "PRODUCTION_FACTOR_MATRIX_LINEAGE",
+    "required": "Deterministic bit-level factor matrix reproduction from committed market panels; matching physical file SHA256 against manifest file_sha256; unpolluted lineage (raw circ_mv preserved for OLS neutralization).",
+    "observed": "Triple hash divergence: physical factor_matrix_300.parquet SHA256 is 81c75a65ff...; manifest file_sha256 is ad672d9cf5...; canonical run pointer dataset_sha256 is 9a882c4568... Lineage is polluted: market_daily_300.parquet contains normalized LOG_CIRC_MV (mean=0/std=1) instead of raw circ_mv, preventing bit-level matrix reproduction.",
+    "status": "FAIL",
+    "reason": "Physical file hash diverges from manifest and canonical run pointer; dataset lineage pollution prevents bit-level deterministic rebuild.",
+    "evidence_path": "data_storage/research/factor_matrix_300.manifest.json",
+    "sha256": "ad672d9cf58597566024f83ade5e5dfc9e4efde8604a7268f66bd3c7c16b4bb1"
+  },
+  {
+    "gate": "WALKFORWARD_PURGE_GATE",
+    "required": "All trading-day gaps between folds meet label horizon and configured purge (actual_train_val_gap_trading_days >= max(configured_purge_gap_trading_days, label_horizon_trading_days)).",
+    "observed": "In historical run, 60 folds were audited with actual_train_val_gap_trading_days recorded and verified against purge_gap_days; however, hardened schema fields configured_purge_gap_trading_days and label_horizon_trading_days were not explicitly itemized in JSON rows.",
+    "status": "INSUFFICIENT_EVIDENCE",
+    "reason": "Historical audit artifact schema lacks explicit configured_purge_gap_trading_days and label_horizon_trading_days field keys.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/walk_forward_purge_audit.json",
+    "sha256": "73520ab5a40189ab221616c0a58df3d869f7fc1b3343245a78319ea450289679"
+  },
+  {
+    "gate": "QUANTILE_EVALUATION_INTEGRITY",
+    "required": "Average ranking, complete daily group counts (daily_group_counts with all Q1..Qk non-empty for all valid dates), valid_quantile_dates == len(daily_counts), total_dates == valid + invalid.",
+    "observed": "Historical run artifact verified ranking_method == 'average', daily_equal_weighted == true, and invariance flags, but lacks daily_group_counts dictionary required by hardened r3.2 integrity verifier.",
+    "status": "INSUFFICIENT_EVIDENCE",
+    "reason": "Runtime group counts mapping (daily_group_counts) missing from historical evidence artifact.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/quantile_evaluation_summary.json",
+    "sha256": "363d72d056f065b9f65dfee6a88e92c9a268a8b963a98eea176c3a94ada30bd1"
+  },
+  {
+    "gate": "RUNTIME_ATTESTATION_DIGITAL_ENVELOPE",
+    "required": "RuntimeAttestationEnvelope signed by trusted keyring key with Purpose=RUNTIME_ATTESTATION; code_commit_sha matching active main HEAD; worktree clean; external trust root pinned.",
+    "observed": "artifacts/runtime_audit.json contains code_commit_sha: c9e45e1586..., signing_key_id: DEV_UNTRUSTED_KEY, unpinned trust root; CertificationPolicy evaluated status as HIGH_RISK with STALE_COMMIT_MISMATCH.",
+    "status": "FAIL",
+    "reason": "Digital envelope is bound to historical commit c9e45e15, unpinned trust root, and signed by untrusted development key.",
+    "evidence_path": "artifacts/runtime_audit.json",
+    "sha256": "7dcfaad2d6ea1fb278a2d12e61df36802fe619c9684128dd46b0a88b5dcce97a"
+  },
+  {
+    "gate": "FORMAL_RESEARCH_RUNNER_EXECUTABLE",
+    "required": "Formal research runner executable with complete persisted candidate and baseline fold trace across all folds.",
+    "observed": "20 folds recorded in fold_backtest_provenance.json with all 26 required fields; hash and size match manifest.",
+    "status": "PASS",
+    "reason": "Complete fold trace verified in historical runner artifact.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/fold_backtest_provenance.json",
+    "sha256": "88330b636035009356f14c6c5f5d22c137a9bbdde1133d11294f3a341dc41f6a"
+  },
+  {
+    "gate": "PRODUCTION_MODEL_ISOLATION",
+    "required": "Production model directory byte-identical before and after experiment run.",
+    "observed": "production_isolation.json confirms file_sha_before == file_sha_after and snapshot objects match exactly.",
+    "status": "PASS",
+    "reason": "Production directory unchanged during research runner execution.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/production_isolation.json",
+    "sha256": "27a9233a87a80776d85796d5ffd8193cd47ca4e9a4dcc67327051a793c9d35da"
+  },
+  {
+    "gate": "ARTIFACT_HASH_CHAIN",
+    "required": "Every artifact file on disk matches its SHA256 and size in artifact_manifest.json; all provenance fields match expected values.",
+    "observed": "All 18 artifact files in reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/ match recorded SHA256 and sizes exactly.",
+    "status": "PASS",
+    "reason": "Artifact hash chain verified for frozen research_8dbf062_20260831_155701 run.",
+    "evidence_path": "reports/audit_hardening_v3/runs/research_8dbf062_20260831_155701/artifact_manifest.json",
+    "sha256": "d006cb4d40efc9f9c189ecce017480054fbb27fd18d0c8b7084895aacf373211"
+  }
+]

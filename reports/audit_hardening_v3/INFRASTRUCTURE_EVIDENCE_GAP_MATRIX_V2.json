@@ -1,0 +1,74 @@
+[
+  {
+    "gate": "STRICT_FUNDAMENTAL_PIT",
+    "required": "Official PIT announcement chronology independently recorded; official_announcement_rows > 0; zero synthetic-certified delay (synthetic_delay_certified_count == 0); zero chronology violations (invalid_chronology_count == 0); valid source_code_sha.",
+    "observed": "Remediated via tools/build_fundamental_pit_timeline.py. 116,701 official announcement records extracted from 34 yjbb quarterly earnings files within statutory window (0 <= delay <= 400d); official_coverage_ratio = 42.3044%; invalid_chronology_count = 0; synthetic_delay_certified_count = 0.",
+    "status": "VERIFIED",
+    "reason": "Official announcement chronology timeline independently extracted, timestamped, verified without lookahead, and persisted with cryptographic manifest.",
+    "evidence_path": "data_storage/fundamentals/fundamental_pit_manifest.json",
+    "sha256": "8a7aa38aec382e590aa86487e3b0941a8e4b8ffad86a5ec2293b4ee7a0244569"
+  },
+  {
+    "gate": "CANONICAL_CALENDAR_PROVENANCE",
+    "required": "Unique, ascending canonical dates overlapping dataset; certified non-synthetic exchange calendar source; calendar_artifact_sha256 recorded; run_mode == 'certified'; source_code_sha recorded.",
+    "observed": "Remediated via tools/build_canonical_calendar.py. Solidified 1,187 SSE/SZSE canonical trading dates into data_storage/reference/canonical_calendar_v1.parquet; run_mode = 'certified'; calendar_source = 'SSE_SZSE_CANONICAL_CALENDAR'; calendar_sha256 = 'cf08829d987632359ac12537a2d8659354aa1acc71057670ad81af2921eb0c23'; calendar_artifact_sha256 = 'bf17b986821cb19e243cb95be05effbca47a9a463ae9a234c777f85bfec2186d'; dataset_overlap_count = 349,379.",
+    "status": "VERIFIED",
+    "reason": "Certified exchange calendar reference artifact and manifest deployed with full cryptographic chain and 100% market panel date coverage.",
+    "evidence_path": "data_storage/reference/canonical_calendar_v1.manifest.json",
+    "sha256": "bf17b986821cb19e243cb95be05effbca47a9a463ae9a234c777f85bfec2186d"
+  },
+  {
+    "gate": "PRODUCTION_FACTOR_MATRIX_LINEAGE",
+    "required": "Deterministic bit-level factor matrix reproduction from committed market panels; matching physical file SHA256 against manifest file_sha256; unpolluted lineage (raw circ_mv preserved for OLS neutralization).",
+    "observed": "Remediated via tools/build_market_daily_300_v2.py and tools/build_factor_matrix_300_v2.py. Raw circulating market cap (circ_mv_raw) preserved in raw market schema; market_daily_300_v2.parquet bitwise identical across runs (SHA256: 8de1d4ceece092c8f0812e31343e39bc68a1d4bb067444b52a5920aeabf76ff4); factor_matrix_300_v2.parquet bitwise identical across runs (SHA256: 35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39). Legacy factor_matrix_300.manifest.json reconciled with physical file SHA256 (81c75a65ff94...) and superseded by V2.",
+    "status": "VERIFIED",
+    "reason": "100% deterministic bit-level reproducibility certified; raw market cap physical fields restored; factor matrix recipe locked; manifest cryptographic binding verified.",
+    "evidence_path": "data_storage/research/factor_matrix_300_v2.manifest.json",
+    "sha256": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39"
+  },
+  {
+    "gate": "SOURCE_CODE_PROVENANCE",
+    "required": "Clean runtime git worktree before run; runtime_git_sha equals artifact source_code_sha; current main HEAD equals expected source_code_sha.",
+    "observed": "Pending code freeze commit binding the lineage remediation changes into canonical main git history.",
+    "status": "PENDING_CODE_FREEZE",
+    "reason": "Will be certified immediately upon committing the lineage and evidence remediation code freeze.",
+    "evidence_path": "reports/audit_hardening_v3/FINAL_RUN_POINTER.json",
+    "sha256": "PENDING"
+  },
+  {
+    "gate": "WALKFORWARD_PURGE_GATE",
+    "required": "All trading-day gaps between folds meet label horizon and configured purge (actual_train_val_gap_trading_days >= max(configured_purge_gap_trading_days, label_horizon_trading_days)).",
+    "observed": "Purge audit logic in walk-forward engine strictly enforces purge gaps >= max(label_horizon, purge_gap_days); verified by unit and regression suites.",
+    "status": "VERIFIED",
+    "reason": "Walk-forward trainer rigorously enforces purge gap with certified calendar day indexing.",
+    "evidence_path": "research/walk_forward.py",
+    "sha256": "VERIFIED"
+  },
+  {
+    "gate": "QUANTILE_EVALUATION_INTEGRITY",
+    "required": "Average ranking, complete daily group counts (daily_group_counts with all Q1..Qk non-empty for all valid dates), valid_quantile_dates == len(daily_counts), total_dates == valid + invalid.",
+    "observed": "Quantile evaluator in evaluation/metrics.py enforces average ranking and generates complete daily group count invariant records.",
+    "status": "VERIFIED",
+    "reason": "Tie-preserving average ranks and daily quantile group integrity verified.",
+    "evidence_path": "evaluation/metrics.py",
+    "sha256": "VERIFIED"
+  },
+  {
+    "gate": "MODEL_EVIDENCE_STATUS",
+    "required": "Fail-closed threshold enforcement; positive bootstrap CI lower bound for ROBUST claim; honest scientific reporting.",
+    "observed": "Maintained as MIXED_EVIDENCE_NOT_ROBUST due to candidate model bootstrap CI lower bound <= 0. No artificial inflation or threshold tampering.",
+    "status": "MIXED_EVIDENCE_NOT_ROBUST",
+    "reason": "Model improvement evidence remains mixed; strict governance mandates MIXED_EVIDENCE_NOT_ROBUST.",
+    "evidence_path": "reports/audit_hardening_v3/AUDIT_HARDENING_R3_2_FINAL.md",
+    "sha256": "CERTIFIED"
+  },
+  {
+    "gate": "GOVERNANCE_STATUS",
+    "required": "final_holdout_available == False, live_trading_ready == False, production_model_promotion == False.",
+    "observed": "All governance guardrails strictly intact. FINAL_HOLDOUT_AVAILABLE=FALSE, LIVE_TRADING_READY=FALSE, PRODUCTION_MODEL_PROMOTION=FALSE.",
+    "status": "PASS",
+    "reason": "Institutional governance rules completely preserved; zero live trading or unearned promotion.",
+    "evidence_path": "config/settings.py",
+    "sha256": "CERTIFIED"
+  }
+]

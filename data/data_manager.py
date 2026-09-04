@@ -690,10 +690,13 @@ class DataManager:
         df["is_limit_up_locked"] = df["is_limit_up"] & (df["open"] == df["high"]) & (df["high"] == df["low"])
         df["is_limit_down_locked"] = df["is_limit_down"] & (df["open"] == df["high"]) & (df["high"] == df["low"])
 
-        # 估算对数流通市值
+        # 估算流通市值与对数流通市值 (保留原始未标准化值及显式派生对数特征)
         valid_turnover = df["turnover"].replace(0, np.nan).fillna(0.01)
-        estimated_market_cap = df["amount"] / valid_turnover
-        df["log_circ_mv"] = np.log(np.maximum(estimated_market_cap, 1e8))
+        raw_circ_mv = np.maximum(df["amount"] / valid_turnover, 1e8)
+        df["circ_mv"] = raw_circ_mv
+        df["circ_mv_raw"] = raw_circ_mv
+        df["log_circ_mv"] = np.log(raw_circ_mv)
+        df["LOG_CIRC_MV"] = df["log_circ_mv"]
 
         # 缺失值前向填充 (ffill)，禁止 bfill
         for col in ["open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close"]:

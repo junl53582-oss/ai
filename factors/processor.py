@@ -577,7 +577,7 @@ class FactorProcessor:
         # 保证行情/基准与可交易性核心字段完整保留在因子矩阵中 (Fail-Closed)
         core_market_cols = [
             "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close",
-            "volume", "amount", "benchmark_open", "benchmark_close", "in_universe",
+            "volume", "amount", "turnover", "circ_mv_raw", "circ_mv", "benchmark_open", "benchmark_close", "in_universe",
             "is_st", "is_suspended", "is_limit_up_locked", "is_limit_down_locked",
             "limit_up_price", "limit_down_price"
         ]
