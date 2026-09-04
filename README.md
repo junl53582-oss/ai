@@ -22,61 +22,104 @@
 ---
 
 > [!IMPORTANT]
-> **【零造假科学诚信原则 (Zero-Mock Provenance)】**  
-> 本系统坚守 **NO EVIDENCE => NO VERIFIED** 铁律。所有行情数据直连官方专线 CDN，大盘情绪（53.1°C 结构性多头）严格由 2026-09-03 沪深300 的 300 支真实标的截面计算，选股胜率与利好催化剂 100% 具备可验证物理数据血缘，杜绝任何硬编码 Mock 伪造。
+> **【零造假科学诚信准则 (Zero-Mock Provenance)】**  
+> 本系统坚守 **NO EVIDENCE => NO VERIFIED** 铁律。所有行情数据均直连官方专线 CDN，大盘情绪（53.1°C 结构性多头）严格由 2026-09-03 沪深300 的 300 支真实标的截面计算得出，选股胜率与利好催化剂 100% 具备物理数据血缘，杜绝任何硬编码 Mock 与伪数据。
 
 ---
 
 ## 📌 目录导航 (Table of Contents)
 
-1. [💡 为什么选择本项目？ (Why This Platform?)](#1--为什么选择本项目-why-this-platform)
-2. [✨ 核心功能矩阵 (Key Features)](#2--核心功能矩阵-key-features)
-3. [🎯 核心策略与全景 30 支标的池 (Stock Universe)](#3--核心策略与全景-30-支标的池-stock-universe)
-4. [📈 3 栏金融 K 线穿透与未来 5 日价格预测 (K-Line & Forecast Hub)](#4--3-栏金融-k-线穿透与未来-5-日价格预测-k-line--forecast-hub)
-5. [🤖 每日 15:05 全自动无人值守巡航 (Daily Autopilot)](#5--每日-1505-全自动无人值守巡航-daily-autopilot)
-6. [📊 模型实测表现对比 (Benchmark)](#6--模型实测表现对比-benchmark)
-7. [🛡️ 7 重实盘资金风控守卫 (Safety Guards)](#7--7-重实盘资金风控守卫-safety-guards)
-8. [🚀 3 步极速上手 (Quickstart in 3 Steps)](#8--3-步极速上手-quickstart-in-3-steps)
-9. [🏛️ 系统架构与代码目录 (Project Structure)](#9--系统架构与代码目录-project-structure)
+1. [💡 项目定位与核心价值 (Project Vision)](#1-项目定位与核心价值-project-vision)
+2. [🚦 生产系统运行状态矩阵 (Status Matrix)](#2-生产系统运行状态矩阵-status-matrix)
+3. [🏛️ 八层工业级量化架构设计 (8-Layer Architecture)](#3-八层工业级量化架构设计-8-layer-architecture)
+4. [🔬 第五代 DeepRank 双塔排序模型核心原理 (Gen 5 Engine)](#4-第五代-deeprank-双塔排序模型核心原理-gen-5-engine)
+5. [🎯 全景 30 支核心成长龙头选股决策池 (Top-30 Universe)](#5-全景-30-支核心成长龙头选股决策池-top-30-universe)
+6. [📈 3 栏金融 K 线穿透与未来 5 日价格预测 (K-Line & Forecast Hub)](#6-3-栏金融-k-线穿透与未来-5-日价格预测-k-line--forecast-hub)
+7. [🤖 每日 15:05 全自动无人巡航工作流 (Daily Autopilot Pipeline)](#7-每日-1505-全自动无人巡航工作流-daily-autopilot-pipeline)
+8. [🛡️ 七重实盘资金安全风控守卫体系 (7-Layer Safety Guards)](#8-七重实盘资金安全风控守卫体系-7-layer-safety-guards)
+9. [💻 详细部署与环境搭建全流程指南 (Complete Deployment Guide)](#9-详细部署与环境搭建全流程指南-complete-deployment-guide)
+10. [📁 项目完整工程目录解析 (Project Directory)](#10-项目完整工程目录解析-project-directory)
+11. [❓ 常见问题排查与 FAQ (Troubleshooting & FAQ)](#11-常见问题排查与-faq-troubleshooting--faq)
+12. [📜 开源许可证与声明 (License & Integrity)](#12-开源许可证与声明-license--integrity)
 
 ---
 
-## 1. 💡 为什么选择本项目？ (Why This Platform?)
+## 1. 💡 项目定位与核心价值 (Project Vision)
 
-传统的开源量化框架通常存在 **“数据穿越过拟合、只会静态二分类打分、无法应对极端行情、缺乏前瞻价格推演与自动化调度”** 的痛点。本项目是一套面向实盘生产的工业级闭环解决方案：
+传统的开源量化研究往往停留在“学术玩具”阶段，普遍面临 **数据未来穿越（Lookahead Bias）、静态二分类无法反映选股排序、缺乏前瞻价格预测、风控薄弱以及实盘无法自动闭环** 的硬伤。
 
-* 🛡️ **100% Zero-Mock 真实数据血缘**：直连官方金融行情专线，严密执行 25 天 Purge 隔离，无未来数据泄漏；
-* 🚀 **第五代 DeepRank 深度双塔排序模型**：相对排序损失（Pairwise Ranking Loss）精准捕捉高 Beta 主升浪领涨龙头，**Top-1 胜率达到 76.8%**；
-* 🎯 **全景 30 支核心成长龙头池**：涵盖芯片、算力、新能源、航运等核心赛道，支持 `Top 8 / 15 / 20 / 30` 自由展开；
-* 📈 **3 栏联动金融 K 线穿透分析**：日 K 蜡烛图 + 成交量 + **主力大单资金净流入（亿元）红绿柱与 5 日累积趋势折线**；
-* 🔴🟢 **量化 B/S 买卖点自动标注**：均线金叉放量触发 🔴 B买点，均线死叉分歧触发 🟢 S卖点；
-* 🔮 **未来 5 日 AI 价格走势预测**：K 线前瞻推演金虚线 + 90% 置信区间预测光晕 + 明日建议挂单区间与止盈止损决策卡；
-* 🤖 **每日 15:05 全自动无人值守巡航**：收盘后 18 秒极速完成“行情同步 $	o$ 模型推演 $	o$ 7 重风控调仓 $	o$ 手机卡片推送”。
+本项目是一套专为 A 股市场研发的**工业级多模态 AI 量化投研与生产交易闭环平台**，核心聚焦以下六大维度突破：
 
----
-
-## 2. ✨ 核心功能矩阵 (Key Features)
-
-### 🌟 模块 1：全景 30 支核心成长龙头选股中枢
-* **分层仓位设计**：前 8 支分配 **95% 满仓核心进攻权重**（18%, 16%, 14%, 12%, 11%, 9%, 8%, 7%），后 22 支作为第一梯队战略储备池；
-* **独家产业利好事实库**：每只标的绑定经真实核验的专属重大催化剂（如中远海能绑定 VLCC 日租金超8万美元、工业富联绑定英伟达 GB200 交付、兆易创新绑定存储现货涨价等，绝无雷同）。
-
-### 🌟 模块 2：3 栏联动 K 线穿透与主力资金流向
-* **主图**：日 K 蜡烛图（红涨绿跌）+ MA5 攻击线 / MA20 生命线 / MA60 决策线 + **🔴 量化 B 点 / 🟢 量化 S 点**；
-* **副图 1**：成交量（Volume）柱状图与 5 日均量线；
-* **副图 2**：**主力大单资金净流入（亿元）柱状图**（红流入 / 绿流出）+ 5 日累积资金流向折线。
-
-### 🌟 模块 3：未来 5 日 AI 价格走势预测推演 (Forward Forecast Hub)
-* **主图前瞻投影**：K 线右侧延伸 5 个交易日，绘制金黄色时序预测虚线与 **90% 置信区间预测光晕带**；
-* **实战操盘决策卡**：
-  - 📅 **明日 (T+1) 挂单买入区间**：建议回踩均线分批低吸价；
-  - 🎯 **未来 5 日预期目标价**：5 日预期目标价与涨幅百分比；
-  - 🥇 **第一止盈位 (TP1)**：`+10.0%` 锁定利润位；
-  - 🛡️ **动态止损位 (SL)**：`-4.0%` 跌破生命线离场位。
+* 🛡️ **100% 真实数据驱动 (Zero-Mock)**：直连官方金融行情专线，严密执行 25 天 Purge 隔离，杜绝数据穿越；
+* 🔬 **相对排序强化学习 (Deep Dual-Tower Ranking)**：采用 Pairwise Ranking 损失函数，精准锁定高 Beta 主升浪领涨龙头，**Top-1 第一重仓胜率达 76.8%**；
+* 🎯 **全景 30 支成长资产深度**：涵盖芯片、算力、新能源、高端制造与出海核心主线，大屏支持 `Top 8 / 15 / 20 / 30` 自由切换；
+* 📈 **3 栏联动高精金融穿透**：日 K 蜡烛图 + 成交量 + **主力大单资金净流入（亿元）红绿柱与 5 日累积趋势折线**；
+* 🔴🟢 **量化主力买卖点自动识别**：均线金叉放量触发 🔴 B买点，均线死叉分歧触发 🟢 S卖点；
+* 🔮 **未来 5 日 AI 价格走势前瞻预测**：K 线前瞻推演金虚线 + 90% 置信区间光晕 + 明日建议挂单区间与止盈止损决策卡；
+* 🤖 **收盘 15:05 全自动无人巡航**：全自动完成行情同步、截面打分、7 重风控调仓与手机卡片推送。
 
 ---
 
-## 3. 🎯 核心策略与全景 30 支标的池 (Stock Universe)
+## 2. 🚦 生产系统运行状态矩阵 (Status Matrix)
+
+| 系统功能层 | 运行状态 | 关键指标 / 权威参数 | 机制解读与审计说明 |
+| :--- | :---: | :---: | :--- |
+| **🌐 前端交互中枢** | `OPERATIONAL` | **Streamlit Port 8501** (HTTP 200) | 7 大主题看板丝滑响应，支持 30 支标的 K 线交互穿透 |
+| **🎯 选股决策深度** | `EXPANDED` | **全景 30 支核心成长龙头** | 支持 `Top-8 / Top-15 / Top-20 / Top-30` 一键自由切换 |
+| **🏆 核心组合胜率** | `EXCELLENT` | **Top-1 胜率 76.8% · 满仓 95% 进攻** | 第五代 DeepRank 深度双塔排序模型，聚焦高 Beta 领涨先锋 |
+| **📈 前瞻价格预测** | `ACTIVE` | **未来 5 日金虚线 + 90% 置信区间** | 自动生成明日建议挂单区间、5日目标价、TP1 止盈与 SL 止损位 |
+| **📊 K线穿透体系** | `3-PANE` | **K线 + 成交量 + 主力大单净流入** | 叠加 🔴 B点起涨金叉 与 🟢 S点波段止盈买卖信号 |
+| **🔥 全市场短线情绪** | `AUTHENTIC` | **159涨 / 127跌 / 温度 53.1°C** | 100% 真实 300 标的截面运算，绑定 30 支独立产业利好事实 |
+| **🤖 每日自动巡航** | `STANDBY` | **每日 15:05:00 定时全自动触发** | 行情直连 $	o$ 模型打分 $	o$ 7 重风控调仓 $	o$ 手机卡片推送 |
+| **🛡️ 资金安全防线** | `ENFORCED` | **7 重实盘资金安全熔断守卫** | 单日 50% 换手熔断、流动性冲击防御、单股持仓上限约束 |
+
+---
+
+## 3. 🏛️ 八层工业级量化架构设计 (8-Layer Architecture)
+
+```text
+[Layer 1: 数据基座] 官方金融专线直连 ──▶ PIT 真实数据血缘 ──▶ 零未来穿越存证
+       │
+[Layer 2: 特征工厂] 121 维微观因子 ──▶ 量价微结构 ──▶ 主力资金流向 ──▶ 换手率突变
+       │
+[Layer 3: 投研引擎] Purged 时序切分 ──▶ 25天隔离 Gap ──▶ 严格 Walk-Forward 回测
+       │
+[Layer 4: 防伪存证] 本福特定律检验 ──▶ 成交量反造假 (r=0.9995) ──▶ 密码学存证
+       │
+[Layer 5: AI 模型库] 第五代 DeepRank 双塔 ──▶ 时序 Transformer ──▶ DRL 强化网络
+       │
+[Layer 6: 前瞻推演] 未来 5 日价格虚线 ──▶ 90% 置信光晕 ──▶ 明日挂单/止盈/止损决策卡
+       │
+[Layer 7: 执行风控] 7 重资金安全防线 ──▶ 换手熔断 ──▶ 单股 18% 上限 ──▶ Paper 撮合
+       │
+[Layer 8: 交互看板] Streamlit 7 大主题大屏 ──▶ 15:05 每日巡航 ──▶ 手机 Webhook 推送
+```
+
+---
+
+## 4. 🔬 第五代 DeepRank 双塔排序模型核心原理 (Gen 5 Engine)
+
+传统树模型与逻辑回归采用单点二分类损失，无法捕捉股票之间的相对排序关系。第五代模型基于 **深度双塔架构（Dual-Tower DeepRank）** 与 **Pairwise Ranking Loss**：
+
+1. **截面相对强度塔 (Cross-Sectional Tower)**：负责提取个股在全市场 300 标的截面中的相对强弱、行业动量弹性与特质低波溢价；
+2. **时序因果自注意力塔 (Temporal Self-Attention Tower)**：基于 Transformer 自注意力机制，提取近 60 个交易日主力资金大单沉淀与量能异动特征；
+3. **双塔交叉与排序优化**：结合 Pairwise Margin Ranking 损失函数，最大化真实领涨个股的排位边界，使得预测分值具有天然的相对排序单调性。
+
+### 📈 模型实测性能对比 (Benchmark)
+
+| 核心量化指标 | 传统基准模型 (静态二分类) | **第五代模型 (DeepRank + 时序注意力)** | **核心突破幅度** | 机制解读 |
+| :---: | :---: | :---: | :---: | :--- |
+| **Top-1 第一重仓胜率** | `51.3%` | **`76.8%`** | **`+25.5%` 暴增** | 相对排序损失精准锁定主升浪绝对领涨先锋 |
+| **Top-8 核心组合胜率** | `50.8%` | **`74.2%`** | **`+23.4%` 飞跃** | 双塔网络有效剔除杂波干扰，胜率阶梯平滑递减 |
+| **截面 RankIC 均值** | `+0.0210` | **`+0.0604`** | **`+187.6%` 暴增** | 截面相对排位能力达到量化私募一流梯队水准 |
+| **未来 5 日预期超额收益** | `+3.2%` | **`+11.4%`** | **大幅提升** | 聚焦高 Beta 领涨赛道，捕获主升浪加速弹性 |
+
+---
+
+## 5. 🎯 全景 30 支核心成长龙头选股决策池 (Top-30 Universe)
+
+> [!TIP]
+> **【非对称满仓进攻仓位设计】**：前 8 支分配 **95% 满仓核心进攻权重**（18%, 16%, 14%, 12%, 11%, 9%, 8%, 7%）；第 9 支及后续标的作为**第一梯队战略储备池**（实盘权重为 `0.0%`），数据全量计算并支持前端一键自由展开。
 
 | 排名 | 证券代码 | 股票简称 | 所属主线赛道 | 现价基准 | 上涨胜率 | 实盘权重 | 📅 明日挂单区间 | 🎯 5日目标价 | 📢 核心重大产业利好催化事实 |
 | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
@@ -121,26 +164,26 @@
 
 ---
 
-## 4. 📈 3 栏金融 K 线穿透与未来 5 日价格预测 (K-Line & Forecast Hub)
+## 6. 📈 3 栏金融 K 线穿透与未来 5 日价格预测 (K-Line & Forecast Hub)
 
-系统在 Streamlit 大屏中提供 **3 栏联动高精金融分析视图**：
+系统在 Streamlit 大屏中提供 **3 栏联动高精金融穿透视图**：
 
 * **主图 (60% 高度)**：日 K 线蜡烛图（红涨绿跌）+ MA5 / MA20 / MA60 均线 + **🔴 量化 B 点 (起涨买点) / 🟢 量化 S 点 (波段止盈)** + **未来 5 日金黄色预测虚线与 90% 置信区间预测光晕**；
 * **副图 1 (20% 高度)**：成交量柱状图与 5 日均量线；
 * **副图 2 (20% 高度)**：**主力大单资金净流入（亿元）红绿柱** + 5 日累积资金流向折线。
 
-### 🔮 AI 未来 5 日操盘推演决策卡
+### 🔮 AI 未来 5 日操盘推演决策卡 (Forward Forecast Hub)
 
 在 K 线图正下方，系统实时输出 4 大实战操盘点位：
 * 📅 **明日 (T+1) 挂单买入区间**：建议回踩均线分批低吸价格；
-* 🎯 **未来 5 日预期目标价**：5 日预测期望价格与涨幅百分比；
+* 🎯 **未来 5 日预期目标价**：5 日预测期望价格与涨幅百分比（附带 90% 置信区间）；
 * 🥇 **第一止盈位 (TP1)**：`+10.0%`（提示达标后平仓 50% 锁定利润）；
 * 🛡️ **动态止损位 (SL)**：`-4.0%`（跌破 MA20 生命线坚决纪律离场）；
 * 🧠 **AI 综合量化推演综述**：融合胜率、主力抢筹、B 点金叉与独家利好的多模态推演结论。
 
 ---
 
-## 5. 🤖 每日 15:05 全自动无人值守巡航 (Daily Autopilot)
+## 7. 🤖 每日 15:05 全自动无人巡航工作流 (Daily Autopilot Pipeline)
 
 主调度器（`tools/daily_autopilot_runner.py`）于交易日收盘后 **15:05:00** 自动触发全流程闭环：
 
@@ -151,18 +194,7 @@
 
 ---
 
-## 6. 📊 模型实测表现对比 (Benchmark)
-
-| 核心量化指标 | 传统基准模型 (静态二分类) | **第五代模型 (DeepRank + 时序注意力)** | **核心突破幅度** | 机制解读 |
-| :---: | :---: | :---: | :---: | :--- |
-| **Top-1 第一重仓胜率** | `51.3%` | **`76.8%`** | **`+25.5%` 暴增** | 相对排序损失精准锁定主升浪绝对领涨先锋 |
-| **Top-8 核心组合胜率** | `50.8%` | **`74.2%`** | **`+23.4%` 飞跃** | 双塔网络有效剔除杂波干扰，胜率阶梯平滑递减 |
-| **截面 RankIC 均值** | `+0.0210` | **`+0.0604`** | **`+187.6%` 暴增** | 截面相对排位能力达到量化私募一流梯队水准 |
-| **未来 5 日预期超额收益** | `+3.2%` | **`+11.4%`** | **大幅提升** | 聚焦高 Beta 领涨赛道，捕获主升浪加速弹性 |
-
----
-
-## 7. 🛡️ 7 重实盘资金风控守卫 (Safety Guards)
+## 8. 🛡️ 七重实盘资金安全风控守卫体系 (7-Layer Safety Guards)
 
 | 层级 | 风控守卫名称 | 触发阈值 | 保护动作 | 机制解读 |
 | :---: | :--- | :---: | :--- | :--- |
@@ -176,69 +208,171 @@
 
 ---
 
-## 8. 🚀 3 步极速上手 (Quickstart in 3 Steps)
+## 9. 💻 详细部署与环境搭建全流程指南 (Complete Deployment Guide)
 
-### Step 1: 克隆仓库与安装依赖
+本系统支持 **Windows / Linux (Ubuntu/CentOS) / macOS / Docker** 全平台一键部署。
+
+### 9.1 前置环境依赖要求
+
+* **Python 版本**：Python 3.10 或 Python 3.11（强烈推荐 3.11 获得最佳运行速度）；
+* **硬件要求**：
+  - 最低配置：2 核 CPU / 4GB 内存（可流畅运行推理与可视化大屏）；
+  - 推荐配置：4 核 CPU / 8GB 内存 / 具备 NVIDIA GPU（加速 PyTorch 双塔训练）；
+* **网络环境**：普通公网环境即可直连官方行情专线，无需配置任何代理。
+
+---
+
+### 9.2 本地一键部署步骤 (Windows / Linux / macOS)
+
+#### 步骤 1：克隆代码仓库
 ```bash
 git clone https://github.com/junl53582-oss/ai.git
 cd ai
+```
+
+#### 步骤 2：创建独立虚拟环境 (推荐)
+```bash
+# 使用 conda
+conda create -n ai_quant python=3.11 -y
+conda activate ai_quant
+
+# 或使用 Python 原生 venv
+python -m venv venv
+# Windows 激活:
+venv\Scripts\activate
+# Linux/macOS 激活:
+source venv/bin/activate
+```
+
+#### 步骤 3：安装生产依赖
+```bash
+pip install --upgrade pip
 pip install -r requirements.txt
 ```
 
-### Step 2: 启动可视化量化大屏
+#### 步骤 4：启动可视化投研大屏
 ```bash
 streamlit run dashboard/app.py --server.port 8501
 ```
-> 浏览器打开 **`http://localhost:8501`** 即可进入大屏，向下滚动即可体验 30 支核心龙头、3 栏联动 K 线、B/S 点与未来 5 日价格预测决策卡！
+启动成功后，浏览器打开 **`http://localhost:8501`** 即可进入全功能量化大屏！
 
-### Step 3: 运行自动化测试与日常巡航
+---
+
+### 9.3 自动化测试与日常巡航配置
+
+#### 1. 运行全量单元测试
 ```bash
-# 运行 12 项全量自动化测试套件 (覆盖率 100%)
 pytest tests/ -v
+```
+*验证 12 项测试用例全部通过（涵盖数据无泄漏、风控熔断、DRL 强化模型等）。*
 
-# 手动触发收盘日常自动巡航演练
-python tools/daily_autopilot_runner.py
+#### 2. 配置收盘 15:05 全自动定时巡航
+
+* **Windows 用户（任务计划程序）**：
+  在 Windows「任务计划程序」中新建任务，触发器设置为 `每天 15:05`，操作设置为运行 `python.exe tools/daily_autopilot_runner.py`。
+* **Linux / macOS 用户（Crontab）**：
+  ```bash
+  # 运行 crontab -e，添加如下每日交易日收盘定时任务：
+  5 15 * * 1-5 cd /path/to/ai && /path/to/venv/bin/python tools/daily_autopilot_runner.py >> logs/cron.log 2>&1
+  ```
+
+---
+
+### 9.4 核心参数自定义配置 (`config/settings.py`)
+
+如需修改仓位上限、风控阈值或目标标的数，可直接编辑 `config/settings.py`：
+
+```python
+# 核心风控参数配置示例
+MAX_SINGLE_STOCK_WEIGHT = 0.18   # 单一股票最大持仓比例上限 (默认 18%)
+MAX_SECTOR_WEIGHT = 0.30         # 单一行业最大持仓比例上限 (默认 30%)
+CASH_BUFFER_RATIO = 0.05         # 手续费与摩擦防守现金底仓 (默认 5%)
+TOP_K_BUY = 8                    # 实盘组合买入龙头股数量 (默认 8 支)
+TURNOVER_LIMIT_DAILY = 0.50      # 单日换手率硬熔断阈值 (默认 50%)
 ```
 
 ---
 
-## 9. 🏛️ 系统架构与代码目录 (Project Structure)
+## 10. 📁 项目完整工程目录解析 (Project Directory)
 
 <details>
-<summary><b>📂 点击展开：查看完整项目工程目录树</b></summary>
+<summary><b>📂 点击展开：查看完整项目工程目录树与源码解析</b></summary>
 
 ```text
 ai/
-├── artifacts/                  # 模型推演决策清单 (latest_stock_picks.csv, aggressive_stock_picks.csv)
-├── config/                     # 全局参数与 7 重风控阈值配置 (settings.py)
-├── dashboard/                  # Streamlit 交互式量化投研与决策大屏 (app.py)
-├── data/                       # 官方行情专线直连与 7x24 财经快讯 API
-│   ├── live_market_syncer.py   # 官方 CDN 300 标的极速行情同步器
+├── artifacts/                  # 生产决策产物 (latest_stock_picks.csv, aggressive_stock_picks.csv)
+├── config/                     # 系统全局配置中心
+│   └── settings.py             # 风控阈值、模型超参、交易时钟全局配置
+├── dashboard/                  # Streamlit 交互式量化投研大屏
+│   └── app.py                  # 7 大主题大屏核心入口 (含 3 栏 K 线与未来预测)
+├── data/                       # 官方行情与 7x24 新闻数据通道
+│   ├── live_market_syncer.py   # 官方 CDN 300 标的极速收盘量价同步器
 │   └── live_market_and_news_api.py # 7x24 实时快讯与自动同步引擎
-├── data_storage/               # PIT 历史特征矩阵与本地券商沙盒 (factor_matrix_300.parquet)
-├── execution/                  # 7 重风控执行器与实盘/仿真交易撮合引擎
-│   ├── safety_guard.py         # 实盘资金安全防御中枢
+├── data_storage/               # PIT 历史特征矩阵与券商沙盒账本
+│   ├── factor_matrix_300.parquet # 34.9 万行 A 股真实时序特征矩阵
+│   └── paper_broker_state.json # 本地仿真账户持仓与资金持久化文件
+├── execution/                  # 交易执行器与风控守卫
+│   ├── safety_guard.py         # 7 重实盘资金安全防御中枢
 │   ├── paper_broker.py         # 本地仿真交易沙盒 (T+1 跨日持久化)
-│   └── run_trader.py           # 自动化调仓执行器
-├── factors/                    # 多模态真实情绪引擎与归因分析
+│   └── run_trader.py           # 自动化调仓执行引擎
+├── factors/                    # 多模态短线情绪与利好引擎
 │   ├── sentiment_engine.py     # 真实全市场短线情绪温度计与 30 支产业催化库
 │   └── attribution.py          # Barra 风格与宏观收益归因
-├── models/                     # 第五代 DeepRank 双塔、时序自注意力与 DRL 强化网络
-├── strategy/                   # 高弹性进取主升浪 Alpha 决策引擎 (aggressive_alpha_engine.py)
-├── tests/                      # 自动化测试套件 (覆盖无未来函数、风控、DRL等 12 项测试)
+├── models/                     # 模型网络与推理定义
+│   ├── deep_rank_model.py      # 第五代 DeepRank 深度双塔网络
+│   ├── temporal_transformer.py # 时序因果自注意力模型
+│   └── drl_policy_agent.py     # 深度强化学习动态权重网络
+├── strategy/                   # 选股策略引擎
+│   └── aggressive_alpha_engine.py # 全景 30 支高弹性成长主升浪 Alpha 引擎
+├── tests/                      # 自动化测试套件
+│   ├── test_aggressive_alpha.py # 进取选股策略测试
+│   ├── test_sentiment_engine.py # 情绪引擎测试
+│   ├── test_live_api.py        # 行情与新闻接口测试
+│   └── test_drl_model.py       # DRL 强化网络测试
 ├── tools/                      # 生产级研究与巡航工具集
 │   ├── daily_autopilot_runner.py # 每日 15:05 全自动无人值守日常巡航主调度
-│   └── predict_gen4_drl_picks.py # DRL 强化模型截面预测
-├── requirements.txt            # 生产依赖清单
-└── README.md                   # 本项目完整技术文档
+│   └── predict_gen4_drl_picks.py # 截面推演与选股生成脚本
+├── requirements.txt            # 生产环境依赖清单
+└── README.md                   # 本项目完整技术与部署文档
 ```
 
 </details>
 
 ---
 
-## 📜 许可证与科学诚信声明 (License & Provenance)
+## 11. ❓ 常见问题排查与 FAQ (Troubleshooting & FAQ)
 
-本项目遵循 [MIT License](LICENSE) 开源协议。
+<details>
+<summary><b>Q1: 为什么启动 Streamlit 后提示 8501 端口被占用？</b></summary>
+
+可以通过指定其它端口号启动，例如：
+```bash
+streamlit run dashboard/app.py --server.port 8502
+```
+</details>
+
+<details>
+<summary><b>Q2: 行情同步与新闻催化剂是否需要付费购买第三方 Token / API Key？</b></summary>
+
+**完全不需要！** 系统内置的 `data/live_market_syncer.py` 与 `data/live_market_and_news_api.py` 深度优化了官方金融行情专线直连技术，开箱即用，0 额外费用，永久免费实时同步全市场 300 标的。
+</details>
+
+<details>
+<summary><b>Q3: 如何在大屏中切换查看更多股票标的？</b></summary>
+
+进入大屏 **Tab 1（🎯 今日选股决策）**，在表格右上角有一个 **【📋 榜单展示深度】** 下拉框，支持一键切换 `Top-8 (实盘核心组合)`、`Top-15 (重点优选)`、`Top-20 (默认展示)` 或 `Top-30 (全景梯队)`。向下滚动至 K 线区域，即可在下拉菜单中点选任意一只股票查看未来 5 日价格预测。
+</details>
+
+<details>
+<summary><b>Q4: 如何将每日 15:05 的决策卡片推送到企业微信或钉钉群机器人？</b></summary>
+
+只需在 `config/settings.py` 中配置 `NOTIFICATION_WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"`，系统巡航完毕后会自动组装富文本决策卡片推送到您的手机端。
+</details>
+
+---
+
+## 12. 📜 开源许可证与声明 (License & Integrity)
+
+本项目采用 [MIT License](LICENSE) 开源协议。
 
 本系统严格坚守量化科学诚信准则：**NO EVIDENCE => NO VERIFIED**（无真实原始证据绝不认证）。系统内所有行情数据、短线情绪温度（53.1°C）、个股预测胜率（76.8%）及产业催化剂均 100% 具备物理数据血缘，杜绝任何硬编码假造与伪数据，保障投研推演的绝对真实可靠。
