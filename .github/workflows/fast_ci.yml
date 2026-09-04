@@ -2,7 +2,7 @@ name: Fast CI
 
 on:
   push:
-    branches: [ main, "codex/*" ]
+    branches: [ main ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"

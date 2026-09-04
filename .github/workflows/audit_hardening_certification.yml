@@ -2,9 +2,13 @@ name: Audit Hardening Certification & Integrity Regression Suite
 
 on:
   push:
-    branches: [ main, "phase2.1-*", "codex/*" ]
+    branches: [ main ]
   pull_request:
     branches: [ main ]
+
+concurrency:
+  group: integrity-audit-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   integrity-audit-certification:
