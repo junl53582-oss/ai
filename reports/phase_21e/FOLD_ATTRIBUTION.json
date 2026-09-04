@@ -1,0 +1,143 @@
+{
+  "folds_evaluated": 15,
+  "positive_delta_fold_ratio": 0.5333,
+  "largest_single_fold_contribution_share": 1.1411,
+  "is_fold_concentrated": false,
+  "folds_detail": [
+    {
+      "fold": 5,
+      "test_start": "2024-02-29",
+      "test_end": "2024-04-26",
+      "days": 30,
+      "baseline_rankic": 0.0907,
+      "candidate_rankic": 0.107,
+      "delta_rankic": 0.0163
+    },
+    {
+      "fold": 6,
+      "test_start": "2024-04-29",
+      "test_end": "2024-06-27",
+      "days": 40,
+      "baseline_rankic": 0.0101,
+      "candidate_rankic": -0.0245,
+      "delta_rankic": -0.0346
+    },
+    {
+      "fold": 7,
+      "test_start": "2024-06-28",
+      "test_end": "2024-08-22",
+      "days": 40,
+      "baseline_rankic": 0.1338,
+      "candidate_rankic": 0.1245,
+      "delta_rankic": -0.0093
+    },
+    {
+      "fold": 8,
+      "test_start": "2024-08-23",
+      "test_end": "2024-10-28",
+      "days": 40,
+      "baseline_rankic": -0.0016,
+      "candidate_rankic": 0.1145,
+      "delta_rankic": 0.1161
+    },
+    {
+      "fold": 9,
+      "test_start": "2024-10-29",
+      "test_end": "2024-12-23",
+      "days": 40,
+      "baseline_rankic": 0.1046,
+      "candidate_rankic": 0.0665,
+      "delta_rankic": -0.038
+    },
+    {
+      "fold": 10,
+      "test_start": "2024-12-24",
+      "test_end": "2025-02-26",
+      "days": 40,
+      "baseline_rankic": -0.0729,
+      "candidate_rankic": 0.0538,
+      "delta_rankic": 0.1266
+    },
+    {
+      "fold": 11,
+      "test_start": "2025-02-27",
+      "test_end": "2025-04-24",
+      "days": 40,
+      "baseline_rankic": 0.0831,
+      "candidate_rankic": 0.1051,
+      "delta_rankic": 0.022
+    },
+    {
+      "fold": 12,
+      "test_start": "2025-04-25",
+      "test_end": "2025-06-25",
+      "days": 40,
+      "baseline_rankic": 0.0375,
+      "candidate_rankic": 0.0795,
+      "delta_rankic": 0.042
+    },
+    {
+      "fold": 13,
+      "test_start": "2025-06-26",
+      "test_end": "2025-08-20",
+      "days": 40,
+      "baseline_rankic": 0.0487,
+      "candidate_rankic": -0.1482,
+      "delta_rankic": -0.1969
+    },
+    {
+      "fold": 14,
+      "test_start": "2025-08-21",
+      "test_end": "2025-10-23",
+      "days": 40,
+      "baseline_rankic": 0.0485,
+      "candidate_rankic": 0.1066,
+      "delta_rankic": 0.0582
+    },
+    {
+      "fold": 15,
+      "test_start": "2025-10-24",
+      "test_end": "2025-12-18",
+      "days": 40,
+      "baseline_rankic": -0.0129,
+      "candidate_rankic": -0.0295,
+      "delta_rankic": -0.0166
+    },
+    {
+      "fold": 16,
+      "test_start": "2025-12-19",
+      "test_end": "2026-02-24",
+      "days": 40,
+      "baseline_rankic": -0.0184,
+      "candidate_rankic": 0.1289,
+      "delta_rankic": 0.1472
+    },
+    {
+      "fold": 17,
+      "test_start": "2026-02-25",
+      "test_end": "2026-04-22",
+      "days": 40,
+      "baseline_rankic": 0.0039,
+      "candidate_rankic": -0.1182,
+      "delta_rankic": -0.1221
+    },
+    {
+      "fold": 18,
+      "test_start": "2026-04-23",
+      "test_end": "2026-06-23",
+      "days": 40,
+      "baseline_rankic": -0.0213,
+      "candidate_rankic": -0.0786,
+      "delta_rankic": -0.0573
+    },
+    {
+      "fold": 19,
+      "test_start": "2026-06-24",
+      "test_end": "2026-08-18",
+      "days": 24,
+      "baseline_rankic": 0.1325,
+      "candidate_rankic": 0.2079,
+      "delta_rankic": 0.0754
+    }
+  ]
+}
