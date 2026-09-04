@@ -34,19 +34,11 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
-      - name: Fail-Closed Market Dataset Gate (Phase A: 行情主数据集已入库)
+      - name: "Fail-Closed Market Dataset Gate (Phase A: 行情主数据集已入库)"
         run: |
-          python -u -c "
-          from pathlib import Path
-          import pyarrow.parquet as pq
-          p = Path('data_storage/research/market_daily_300.parquet')
-          assert p.exists(), 'Production market dataset market_daily_300.parquet missing! Fail-Closed.'
-          f = pq.ParquetFile(p)
-          assert f.metadata.num_rows == 349379, f'Row count drifted: {f.metadata.num_rows}'
-          print(f'Market dataset OK: {f.metadata.num_rows} rows')
-          "
+          python -u -c "import sys, pyarrow.parquet as pq; from pathlib import Path; p = Path('data_storage/research/market_daily_300.parquet'); sys.exit('Production market dataset market_daily_300.parquet missing! Fail-Closed.') if not p.exists() else None; f = pq.ParquetFile(p); sys.exit(f'Row count drifted: {f.metadata.num_rows}') if f.metadata.num_rows != 349379 else print(f'Market dataset OK: {f.metadata.num_rows} rows')"
 
-      - name: Factor Matrix Reproducibility Check (Phase A)
+      - name: "Factor Matrix Reproducibility Check (Phase A)"
         run: |
           if [ ! -f data_storage/research/factor_matrix_300.parquet ]; then
             echo "::error::认证级因子矩阵 factor_matrix_300.parquet (311MB) 未入库, 且当前无法从入库代码+数据位级复现。"

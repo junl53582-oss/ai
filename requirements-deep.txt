@@ -1,0 +1,3 @@
+# 深度序列与强化学习模型 (Gen 4 DRL / Gen 5 DeepRank / Temporal Transformer)
+# CPU 安装推荐: pip install torch --index-url https://download.pytorch.org/whl/cpu
+torch>=2.0.0

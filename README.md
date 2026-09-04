@@ -5,8 +5,8 @@
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.11">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat-square" alt="License GPL-3.0">
-  <img src="https://img.shields.io/badge/Tests-568%2F568%20Passing-10B981.svg?style=flat-square&logo=github-actions&logoColor=white" alt="Tests 568/568 Passing">
-  <img src="https://img.shields.io/badge/Governance-PASS-success.svg?style=flat-square" alt="Governance PASS">
+  <img src="https://img.shields.io/badge/CI%20Status-Passing%20(Fast%20%2B%20Audit)-10B981.svg?style=flat-square&logo=github-actions&logoColor=white" alt="CI Status">
+  <img src="https://img.shields.io/badge/Research%20Certification-FAILED%20(Insufficient%20Evidence)-crimson.svg?style=flat-square" alt="Research Certification FAILED">
   <img src="https://img.shields.io/badge/Live%20Trading-FALSE%20(Paper%20Only)-orange.svg?style=flat-square" alt="Live Trading False">
   <img src="https://img.shields.io/badge/Dashboard-Port%208501-8B5CF6.svg?style=flat-square&logo=streamlit&logoColor=white" alt="Dashboard Port 8501">
 </p>
@@ -38,17 +38,44 @@
 
 ## 1. 🚦 系统权威状态矩阵 (Current Status)
 
-依据量化系统正式科研门禁（Gate Matrix）及 ModelRegistry 审计记录，当前系统的权威运行状态如下：
+本项目严格坚持单一事实源（Single Source of Truth），将系统状态严格划分为三大维度：**软件工程状态**、**正式科研认证状态**与**部署/实盘状态**。
 
-| 治理与运行时维度 | 状态判定 | 权威依据 / 当前数值 | 说明与风控边界 |
+> [!WARNING]
+> **【核心概念边界 Clarification】**
+> - `ModelRegistry` 中的 `PRODUCTION` 状态仅代表**已打包的部署工程制品（`DEPLOYMENT_ARTIFACT` / `PAPER_PRODUCTION_MODEL`）**，可在模拟盘或交互看盘中运行批处理推理。
+> - **`PRODUCTION` 状态绝对不等于科学实证认证通过（`scientific VERIFIED`），亦绝对不等于实盘交易批准（`live trading approved`）。**
+> - 本项目实盘交易门禁永久硬阻断：`LIVE_TRADING_READY = FALSE`。
+
+### 1.1 软件工程与 CI 状态 (Software Engineering Status)
+| 检查项 | 状态判定 | 执行环境 | 实际测试记录 (Authoritative Logs) |
 | :--- | :---: | :---: | :--- |
-| **🛡️ 治理与审计门禁** | `PASS` | 32 项安全门禁全部通过 | 代码防篡改、血统溯源与因果隔离审计验证通过 |
-| **🚨 实盘交易就绪状态** | `FALSE` | `LIVE_TRADING_READY = FALSE` | **当前严禁实盘资金直连**；仅限 PaperBroker 模拟撮合与前瞻观测 |
-| **🏭 官方在役生产模型** | `PRODUCTION` | `m_20260903_194757_hybrid_bagging_ridge` | 多随机种子浅树集成 + L2 Ridge 线性底仓 (32 维精选特征) |
-| **🧪 前沿研究候选模型** | `CANDIDATE` | Gen 4 (DRL 智能体) / Gen 5 (双塔排序) | 处于离线研究与实验对比阶段，未签发上线授权 |
-| **📊 全量自动化测试** | `100% PASS` | **568 / 568 项测试全部通过** | 涵盖 PIT 数据防泄漏、交易撮合、模型适配器、生产熔断防御 |
-| **📅 盘后调度工作流** | `OPERATIONAL` | 每日 15:05:00 定时执行 | 生产默认 `--mode inference`，检测到生产环境严禁重训 (fail-closed) |
-| **🌐 可视化投研大屏** | `ONLINE` | Streamlit Port 8501 | 7 大主题看板，支持 K 线多周期穿透与未来价格推演 |
+| **Local Full Pytest** | `PASS` | Windows 11 / Py 3.11 | **568 passed**, 0 failed, 164 warnings in 222.05s |
+| **CI: Fast CI** | `PASS` | Ubuntu-latest / Py 3.11 | **178 passed**, 2 deselected, 2 warnings in 162.58s (Run #33842051349) |
+| **CI: Audit Hardening** | `PASS` | Ubuntu-latest / Py 3.11 | **33 passed**, 2 warnings in 2.94s (Run #33842051439) |
+| **CI: r3.2 Adversarial** | `PASS` | Ubuntu-latest / Py 3.11 | **16 passed**, 1 warning in 1.16s (Run #33842051439) |
+| **CI: Formal E2E Smoke** | `PASS` | Ubuntu-latest / Py 3.11 | **3 passed**, 7 warnings in 9.42s (Run #33842051439) |
+| **CI: Linux Full Pytest** | `PASS` | Ubuntu-latest / Py 3.11 | **567 passed**, 1 skipped, 52 warnings in 225.43s (Run #33842051439) |
+| **Production Research Audit** | `VALID` | GitHub Actions Workflow | Workflow 语法与 schema 100% 合法，支持 `workflow_dispatch` 启动与 fail-closed 门禁拦截 |
+
+### 1.2 科研认证门禁状态 (Research Certification Status)
+依据官方冻结规范与 `FINAL_RUN_POINTER.json`（指向权威运行 `research_8dbf062_20260831_155701`），科研认证结论严格保持如下：
+| 科研认证门禁维度 | 状态值 | 判定依据与说明 |
+| :--- | :---: | :--- |
+| **INFRASTRUCTURE_STATUS** | `INSUFFICIENT_EVIDENCE` | 缺少官方财报披露日逐笔因果存证，STRICT_FUNDAMENTAL_PIT 证据不足 |
+| **MODEL_EVIDENCE_STATUS** | `MIXED_EVIDENCE_NOT_ROBUST` | Bootstrap 95% 置信区间下界 <= 0，且跨种子稳定性方差未达极致阈值 |
+| **GOVERNANCE_STATUS** | `PASS` | 32 项代码防篡改、无未来函数与反欺诈门禁全量通过 |
+| **OVERALL_RESEARCH_STATUS**| `FAILED` | 依据科研门禁体系，因上述关键项未达标，综合科研认证结论判定为未通过 |
+| **FINAL_HOLDOUT_AVAILABLE**| `FALSE` | 严守时序盲测准则，终极样本外盲测集未到解封时点 |
+| **PRODUCTION_MODEL_PROMOTION**| `FALSE` | 正式科研模型晋升已被治理网关否决，禁止自动转正 |
+
+### 1.3 部署与实盘状态 (Deployment / Trading Status)
+| 运行时维度 | 状态值 | 说明与风控边界 |
+| :--- | :---: | :--- |
+| **🚨 实盘交易就绪状态** | `FALSE` | **`LIVE_TRADING_READY = FALSE`**。绝对禁止实盘真实资金交易，仅限模拟盘沙盒 |
+| **🏭 在役部署模型制品** | `DEPLOYMENT_ARTIFACT` | `m_20260903_194757_hybrid_bagging_ridge` (仅供 Paper Trading 与前瞻推演) |
+| **🧪 前沿研究候选模型** | `CANDIDATE` | Gen 4 (DRL 智能体) / Gen 5 (双塔排序)，仅供离线实验 |
+| **📅 盘后调度工作流** | `OPERATIONAL` | 每日 15:05:00 自动执行，默认 `--mode inference`，生产环境严禁重训 (fail-closed) |
+| **🌐 可视化投研大屏** | `ONLINE` | Streamlit Port 8501 (`streamlit run dashboard/app.py`)，7 大主题看板正常运作 |
 
 ---
 

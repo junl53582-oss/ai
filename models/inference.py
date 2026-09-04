@@ -65,6 +65,10 @@ class BatchInference:
         self.model = self._load_model()
         self.model_id = self.record.model_id
 
+    @property
+    def feature_names(self):
+        return self.model.feature_names
+
     # ---------------------------------------------------------------- 加载
     def _load_model(self):
         artifact = self.registry.resolve_artifact(self.record.model_id)

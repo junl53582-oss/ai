@@ -43,6 +43,10 @@ class BaseModelAdapter(ABC):
             return list(self.model.feature_names)
         return []
 
+    def get_feature_names(self) -> List[str]:
+        """兼容性方法: 获取模型所需的特征名列表"""
+        return self.feature_names
+
     def __getattr__(self, name: str) -> Any:
         """透明转发底层模型对象的其他属性与方法"""
         if self.model is not None and hasattr(self.model, name):
