@@ -1,4 +1,4 @@
-﻿"""
+"""
 深度优化模型正式晋升与生产发布工具 (tools/promote_deep_model.py)
 """
 import sys
@@ -105,4 +105,9 @@ def run_deep_promotion():
     print('=' * 75)
 
 if __name__ == '__main__':
+    if "--allow-legacy-demo" not in sys.argv:
+        print("[BLOCKED] tools/promote_deep_model.py 是历史演示脚本，包含硬编码模拟审批凭证，默认禁止执行以防伪造审批。")
+        print("正式晋升请使用: python tools/promote_model.py promote --model-id <ID> --to <STATE> --approval-artifact <JSON>")
+        print("如确需在测试沙盒中复现历史演示，请显式追加参数: --allow-legacy-demo")
+        sys.exit(1)
     run_deep_promotion()

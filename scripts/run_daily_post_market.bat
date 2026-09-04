@@ -17,8 +17,8 @@ if defined QUANT_WEBHOOK_URL (
     set WEBHOOK_ARG=--webhook "%QUANT_WEBHOOK_URL%"
 )
 
-echo [%date% %time%] 启动盘后自动同步、走步预测、组合优化与消息推送...
-"%PY311%" -u scheduler/daily_runner.py --optimizer risk_parity %WEBHOOK_ARG%
+echo [%date% %time%] [MODE=INFERENCE] 启动盘后自动同步、生产批量推理与盘后风控调仓...
+"%PY311%" -u scheduler/daily_runner.py --mode inference --production-runtime --optimizer risk_parity %WEBHOOK_ARG%
 
 if %ERRORLEVEL% equ 0 (
     echo [%date% %time%] ✅ 盘后量化决策任务执行成功！

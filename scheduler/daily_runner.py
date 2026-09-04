@@ -75,13 +75,29 @@ def _push_failure_alert(webhook_url: Optional[str], channel: str, stage_error: s
         logger.critical(f"🚨 流水线失败且告警推送也失败: {push_err} | 原始错误: {stage_error}")
 
 
+def is_production_environment(explicit_flag: Optional[bool] = None) -> bool:
+    """检测当前是否处于生产运行环境"""
+    import os
+    if explicit_flag is not None:
+        return bool(explicit_flag)
+    env_vars = ["PRODUCTION_RUNTIME", "QUANT_ENV", "APP_ENV", "ENVIRONMENT"]
+    for var in env_vars:
+        val = os.environ.get(var, "").strip().lower()
+        if val in ("1", "true", "yes", "prod", "production"):
+            return True
+    if getattr(settings, "ENVIRONMENT", "").lower() in ("prod", "production"):
+        return True
+    return False
+
+
 def run_daily_automation(
     webhook_url: Optional[str] = None,
     channel: str = "feishu",
     optimizer_type: str = "equal",
     force_update: bool = False,
     current_holdings: Optional[Set[str]] = None,
-    mode: str = "research"
+    mode: str = "inference",
+    production_runtime: Optional[bool] = None,
 ) -> Dict[str, Any]:
     """执行每日盘后自动化任务并推送决策清单
 
@@ -89,13 +105,23 @@ def run_daily_automation(
         current_holdings: 当前真实持仓标的集合。不传则退化为空集 (滞回缓冲不生效,
                           新买入门槛为 TOP_K_BUY); 传入后已持仓标的按 TOP_K_HOLD 宽缓冲保留。
         mode:
-            "research"  (默认/旧行为): 每日重跑 walk-forward 取最新 OOS 截面。
-                        架构审计判定此为 research replay 而非真正推理, 仅用于研究场景。
-            "inference": 加载注册表中唯一的 PRODUCTION 模型做批量推理 (推荐生产路径)。
+            "inference" (默认生产路径): 加载注册表中唯一的 PRODUCTION 模型做批量推理。
                         无 PRODUCTION 模型时 fail-closed 拒绝运行, 绝不以重训冒充推理。
+            "research"  (离线研究专用): 重跑 walk-forward 取最新 OOS 截面。
+                        严禁在生产运行环境下使用 (fail-closed)。
+        production_runtime: 是否强制标记生产运行环境。为 True 时若 mode=='research' 将直接抛错拦截。
     """
+    is_prod = is_production_environment(production_runtime)
+    if is_prod and mode == "research":
+        err_msg = (
+            "🚨 生产安全防御拦截 (fail-closed): 检测到当前处于生产运行环境 (production_runtime=True)，"
+            "严禁在生产中使用 research 模式直接输出交易信号！请使用 --mode inference 运行正式生产模型。"
+        )
+        logger.critical(err_msg)
+        raise RuntimeError(err_msg)
+
     print("\n" + "=" * 70)
-    print(">> 启动 A股盘后量化自动化任务 (Daily Automation Runner)")
+    print(f">> 启动 A股盘后量化自动化任务 (Daily Automation Runner | Mode: {mode.upper()})")
     print("=" * 70)
 
     holdings = current_holdings if current_holdings is not None else set()
@@ -204,8 +230,10 @@ if __name__ == "__main__":
     parser.add_argument("--optimizer", type=str, default="equal", help="组合优化器类型")
     parser.add_argument("--force-update", action="store_true", help="强制更新数据")
     parser.add_argument("--holdings", type=str, default=None, help="当前持仓标的, 逗号分隔 (如 600519.SH,000858.SZ); 不传则滞回缓冲不生效")
-    parser.add_argument("--mode", type=str, default="research", choices=["research", "inference"],
-                        help="research=每日重训(研究用, 默认); inference=加载 PRODUCTION 模型批量推理(生产路径)")
+    parser.add_argument("--mode", type=str, default="inference", choices=["inference", "research"],
+                        help="inference=加载 PRODUCTION 模型批量推理(生产路径, 默认); research=每日走步重训(仅供离线研究)")
+    parser.add_argument("--production-runtime", action="store_true", default=False,
+                        help="标记当前处于生产运行环境，若模式为 research 将触发防御性抛错 (fail-closed)")
     args = parser.parse_args()
 
     holdings = {s.strip() for s in args.holdings.split(",") if s.strip()} if args.holdings else set()
@@ -216,5 +244,6 @@ if __name__ == "__main__":
         optimizer_type=args.optimizer,
         force_update=args.force_update,
         current_holdings=holdings,
-        mode=args.mode
+        mode=args.mode,
+        production_runtime=args.production_runtime
     )

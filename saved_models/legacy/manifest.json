@@ -1,0 +1,42 @@
+{
+  "latest_lightgbm.pkl": {
+    "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1",
+    "size_bytes": 16725957,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "latest_ensemble.pkl": {
+    "sha256": "8b6de56d85327aa8d550b9b37f8f885dfa2926aeb53880c7338bbc26c6f43496",
+    "size_bytes": 181683,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "candidate_deep_optimized.pkl": {
+    "sha256": "90917ed6e5470bfc67c68c07eef63f30f7a64aa5a5825d74b01bf576b0818af5",
+    "size_bytes": 94384,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "candidate_gen4_drl_model.pkl": {
+    "sha256": "1b39eec2c6f68b16ec30897c338bd2aaba183d93091cd6fdd37b173f9c21d3c1",
+    "size_bytes": 16725957,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "candidate_gen3_mega_model.pkl": {
+    "sha256": "becd78efbacce6d1875f39528faa44db0c9162943528f7cbffcecb61672eba79",
+    "size_bytes": 16938793,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "candidate_optimized_ensemble.pkl": {
+    "sha256": "ee6b0a9fd56331265d69ab427215349a94e4df836fcecacb36dfda960551b61f",
+    "size_bytes": 45468,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "candidate_next_gen.pkl": {
+    "sha256": "961da4b07ccce77103abe52ee2f0d752af090a00f57f11aae57264838ccacf21",
+    "size_bytes": 18379,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  },
+  "double_ensemble_latest.pkl": {
+    "sha256": "619dfb59cc701e5b4a3a79e7ba3a23d0d9e1f1e5a6bd86648b87b2999129ea71",
+    "size_bytes": 85642,
+    "note": "Legacy model artifact preserved for backward compatibility"
+  }
+}

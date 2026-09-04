@@ -6,5 +6,6 @@
   "config_hash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
   "artifact_manifest_sha256": "d006cb4d40efc9f9c189ecce017480054fbb27fd18d0c8b7084895aacf373211",
   "gate_matrix_sha256": "deeeb4f0858bb7a86ef87c2937cd94d5602ab4a3d7e33f58bfce475b5acfa8ff",
+  "created_at": "2026-09-04T06:30:00Z",
   "run_status": "FAILED: INSUFFICIENT_EVIDENCE_FOR_STRICT_FUNDAMENTAL_PIT"
 }

@@ -22,6 +22,7 @@ data_storage/research/*.parquet
 !data_storage/research/market_daily_300.parquet
 !data_storage/research/market_daily_300_v2.parquet
 saved_models/*.pkl
+saved_models/legacy/*.pkl
 saved_models/*.txt
 saved_models/*.pt
 saved_models/registry/
@@ -59,6 +60,7 @@ data_storage/st_timeline/
 .env
 .env.*
 *.env
+!.env.example
 
 # Local transient execution queues
 artifacts/pending_rebalance_queue.json

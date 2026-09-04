@@ -1,378 +1,344 @@
-# A股多模态 AI 量化投研、未来价格预测与自动化实盘交易系统
+# A股工业级 AI 量化投研、未来价格前瞻推演与自动化交易中台
 
-> **A-Share Multimodal AI Quantitative Research, Forward Price Forecasting & Production Trading Platform**
+> **A-Share Institutional AI Quantitative Research, Forward Price Forecasting & Trading Platform**
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.11">
-  <img src="https://img.shields.io/badge/License-MIT-22C55E.svg?style=flat-square" alt="License MIT">
-  <img src="https://img.shields.io/badge/CI-12%2F12%20Passing-10B981.svg?style=flat-square&logo=github-actions&logoColor=white" alt="CI Passing">
-  <img src="https://img.shields.io/badge/Data%20Integrity-100%25%20Zero--Mock-EF4444.svg?style=flat-square" alt="Zero Mock">
-  <img src="https://img.shields.io/badge/Dashboard-Port%208501%20Online-8B5CF6.svg?style=flat-square&logo=streamlit&logoColor=white" alt="Dashboard">
-  <img src="https://img.shields.io/badge/Model-Gen%205%20DeepRank-F59E0B.svg?style=flat-square" alt="Gen 5 Model">
-</p>
-
-<p align="center">
-  <b>🌐 100% 真实数据直连</b> · 
-  <b>🔬 第五代 DeepRank 双塔排序</b> · 
-  <b>🎯 全景 30 支核心龙头</b> · 
-  <b>🔮 未来 5 日价格前瞻推演</b> · 
-  <b>🤖 每日 15:05 无人巡航</b>
+  <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat-square" alt="License GPL-3.0">
+  <img src="https://img.shields.io/badge/CI%20Status-Passing%20(Fast%20%2B%20Audit)-10B981.svg?style=flat-square&logo=github-actions&logoColor=white" alt="CI Status">
+  <img src="https://img.shields.io/badge/Research%20Certification-FAILED%20(Insufficient%20Evidence)-crimson.svg?style=flat-square" alt="Research Certification FAILED">
+  <img src="https://img.shields.io/badge/Live%20Trading-FALSE%20(Paper%20Only)-orange.svg?style=flat-square" alt="Live Trading False">
+  <img src="https://img.shields.io/badge/Dashboard-Port%208501-8B5CF6.svg?style=flat-square&logo=streamlit&logoColor=white" alt="Dashboard Port 8501">
 </p>
 
 ---
 
 > [!IMPORTANT]
-> **【零造假科学诚信准则 (Zero-Mock Provenance)】**  
-> 本系统坚守 **NO EVIDENCE => NO VERIFIED** 铁律。所有行情数据均直连官方专线 CDN，大盘情绪（53.1°C 结构性多头）严格由 2026-09-03 沪深300 的 300 支真实标的截面计算得出，选股胜率与利好催化剂 100% 具备物理数据血缘，杜绝任何硬编码 Mock 与伪数据。
+> **【零伪造科学诚信准则 (Zero-Mock Provenance)】**
+> 本项目所有量化指标、超额收益、RankIC 与回测曲线均来自真实物理计算与不可篡改密码学凭证（SHA-256 Manifest）。杜绝任何常量伪造与过度拟合欺骗。
+> 严禁实盘直接使用，当前实盘就绪门禁严格保持：`LIVE_TRADING_READY = FALSE`（仅支持模拟与 Paper Trading 验证）。
 
 ---
 
 ## 📌 目录导航 (Table of Contents)
 
-1. [💡 项目定位与核心价值 (Project Vision)](#1-项目定位与核心价值-project-vision)
-2. [🚦 生产系统运行状态矩阵 (Status Matrix)](#2-生产系统运行状态矩阵-status-matrix)
-3. [🏛️ 八层工业级量化架构设计 (8-Layer Architecture)](#3-八层工业级量化架构设计-8-layer-architecture)
-4. [🔬 第五代 DeepRank 双塔排序模型核心原理 (Gen 5 Engine)](#4-第五代-deeprank-双塔排序模型核心原理-gen-5-engine)
-5. [🎯 全景 30 支核心成长龙头选股决策池 (Top-30 Universe)](#5-全景-30-支核心成长龙头选股决策池-top-30-universe)
-6. [📈 3 栏金融 K 线穿透与未来 5 日价格预测 (K-Line & Forecast Hub)](#6-3-栏金融-k-线穿透与未来-5-日价格预测-k-line--forecast-hub)
-7. [🤖 每日 15:05 全自动无人巡航工作流 (Daily Autopilot Pipeline)](#7-每日-1505-全自动无人巡航工作流-daily-autopilot-pipeline)
-8. [🛡️ 七重实盘资金安全风控守卫体系 (7-Layer Safety Guards)](#8-七重实盘资金安全风控守卫体系-7-layer-safety-guards)
-9. [💻 详细部署与环境搭建全流程指南 (Complete Deployment Guide)](#9-详细部署与环境搭建全流程指南-complete-deployment-guide)
-10. [📁 项目完整工程目录解析 (Project Directory)](#10-项目完整工程目录解析-project-directory)
-11. [❓ 常见问题排查与 FAQ (Troubleshooting & FAQ)](#11-常见问题排查与-faq-troubleshooting--faq)
-12. [📜 开源许可证与声明 (License & Integrity)](#12-开源许可证与声明-license--integrity)
+1. [🚦 系统权威状态矩阵 (Current Status)](#1-🚦-系统权威状态矩阵-current-status)
+2. [💡 项目定位与核心技术亮点 (Project Overview)](#2-💡-项目定位与核心技术亮点-project-overview)
+3. [🏛️ 八层量化系统工程架构 (Architecture)](#3-🏛️-八层量化系统工程架构-architecture)
+4. [🔬 生产模型与研究候选模型体系 (Model Registry)](#4-🔬-生产模型与研究候选模型体系-model-registry)
+5. [🛡️ 七重实盘资金安全风控守卫 (Safety Guards)](#5-🛡️-七重实盘资金安全风控守卫-safety-guards)
+6. [📈 交互看板与未来 5 日价格前瞻 (Dashboard & Forecast)](#6-📈-交互看板与未来-5-日价格前瞻-dashboard--forecast)
+7. [💻 快速克隆、安装与运行全流程 (Quickstart)](#7-💻-快速克隆安装与运行全流程-quickstart)
+8. [📦 数据集获取与防篡改哈希核验 (Data & Artifacts)](#8-📦-数据集获取与防篡改哈希核验-data--artifacts)
+9. [📁 项目完整工程目录结构 (Directory Layout)](#9-📁-项目完整工程目录结构-directory-layout)
+10. [❓ 常见问题排查与 FAQ (Troubleshooting & FAQ)](#10-❓-常见问题排查与-faq-troubleshooting--faq)
+11. [📜 开源许可证与免责声明 (License & Disclaimer)](#11-📜-开源许可证与免责声明-license--disclaimer)
 
 ---
 
-## 1. 💡 项目定位与核心价值 (Project Vision)
+## 1. 🚦 系统权威状态矩阵 (Current Status)
 
-传统的开源量化研究往往停留在“学术玩具”阶段，普遍面临 **数据未来穿越（Lookahead Bias）、静态二分类无法反映选股排序、缺乏前瞻价格预测、风控薄弱以及实盘无法自动闭环** 的硬伤。
+本项目严格坚持单一事实源（Single Source of Truth），将系统状态严格划分为三大维度：**软件工程状态**、**正式科研认证状态**与**部署/实盘状态**。
 
-本项目是一套专为 A 股市场研发的**工业级多模态 AI 量化投研与生产交易闭环平台**，核心聚焦以下六大维度突破：
+> [!WARNING]
+> **【核心概念边界 Clarification】**
+> - `ModelRegistry` 中的 `PRODUCTION` 状态仅代表**已打包的部署工程制品（`DEPLOYMENT_ARTIFACT` / `PAPER_PRODUCTION_MODEL`）**，可在模拟盘或交互看盘中运行批处理推理。
+> - **`PRODUCTION` 状态绝对不等于科学实证认证通过（`scientific VERIFIED`），亦绝对不等于实盘交易批准（`live trading approved`）。**
+> - 本项目实盘交易门禁永久硬阻断：`LIVE_TRADING_READY = FALSE`。
 
-* 🛡️ **100% 真实数据驱动 (Zero-Mock)**：直连官方金融行情专线，严密执行 25 天 Purge 隔离，杜绝数据穿越；
-* 🔬 **相对排序强化学习 (Deep Dual-Tower Ranking)**：采用 Pairwise Ranking 损失函数，精准锁定高 Beta 主升浪领涨龙头，**Top-1 第一重仓胜率达 76.8%**；
-* 🎯 **全景 30 支成长资产深度**：涵盖芯片、算力、新能源、高端制造与出海核心主线，大屏支持 `Top 8 / 15 / 20 / 30` 自由切换；
-* 📈 **3 栏联动高精金融穿透**：日 K 蜡烛图 + 成交量 + **主力大单资金净流入（亿元）红绿柱与 5 日累积趋势折线**；
-* 🔴🟢 **量化主力买卖点自动识别**：均线金叉放量触发 🔴 B买点，均线死叉分歧触发 🟢 S卖点；
-* 🔮 **未来 5 日 AI 价格走势前瞻预测**：K 线前瞻推演金虚线 + 90% 置信区间光晕 + 明日建议挂单区间与止盈止损决策卡；
-* 🤖 **收盘 15:05 全自动无人巡航**：全自动完成行情同步、截面打分、7 重风控调仓与手机卡片推送。
-
----
-
-## 2. 🚦 生产系统运行状态矩阵 (Status Matrix)
-
-| 系统功能层 | 运行状态 | 关键指标 / 权威参数 | 机制解读与审计说明 |
+### 1.1 软件工程与 CI 状态 (Software Engineering Status)
+| 检查项 | 状态判定 | 执行环境 | 实际测试记录 (Authoritative Logs) |
 | :--- | :---: | :---: | :--- |
-| **🌐 前端交互中枢** | `OPERATIONAL` | **Streamlit Port 8501** (HTTP 200) | 7 大主题看板丝滑响应，支持 30 支标的 K 线交互穿透 |
-| **🎯 选股决策深度** | `EXPANDED` | **全景 30 支核心成长龙头** | 支持 `Top-8 / Top-15 / Top-20 / Top-30` 一键自由切换 |
-| **🏆 核心组合胜率** | `EXCELLENT` | **Top-1 胜率 76.8% · 满仓 95% 进攻** | 第五代 DeepRank 深度双塔排序模型，聚焦高 Beta 领涨先锋 |
-| **📈 前瞻价格预测** | `ACTIVE` | **未来 5 日金虚线 + 90% 置信区间** | 自动生成明日建议挂单区间、5日目标价、TP1 止盈与 SL 止损位 |
-| **📊 K线穿透体系** | `3-PANE` | **K线 + 成交量 + 主力大单净流入** | 叠加 🔴 B点起涨金叉 与 🟢 S点波段止盈买卖信号 |
-| **🔥 全市场短线情绪** | `AUTHENTIC` | **159涨 / 127跌 / 温度 53.1°C** | 100% 真实 300 标的截面运算，绑定 30 支独立产业利好事实 |
-| **🤖 每日自动巡航** | `STANDBY` | **每日 15:05:00 定时全自动触发** | 行情直连 $	o$ 模型打分 $	o$ 7 重风控调仓 $	o$ 手机卡片推送 |
-| **🛡️ 资金安全防线** | `ENFORCED` | **7 重实盘资金安全熔断守卫** | 单日 50% 换手熔断、流动性冲击防御、单股持仓上限约束 |
+| **Local Full Pytest** | `PASS` | Windows 11 / Py 3.11 | **568 passed**, 0 failed, 164 warnings in 222.05s |
+| **CI: Fast CI** | `PASS` | Ubuntu-latest / Py 3.11 | **178 passed**, 2 deselected, 2 warnings in 162.58s (Run #33842051349) |
+| **CI: Audit Hardening** | `PASS` | Ubuntu-latest / Py 3.11 | **33 passed**, 2 warnings in 2.94s (Run #33842051439) |
+| **CI: r3.2 Adversarial** | `PASS` | Ubuntu-latest / Py 3.11 | **16 passed**, 1 warning in 1.16s (Run #33842051439) |
+| **CI: Formal E2E Smoke** | `PASS` | Ubuntu-latest / Py 3.11 | **3 passed**, 7 warnings in 9.42s (Run #33842051439) |
+| **CI: Linux Full Pytest** | `PASS` | Ubuntu-latest / Py 3.11 | **567 passed**, 1 skipped, 52 warnings in 225.43s (Run #33842051439) |
+| **Production Research Audit** | `VALID` | GitHub Actions Workflow | Workflow 语法与 schema 100% 合法，支持 `workflow_dispatch` 启动与 fail-closed 门禁拦截 |
+
+### 1.2 科研认证门禁状态 (Research Certification Status)
+依据官方冻结规范与 `FINAL_RUN_POINTER.json`（指向权威运行 `research_8dbf062_20260831_155701`），科研认证结论严格保持如下：
+| 科研认证门禁维度 | 状态值 | 判定依据与说明 |
+| :--- | :---: | :--- |
+| **INFRASTRUCTURE_STATUS** | `INSUFFICIENT_EVIDENCE` | 缺少官方财报披露日逐笔因果存证，STRICT_FUNDAMENTAL_PIT 证据不足 |
+| **MODEL_EVIDENCE_STATUS** | `MIXED_EVIDENCE_NOT_ROBUST` | Bootstrap 95% 置信区间下界 <= 0，且跨种子稳定性方差未达极致阈值 |
+| **GOVERNANCE_STATUS** | `PASS` | 32 项代码防篡改、无未来函数与反欺诈门禁全量通过 |
+| **OVERALL_RESEARCH_STATUS**| `FAILED` | 依据科研门禁体系，因上述关键项未达标，综合科研认证结论判定为未通过 |
+| **FINAL_HOLDOUT_AVAILABLE**| `FALSE` | 严守时序盲测准则，终极样本外盲测集未到解封时点 |
+| **PRODUCTION_MODEL_PROMOTION**| `FALSE` | 正式科研模型晋升已被治理网关否决，禁止自动转正 |
+
+### 1.3 部署与实盘状态 (Deployment / Trading Status)
+| 运行时维度 | 状态值 | 说明与风控边界 |
+| :--- | :---: | :--- |
+| **🚨 实盘交易就绪状态** | `FALSE` | **`LIVE_TRADING_READY = FALSE`**。绝对禁止实盘真实资金交易，仅限模拟盘沙盒 |
+| **🏭 在役部署模型制品** | `DEPLOYMENT_ARTIFACT` | `m_20260903_194757_hybrid_bagging_ridge` (仅供 Paper Trading 与前瞻推演) |
+| **🧪 前沿研究候选模型** | `CANDIDATE` | Gen 4 (DRL 智能体) / Gen 5 (双塔排序)，仅供离线实验 |
+| **📅 盘后调度工作流** | `OPERATIONAL` | 每日 15:05:00 自动执行，默认 `--mode inference`，生产环境严禁重训 (fail-closed) |
+| **🌐 可视化投研大屏** | `ONLINE` | Streamlit Port 8501 (`streamlit run dashboard/app.py`)，7 大主题看板正常运作 |
 
 ---
 
-## 3. 🏛️ 八层工业级量化架构设计 (8-Layer Architecture)
+## 2. 💡 项目定位与核心技术亮点 (Project Overview)
+
+本项目是一套专为 A 股市场研发的**工业级多模态 AI 量化投研与生产交易闭环中台**，解决传统开源量化“未来函数泛滥、简单分类无法反映真实排序、风控形同虚设、实盘无法闭环”的根本痛点：
+
+* 🛡️ **严格零幸存者偏差 (Point-In-Time Universe)**：接入 2021~2026 年沪深 300 真实时点调仓事件流，历史回测严格对齐当时成分股。
+* 🔒 **因果隔离与防视前泄漏**：财报按公告日延后 110 天披露窗口对齐，时序走步训练严格设置 25 天 Purge 隔离期。
+* 🧩 **统一模型适配器层 (Model Adapter Pattern)**：解耦推理引擎与底层模型结构，无缝兼容 LightGBM、浅树袋装集成、DRL 及 PyTorch 深度模型。
+* ⚖️ **A 股实盘交易硬约束**：内置 T+1 卖出限制、100 股整手向下取整、一字涨跌停禁买禁卖、ST 标的 5% 限价与双边滑点摩擦。
+* 🤖 **盘后全自动巡航闭环**：每日收盘后自动同步全市场行情、批量推理截面得分、触发风控组合优化并多通道推送决策卡片。
+
+---
+
+## 3. 🏛️ 八层量化系统工程架构 (Architecture)
 
 ```text
-[Layer 1: 数据基座] 官方金融专线直连 ──▶ PIT 真实数据血缘 ──▶ 零未来穿越存证
-       │
-[Layer 2: 特征工厂] 121 维微观因子 ──▶ 量价微结构 ──▶ 主力资金流向 ──▶ 换手率突变
-       │
-[Layer 3: 投研引擎] Purged 时序切分 ──▶ 25天隔离 Gap ──▶ 严格 Walk-Forward 回测
-       │
-[Layer 4: 防伪存证] 本福特定律检验 ──▶ 成交量反造假 (r=0.9995) ──▶ 密码学存证
-       │
-[Layer 5: AI 模型库] 第五代 DeepRank 双塔 ──▶ 时序 Transformer ──▶ DRL 强化网络
-       │
-[Layer 6: 前瞻推演] 未来 5 日价格虚线 ──▶ 90% 置信光晕 ──▶ 明日挂单/止盈/止损决策卡
-       │
-[Layer 7: 执行风控] 7 重资金安全防线 ──▶ 换手熔断 ──▶ 单股 18% 上限 ──▶ Paper 撮合
-       │
-[Layer 8: 交互看板] Streamlit 7 大主题大屏 ──▶ 15:05 每日巡航 ──▶ 手机 Webhook 推送
+┌──────────────────────────────────────────────────────────────────────────┐
+│  Layer 1: 数据基座 (Point-In-Time 行情专线直连 + 季度财报披露时点对齐)   │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 2: 特征工厂 (126维量价微结构 + 主力资金流背离 + 截面正交中性化)   │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 3: 投研引擎 (Purged Walk-Forward 滚动折叠 + 25天因果隔离 Gap)     │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 4: 防伪存证 (SHA-256 物理文件防篡改 + Git Commit 密码学证据链)    │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 5: 模型仓库 (ModelRegistry 状态机 + Model Adapter 统一推理适配层) │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 6: 前瞻推演 (未来 5 日价格预期走势 + 90% 置信区间 + 建议挂单卡)   │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 7: 执行风控 (7重实盘资金熔断守卫 + PaperBroker 仿真撮合账本)      │
+├──────────────────────────────────────────────────────────────────────────┤
+│  Layer 8: 交互看板 (Streamlit 7大主题大屏 + 每日 15:05 自动推送中枢)     │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## 4. 🔬 第五代 DeepRank 双塔排序模型核心原理 (Gen 5 Engine)
+## 4. 🔬 生产模型与研究候选模型体系 (Model Registry)
 
-传统树模型与逻辑回归采用单点二分类损失，无法捕捉股票之间的相对排序关系。第五代模型基于 **深度双塔架构（Dual-Tower DeepRank）** 与 **Pairwise Ranking Loss**：
+### 4.1 现役生产模型 (Official Production)
+* **Model ID**: `m_20260903_194757_hybrid_bagging_ridge`
+* **模型架构**: 第二代深度混合异构集成（多种子浅树 Bagging + L2 线性正则化底仓）
+* **特征输入**: 32 维精选微观特征（残差动量、换手率突变、质量动量交叉、特质低波惩罚等）
+* **样本外指标**: Mean Rank IC = `0.0258`, Rank ICIR = `0.1916`
+* **存储路径**: `saved_models/production/m_20260903_194757_hybrid_bagging_ridge/`（含 `model.pkl`、`metadata.json`、`manifest.json`）
 
-1. **截面相对强度塔 (Cross-Sectional Tower)**：负责提取个股在全市场 300 标的截面中的相对强弱、行业动量弹性与特质低波溢价；
-2. **时序因果自注意力塔 (Temporal Self-Attention Tower)**：基于 Transformer 自注意力机制，提取近 60 个交易日主力资金大单沉淀与量能异动特征；
-3. **双塔交叉与排序优化**：结合 Pairwise Margin Ranking 损失函数，最大化真实领涨个股的排位边界，使得预测分值具有天然的相对排序单调性。
+### 4.2 前沿研究模型 (Research Candidates)
+* **Gen 4 (DRL Policy Agent)**: 深度强化学习动态调仓智能体（策略网络根据波动率与换手自适应分配仓位）。
+* **Gen 5 (Dual-Tower DeepRank)**: 基于 Pairwise Ranking 损失函数的双塔排序模型（时序注意力塔 + 截面强弱塔）。
+* **Temporal Transformer**: 因果掩码时序注意力模型（捕捉微观资金大单沉淀）。
 
-### 📈 模型实测性能对比 (Benchmark)
-
-| 核心量化指标 | 传统基准模型 (静态二分类) | **第五代模型 (DeepRank + 时序注意力)** | **核心突破幅度** | 机制解读 |
-| :---: | :---: | :---: | :---: | :--- |
-| **Top-1 第一重仓胜率** | `51.3%` | **`76.8%`** | **`+25.5%` 暴增** | 相对排序损失精准锁定主升浪绝对领涨先锋 |
-| **Top-8 核心组合胜率** | `50.8%` | **`74.2%`** | **`+23.4%` 飞跃** | 双塔网络有效剔除杂波干扰，胜率阶梯平滑递减 |
-| **截面 RankIC 均值** | `+0.0210` | **`+0.0604`** | **`+187.6%` 暴增** | 截面相对排位能力达到量化私募一流梯队水准 |
-| **未来 5 日预期超额收益** | `+3.2%` | **`+11.4%`** | **大幅提升** | 聚焦高 Beta 领涨赛道，捕获主升浪加速弹性 |
-
----
-
-## 5. 🎯 全景 30 支核心成长龙头选股决策池 (Top-30 Universe)
-
-> [!TIP]
-> **【非对称满仓进攻仓位设计】**：前 8 支分配 **95% 满仓核心进攻权重**（18%, 16%, 14%, 12%, 11%, 9%, 8%, 7%）；第 9 支及后续标的作为**第一梯队战略储备池**（实盘权重为 `0.0%`），数据全量计算并支持前端一键自由展开。
-
-| 排名 | 证券代码 | 股票简称 | 所属主线赛道 | 现价基准 | 上涨胜率 | 实盘权重 | 📅 明日挂单区间 | 🎯 5日目标价 | 📢 核心重大产业利好催化事实 |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **#1** | `600026.SH` | **中远海能** | 能源航运 | ¥20.39 | **76.8%** | **18.0%** | `¥20.23 ~ ¥20.70` | **¥22.71 (+11.4%)** | 波斯湾 VLCC 原油日租金跳涨突破 8 万美元/天，超级运价周期 |
-| **#2** | `000301.SZ` | **东方盛虹** | 新材料成长 | ¥14.73 | **76.1%** | **16.0%** | `¥14.61 ~ ¥14.95` | **¥16.38 (+11.2%)** | 斯尔邦光伏级 EVA/POE 粒子技术突破获批，三季度新产能释放 |
-| **#3** | `601138.SH` | **工业富联** | AI硬件服务 | ¥63.46 | **75.4%** | **14.0%** | `¥62.95 ~ ¥64.41` | **¥70.37 (+10.9%)** | 英伟达 GB200 算力机柜全球首批核心组装交付，毛利率大幅攀升 |
-| **#4** | `688981.SH` | **中芯国际** | 晶圆代工 | ¥122.65 | **74.7%** | **12.0%** | `¥121.67 ~ ¥124.49`| **¥135.71 (+10.6%)** | 先进制程晶圆代工产线满载运行，国产半导体设备材料验证提速 |
-| **#5** | `300308.SZ` | **中际旭创** | 光模块/算力 | ¥823.49 | **74.0%** | **11.0%** | `¥816.90 ~ ¥835.84`| **¥909.13 (+10.4%)** | 北美 AI 云巨头追加 1.6T 高速光模块年度定点大单，产能提前锁定 |
-| **#6** | `603259.SH` | **药明康德** | 创新药/CXO | ¥156.63 | **73.3%** | **9.0%** | `¥155.38 ~ ¥158.98`| **¥172.54 (+10.2%)** | 海外小分子 CRDMO 商业化长单持续净流入，海外法案担忧充分消化 |
-| **#7** | `300750.SZ` | **宁德时代** | 电力设备 | ¥349.50 | **72.6%** | **8.0%** | `¥346.70 ~ ¥354.74`| **¥384.10 (+9.9%)**  | 神行超充电池与大储能出海欧洲订单量翻倍，全球电站大单落地 |
-| **#8** | `002594.SZ` | **比亚迪** | 新能源整车 | ¥87.31 | **71.9%** | **7.0%** | `¥86.61 ~ ¥88.62`  | **¥95.78 (+9.7%)**   | 第五代 DM 混动技术车型月销突破 50 万辆大关，高端品牌加速出海 |
-| **#9** | `603986.SH` | **兆易创新** | 存储芯片 | ¥377.64 | **71.2%** | *观察储备* | `¥374.62 ~ ¥383.30`| **¥413.21 (+9.4%)**  | DRAM/NAND 现货合约价连续两月上涨，存储周期见底 (基准383.20元) |
-| **#10**| `688012.SH` | **中微公司** | 半导体设备 | ¥341.00 | **70.5%** | *观察储备* | `¥338.27 ~ ¥346.12`| **¥372.37 (+9.2%)**  | 高端等离子体刻蚀设备斩获头部晶圆厂大单，先进制程市占率突破 |
-| **#15**| `688256.SH` | **寒武纪** | AI算力芯片 | ¥1084.03 | **67.0%** | *观察储备* | `¥1075.36 ~ ¥1100.29`| **¥1170.21 (+8.0%)** | 思元系列云端 AI 芯片在国产智算中心批量部署，算力生态繁荣 |
-
-<details>
-<summary><b>📋 点击展开：查看第 11 ~ 30 只完整标的清单与行业分布</b></summary>
-
-| 排名 | 证券代码 | 股票简称 | 所属主线赛道 | 现价基准 | 上涨胜率 | 状态定位 | 核心重大产业利好催化事实 |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| **#11** | `601872.SH` | **招商轮船** | 交通运输/航运 | ¥19.30 | 69.8% | 战略储备 | 干散货 BDI 运价指数与油轮双轮驱动，海运景气处于高景气区间 |
-| **#12** | `300124.SZ` | **汇川技术** | 工业机器人 | ¥60.15 | 69.1% | 战略储备 | 人形机器人关节伺服电机与工控自动化产线放量，通用自动化底部拐点 |
-| **#13** | `002475.SZ` | **立讯精密** | 消费电子制造 | ¥56.17 | 68.4% | 战略储备 | 北美大客户 AI 智能可穿戴新品组装排产超预期，汽车高压线束跨越放量 |
-| **#14** | `300274.SZ` | **阳光电源** | 光伏与储能 | ¥87.08 | 67.7% | 战略储备 | 欧洲大型独立储能电站大单接踵而至，逆变器出海毛利率站稳 38% 高位 |
-| **#16** | `000977.SZ` | **浪潮信息** | AI计算服务器 | ¥48.20 | 66.3% | 战略储备 | AI 算力服务器中标国内电信与金融智算集采第一份额，交付节奏井喷 |
-| **#17** | `603501.SH` | **韦尔股份** | CMOS图像芯片 | ¥112.50 | 65.6% | 战略储备 | 车载 5000 万像素高端 CIS 导入全球车企智驾感知平台，手机去库完成 |
-| **#18** | `601899.SH` | **紫金矿业** | 有色金属资源 | ¥18.90 | 64.9% | 战略储备 | 卡莫阿与巨龙铜矿扩建达产，全球铜金战略资源储备进入超级周期 |
-| **#19** | `600309.SH` | **万华化学** | 高端化工新材料 | ¥86.20 | 64.2% | 战略储备 | 福建 MDI 与特种化学品新装置投产，全球聚氨酯定价权进一步巩固 |
-| **#20** | `601689.SH` | **拓普集团** | 智能汽车/机器人 | ¥72.40 | 63.5% | 战略储备 | 北美车企轻量化底盘满产交付，人形机器人执行器样件验证通畅 |
-| **#21** | `300476.SZ` | **胜宏科技** | AI算力PCB板 | ¥45.60 | 62.8% | 战略储备 | 英伟达 AI 加速卡高阶 6 阶 HDI 板直供，算力板产能利用率超 100% |
-| **#22** | `300502.SZ` | **新易盛** | 光通信模块 | ¥128.50 | 62.1% | 战略储备 | 海外云计算客户 800G 出货量激增，1.6T 硅光方案在海外头部实验室认证领先 |
-| **#23** | `300394.SZ` | **天孚通信** | 光器件/引擎 | ¥115.80 | 61.4% | 战略储备 | 高速光引擎套件与光无源元器件订单排产至明年二季度，高毛利占比新高 |
-| **#24** | `688036.SH` | **传音控股** | 智能终端出海 | ¥98.60 | 60.7% | 战略储备 | 新兴市场智能机出海渗透率创新高，AI 拍照与本地化软件服务收入翻倍 |
-| **#25** | `002371.SZ` | **北方华创** | 半导体平台装备 | ¥385.00 | 60.0% | 战略储备 | 刻蚀、薄膜沉积、清洗设备在先进制程晶圆厂批量机台验收 |
-| **#26** | `300014.SZ` | **亿纬锂能** | 大圆柱锂电池 | ¥46.30 | 59.3% | 战略储备 | CLS 大圆柱动力电池进入量产出货倒计时，海外储能电芯直供头部集成商 |
-| **#27** | `600570.SH` | **恒生电子** | 金融科技软件 | ¥31.20 | 58.6% | 战略储备 | 证券新一代核心交易柜台系统 UF3.0 信创替代加速，垂直 AI 大模型商业化 |
-| **#28** | `002463.SZ` | **沪电股份** | 算力网络PCB | ¥39.80 | 57.9% | 战略储备 | AI 服务器高多层板与 800G 网络交换机 PCB 供应份额全球领跑 |
-| **#29** | `300661.SZ` | **圣邦股份** | 模拟芯片芯片 | ¥88.40 | 57.2% | 战略储备 | 模拟芯片国产替代持续推进，信号链与电源管理芯片在工控汽车导入加速 |
-| **#30** | `002241.SZ` | **歌尔股份** | XR智能硬件 | ¥24.50 | 56.5% | 战略储备 | 全球主力 XR 头显代工核心份额稳固，微纳光学与汽车声学迎来全新增长 |
-
-</details>
+> **模型治理规范**: 任何新模型必须经由 `ModelRegistry.promote()` 完成指标检验与多级审批，严禁私自替换生产模型文件。
 
 ---
 
-## 6. 📈 3 栏金融 K 线穿透与未来 5 日价格预测 (K-Line & Forecast Hub)
+## 5. 🛡️ 七重实盘资金安全风控守卫 (Safety Guards)
 
-系统在 Streamlit 大屏中提供 **3 栏联动高精金融穿透视图**：
-
-* **主图 (60% 高度)**：日 K 线蜡烛图（红涨绿跌）+ MA5 / MA20 / MA60 均线 + **🔴 量化 B 点 (起涨买点) / 🟢 量化 S 点 (波段止盈)** + **未来 5 日金黄色预测虚线与 90% 置信区间预测光晕**；
-* **副图 1 (20% 高度)**：成交量柱状图与 5 日均量线；
-* **副图 2 (20% 高度)**：**主力大单资金净流入（亿元）红绿柱** + 5 日累积资金流向折线。
-
-### 🔮 AI 未来 5 日操盘推演决策卡 (Forward Forecast Hub)
-
-在 K 线图正下方，系统实时输出 4 大实战操盘点位：
-* 📅 **明日 (T+1) 挂单买入区间**：建议回踩均线分批低吸价格；
-* 🎯 **未来 5 日预期目标价**：5 日预测期望价格与涨幅百分比（附带 90% 置信区间）；
-* 🥇 **第一止盈位 (TP1)**：`+10.0%`（提示达标后平仓 50% 锁定利润）；
-* 🛡️ **动态止损位 (SL)**：`-4.0%`（跌破 MA20 生命线坚决纪律离场）；
-* 🧠 **AI 综合量化推演综述**：融合胜率、主力抢筹、B 点金叉与独家利好的多模态推演结论。
-
----
-
-## 7. 🤖 每日 15:05 全自动无人巡航工作流 (Daily Autopilot Pipeline)
-
-主调度器（`tools/daily_autopilot_runner.py`）于交易日收盘后 **15:05:00** 自动触发全流程闭环：
-
-* 🕒 **15:05:00**：官方专线直连同步全市场 300 标的最新收盘价与成交量；
-* 🤖 **15:06:00**：第五代 DeepRank 深度双塔模型截面打分，自动嵌入 7x24 实时快讯；
-* 🛡️ **15:07:00**：在 7 重资金风控守卫下自动完成账户调仓撮合并更新账本；
-* 📱 **15:08:00**：生成今日决策卡片推送到通知中枢并归档审计日志（`logs/autopilot_YYYYMMDD.log`）。
-
----
-
-## 8. 🛡️ 七重实盘资金安全风控守卫体系 (7-Layer Safety Guards)
-
-| 层级 | 风控守卫名称 | 触发阈值 | 保护动作 | 机制解读 |
+| 守卫层级 | 风控守卫规则 | 触发阈值 | 保护动作 | 机制解读 |
 | :---: | :--- | :---: | :--- | :--- |
-| **L1** | **单日组合换手率熔断** | `> 50.0%` | 自动阻断异常大幅调仓，强制按比例缩放指令 | 严防模型极端翻转造成的巨额交易摩擦费 |
-| **L2** | **单股最大持仓暴露上限** | `> 18.0%` | 强制截断单一标的风险敞口，严防单票黑天鹅 | 单一重仓股最高 18%，分散非系统性风险 |
-| **L3** | **单一行业集中度硬顶** | `> 30.0%` | 行业总暴露超限时强制等比例平滑重分配 | 严防单一板块政策黑天鹅导致组合系统性重挫 |
-| **L4** | **流动性冲击成本保护** | `> 2.0% 日成交` | 拆分多日分批委托队列，严禁大单直接砸盘冲击 | 依据目标股日均成交量智能测算冲击成本 |
-| **L5** | **价格偏离与涨跌停防夹** | `> 2.5% 偏离` | 涨跌停板严禁追单，偏离基准价超限时强制撤单 | 杜绝涨停板买不进、跌停板卖不出的踩踏陷阱 |
-| **L6** | **大盘冰点防守降仓** | `温度 < 35°C` | 市场极端冰点时自动将总仓位下调至 30% 防守 | 联动全市场短线情绪温度计，智能避险退潮期 |
-| **L7** | **现金摩擦与底仓垫储备** | `≥ 5.0% 现金` | 强制预留 5% 现金头寸作为手续费摩擦缓冲垫 | 确保极端赎回与调仓手续费充沛，杜绝透支风险 |
+| **L1** | **单日换手率熔断** | `> 50.0%` | 强制按比例缩放指令，阻断异常大换手 | 防止极端市场下模型频繁换仓产生高额滑点手续费 |
+| **L2** | **单股最大持仓暴露** | `> 18.0%` | 强制截断单一标的权重，分散非系统性风险 | 杜绝单票黑天鹅导致组合净值大幅下挫 |
+| **L3** | **单一行业集中度硬顶** | `> 30.0%` | 行业总敞口超限时强制等比例平滑重分配 | 严防单一板块政策突发冲击引发系统性亏损 |
+| **L4** | **流动性冲击成本保护** | `> 2.0% 日成交` | 拆分多日分批委托队列，严禁市价砸盘冲击 | 依据目标标的日均成交金额智能测算冲击成本 |
+| **L5** | **价格偏离与涨跌停防夹** | `> 2.5% 偏离` | 涨跌停板严禁追单，偏离基准价超限时撤单 | 杜绝涨停板买不进、跌停板卖不出的实操踩踏 |
+| **L6** | **大盘短线情绪避险** | `温度 < 35°C` | 市场极端冰点时自动将总股票仓位下调至 30% | 联动 300 标的短线情绪温度计，智能规避退潮期 |
+| **L7** | **手续费与现金底仓垫** | `≥ 5.0% 现金` | 强制预留 5% 现金头寸作为手续费摩擦缓冲垫 | 确保极端调仓手续费充沛，杜绝透支穿仓风险 |
 
 ---
 
-## 9. 💻 详细部署与环境搭建全流程指南 (Complete Deployment Guide)
+## 6. 📈 交互看板与未来 5 日价格前瞻 (Dashboard & Forecast)
 
-本系统支持 **Windows / Linux (Ubuntu/CentOS) / macOS / Docker** 全平台一键部署。
-
-### 9.1 前置环境依赖要求
-
-* **Python 版本**：Python 3.10 或 Python 3.11（强烈推荐 3.11 获得最佳运行速度）；
-* **硬件要求**：
-  - 最低配置：2 核 CPU / 4GB 内存（可流畅运行推理与可视化大屏）；
-  - 推荐配置：4 核 CPU / 8GB 内存 / 具备 NVIDIA GPU（加速 PyTorch 双塔训练）；
-* **网络环境**：普通公网环境即可直连官方行情专线，无需配置任何代理。
+系统在 Streamlit 看板中提供全功能量化投研视图：
+* **3 栏金融 K 线穿透**: 日 K 蜡烛图 + MA5/MA20/MA60 均线 + 🔴 量化 B 点金叉 / 🟢 S 点止盈 + 成交量 + 主力大单净流入趋势。
+* **未来 5 日价格走势前瞻**: K 线前瞻预测虚线 + 90% 置信区间光晕 + 明日建议挂单区间与止盈止损决策卡。
+* **短线情绪温度计**: 基于 300 标的涨跌分布计算全市场短线投机情绪。
 
 ---
 
-### 9.2 本地一键部署步骤 (Windows / Linux / macOS)
+## 7. 💻 快速克隆、安装与运行全流程 (Quickstart)
 
-#### 步骤 1：克隆代码仓库
+### 7.1 克隆代码仓库
 ```bash
 git clone https://github.com/junl53582-oss/ai.git
 cd ai
 ```
 
-#### 步骤 2：创建独立虚拟环境 (推荐)
+### 7.2 创建与激活 Python 虚拟环境
+推荐使用 Python 3.11 环境：
 ```bash
-# 使用 conda
-conda create -n ai_quant python=3.11 -y
-conda activate ai_quant
+# 创建虚拟环境
+python -m venv .venv
 
-# 或使用 Python 原生 venv
-python -m venv venv
-# Windows 激活:
-venv\Scripts\activate
-# Linux/macOS 激活:
-source venv/bin/activate
+# 激活虚拟环境 (Windows)
+.venv\Scripts\activate
+
+# 激活虚拟环境 (Linux / macOS)
+source .venv/bin/activate
 ```
 
-#### 步骤 3：安装生产依赖
+### 7.3 安装系统依赖
 ```bash
-pip install --upgrade pip
+# 升级 pip
+python -m pip install --upgrade pip
+
+# 安装轻量 CPU 版 PyTorch (若具备 GPU 可安装对应 CUDA 版本)
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# 安装项目全部依赖
 pip install -r requirements.txt
 ```
 
-#### 步骤 4：启动可视化投研大屏
+### 7.4 运行全量自动化测试套件
+在启动系统前，建议运行测试以确认本地环境完整性（全仓库 568 项测试均应通过）：
+```bash
+# 运行审计门禁与生产加固回归测试
+python -m pytest -v tests/test_audit_hardening.py
+python -m pytest -v tests/test_r3_2_evidence_integrity.py
+python -m pytest -v tests/test_production_hardening.py
+
+# 运行全量测试套件 (约 3~4 分钟)
+python -m pytest -q
+```
+
+### 7.5 启动系统
+#### 启动可视化交互看板
 ```bash
 streamlit run dashboard/app.py --server.port 8501
 ```
-启动成功后，浏览器打开 **`http://localhost:8501`** 即可进入全功能量化大屏！
+打开浏览器访问 **`http://localhost:8501`** 即可进入大屏。
 
----
-
-### 9.3 自动化测试与日常巡航配置
-
-#### 1. 运行全量单元测试
+#### 运行盘后自动化批量推理
 ```bash
-pytest tests/ -v
-```
-*验证 12 项测试用例全部通过（涵盖数据无泄漏、风控熔断、DRL 强化模型等）。*
+# Windows 批处理一键执行
+scripts\run_daily_post_market.bat
 
-#### 2. 配置收盘 15:05 全自动定时巡航
-
-* **Windows 用户（任务计划程序）**：
-  在 Windows「任务计划程序」中新建任务，触发器设置为 `每天 15:05`，操作设置为运行 `python.exe tools/daily_autopilot_runner.py`。
-* **Linux / macOS 用户（Crontab）**：
-  ```bash
-  # 运行 crontab -e，添加如下每日交易日收盘定时任务：
-  5 15 * * 1-5 cd /path/to/ai && /path/to/venv/bin/python tools/daily_autopilot_runner.py >> logs/cron.log 2>&1
-  ```
-
----
-
-### 9.4 核心参数自定义配置 (`config/settings.py`)
-
-如需修改仓位上限、风控阈值或目标标的数，可直接编辑 `config/settings.py`：
-
-```python
-# 核心风控参数配置示例
-MAX_SINGLE_STOCK_WEIGHT = 0.18   # 单一股票最大持仓比例上限 (默认 18%)
-MAX_SECTOR_WEIGHT = 0.30         # 单一行业最大持仓比例上限 (默认 30%)
-CASH_BUFFER_RATIO = 0.05         # 手续费与摩擦防守现金底仓 (默认 5%)
-TOP_K_BUY = 8                    # 实盘组合买入龙头股数量 (默认 8 支)
-TURNOVER_LIMIT_DAILY = 0.50      # 单日换手率硬熔断阈值 (默认 50%)
+# 或通过 Python 命令行调用 (生产推荐模式)
+python scheduler/daily_runner.py --mode inference --optimizer risk_parity
 ```
 
 ---
 
-## 10. 📁 项目完整工程目录解析 (Project Directory)
+## 8. 📦 数据集获取与防篡改哈希核验 (Data & Artifacts)
 
-<details>
-<summary><b>📂 点击展开：查看完整项目工程目录树与源码解析</b></summary>
+### 8.1 仓库内数据 vs 仓库外数据
+为保证 GitHub 代码仓库体积轻巧（< 100MB 快速 clone），本项目采用分层策略：
+
+| 数据文件 | 体积 | 状态 | 说明与获取方式 |
+| :--- | :---: | :---: | :--- |
+| `data_storage/fundamentals/yjbb_*.parquet` | ~29 MB | **已入库** | 覆盖 2018~2026 季度财报披露日，用于 PIT 基本面因果溯源 |
+| `data_storage/research/market_daily_300_v2.parquet` | ~20 MB | **已入库** | 覆盖 2021~2026 沪深 300 官方复核行情，修复市值血缘污染 |
+| `data_storage/universe_pit_events.parquet` | ~20 KB | **已入库** | 时点指数成分股变动事件流，杜绝幸存者偏差 |
+| `data_storage/parquet/market_daily.parquet` | ~300 KB | **已入库** | CI 冒烟测试专用快照 |
+| `data_storage/factors/factor_matrix.parquet` | ~800 KB | **已入库** | CI 冒烟测试专用因子矩阵 |
+| `data_storage/research/factor_matrix_300.parquet` | ~311 MB | **Git Ignored** | 全量科研级因子矩阵。可由入库数据一键确定性重建 |
+
+### 8.2 本地确定性重建全量因子矩阵
+无需额外下载 311MB 大文件，在安装依赖后运行以下脚本即可在本地确定性复现：
+```bash
+python tools/build_dataset_300_v2.py
+```
+
+### 8.3 数据完整性与防篡改门禁校验
+运行以下命令校验本地数据与官方清单哈希是否自洽：
+```bash
+python -u tools/check_committed_dataset_schema.py
+python -u tools/validate_certification_artifacts.py
+```
+
+详细数据与模型获取说明请参阅：[docs/DATA_AND_MODELS.md](docs/DATA_AND_MODELS.md)。
+
+---
+
+## 9. 📁 项目完整工程目录结构 (Directory Layout)
 
 ```text
 ai/
-├── artifacts/                  # 生产决策产物 (latest_stock_picks.csv, aggressive_stock_picks.csv)
-├── config/                     # 系统全局配置中心
-│   └── settings.py             # 风控阈值、模型超参、交易时钟全局配置
-├── dashboard/                  # Streamlit 交互式量化投研大屏
-│   └── app.py                  # 7 大主题大屏核心入口 (含 3 栏 K 线与未来预测)
-├── data/                       # 官方行情与 7x24 新闻数据通道
-│   ├── live_market_syncer.py   # 官方 CDN 300 标的极速收盘量价同步器
-│   └── live_market_and_news_api.py # 7x24 实时快讯与自动同步引擎
-├── data_storage/               # PIT 历史特征矩阵与券商沙盒账本
-│   ├── factor_matrix_300.parquet # 34.9 万行 A 股真实时序特征矩阵
-│   └── paper_broker_state.json # 本地仿真账户持仓与资金持久化文件
-├── execution/                  # 交易执行器与风控守卫
-│   ├── safety_guard.py         # 7 重实盘资金安全防御中枢
-│   ├── paper_broker.py         # 本地仿真交易沙盒 (T+1 跨日持久化)
-│   └── run_trader.py           # 自动化调仓执行引擎
-├── factors/                    # 多模态短线情绪与利好引擎
-│   ├── sentiment_engine.py     # 真实全市场短线情绪温度计与 30 支产业催化库
-│   └── attribution.py          # Barra 风格与宏观收益归因
-├── models/                     # 模型网络与推理定义
-│   ├── deep_rank_model.py      # 第五代 DeepRank 深度双塔网络
-│   ├── temporal_transformer.py # 时序因果自注意力模型
-│   └── drl_policy_agent.py     # 深度强化学习动态权重网络
-├── strategy/                   # 选股策略引擎
-│   └── aggressive_alpha_engine.py # 全景 30 支高弹性成长主升浪 Alpha 引擎
-├── tests/                      # 自动化测试套件
-│   ├── test_aggressive_alpha.py # 进取选股策略测试
-│   ├── test_sentiment_engine.py # 情绪引擎测试
-│   ├── test_live_api.py        # 行情与新闻接口测试
-│   └── test_drl_model.py       # DRL 强化网络测试
-├── tools/                      # 生产级研究与巡航工具集
-│   ├── daily_autopilot_runner.py # 每日 15:05 全自动无人值守日常巡航主调度
-│   └── predict_gen4_drl_picks.py # 截面推演与选股生成脚本
-├── requirements.txt            # 生产环境依赖清单
-└── README.md                   # 本项目完整技术与部署文档
+├── .github/                    # GitHub CI/CD 工作流与 PR/Issue 模版
+│   ├── workflows/              # 自动化测试流水线 (fast_ci, audit_hardening)
+│   ├── ISSUE_TEMPLATE/         # Bug 报告与功能建议模版
+│   └── pull_request_template.md # PR 提交自查清单
+├── config/                     # 全局参数与风控阈值
+│   ├── settings.py             # 系统核心配置中枢
+│   └── universe_profiles.py    # 多股票池定义管理器
+├── dashboard/                  # Streamlit 交互大屏
+│   └── app.py                  # 7 大主题大屏入口
+├── data/                       # 数据同步与 PIT 股票池提供者
+│   ├── data_manager.py         # 权威数据同步与清洗中枢
+│   └── universe_provider.py    # 动态时点成分股提供器
+├── data_storage/               # 数据存储目录 (含财报、行情快照与清单)
+├── docs/                       # 核心文档与技术白皮书
+│   └── DATA_AND_MODELS.md      # 数据与模型获取详细说明
+├── execution/                  # 券商撮合与实盘接口
+│   ├── miniqmt_broker.py       # 迅投 MiniQMT 实盘交易网关 (可选)
+│   └── paper_broker.py         # 仿真交易沙盒与账户账本
+├── factors/                    # 因子计算与截面特征工程
+│   ├── alpha158.py             # Alpha158 算子库
+│   └── processor.py            # 截面中性化与正交化处理器
+├── models/                     # 机器学习模型与适配层
+│   ├── adapters/               # 统一模型适配器 (LightGBM, Bagging, DRL)
+│   ├── bagging_ensemble.py     # 多随机种子袋装浅树集成模型
+│   ├── drl_strengthened_model.py # 强化学习增强模型
+│   ├── inference.py            # 生产截面批量推理引擎 (BatchInference)
+│   └── registry.py             # 模型生命周期注册表 (ModelRegistry)
+├── reports/                    # 历史认证证据链与审计报告
+├── saved_models/               # 模型制品存储
+│   ├── production/             # 官方生产模型制品目录 (含 model.pkl, manifest.json)
+│   └── legacy/                 # 历史模型归档目录 (含防混淆声明)
+├── scheduler/                  # 调度器与通知
+│   ├── daily_runner.py         # 每日盘后自动化调度主程序
+│   └── notifier.py             # 飞书/企业微信/钉钉消息卡片渲染
+├── scripts/                    # 运维与自动化执行脚本
+│   └── run_daily_post_market.bat # Windows 盘后批处理脚本
+├── tests/                      # 自动化测试套件 (47 个文件，568 项测试)
+├── tools/                      # 科研重现与加固验证工具集
+├── .env.example                # 环境变量配置模版 (安全示例)
+├── CONTRIBUTING.md             # 开发者贡献与合规指南
+├── LICENSE                     # GNU General Public License v3.0
+├── requirements.txt            # 项目运行依赖清单
+└── README.md                   # 项目主技术与部署文档
 ```
-
-</details>
 
 ---
 
-## 11. ❓ 常见问题排查与 FAQ (Troubleshooting & FAQ)
+## 10. ❓ 常见问题排查与 FAQ (Troubleshooting & FAQ)
 
 <details>
-<summary><b>Q1: 为什么启动 Streamlit 后提示 8501 端口被占用？</b></summary>
+<summary><b>Q1: 为什么在生产环境下运行 --mode research 会报错？</b></summary>
 
-可以通过指定其它端口号启动，例如：
+这是系统内置的 **Fail-Closed 生产安全熔断机制**。当检测到环境变量 `PRODUCTION_RUNTIME=1` 时，严禁使用 research 现场重训模式直接输出交易信号，以防止模型口径漂移与无法归因。生产运行必须使用 `--mode inference` 加载经委员会审批的生产模型。
+</details>
+
+<details>
+<summary><b>Q2: clone 仓库后缺少 factor_matrix_300.parquet，回测是否会报错？</b></summary>
+
+该文件体积为 311MB，因超过 GitHub 单文件限制未存放在普通 Git 中。只需在安装依赖后运行 `python tools/build_dataset_300_v2.py`，系统即可直接从已入库的 20MB 行情基线中确定性重建该文件并校验哈希。
+</details>
+
+<details>
+<summary><b>Q3: 如何配置飞书或企业微信每日自动推送？</b></summary>
+
+将根目录下的 `.env.example` 复制为 `.env`，并在其中填写：
 ```bash
-streamlit run dashboard/app.py --server.port 8502
+QUANT_WEBHOOK_URL="https://open.feishu.cn/open-apis/bot/v2/hook/你的机器人TOKEN"
+QUANT_NOTIFIER_CHANNEL="feishu"
 ```
+系统在每日 15:05 批量推理与调仓完成后，将自动生成排版美观的次日买卖决策卡片并推送。
 </details>
 
 <details>
-<summary><b>Q2: 行情同步与新闻催化剂是否需要付费购买第三方 Token / API Key？</b></summary>
+<summary><b>Q4: PyTorch 是否为必须安装项？</b></summary>
 
-**完全不需要！** 系统内置的 `data/live_market_syncer.py` 与 `data/live_market_and_news_api.py` 深度优化了官方金融行情专线直连技术，开箱即用，0 额外费用，永久免费实时同步全市场 300 标的。
-</details>
-
-<details>
-<summary><b>Q3: 如何在大屏中切换查看更多股票标的？</b></summary>
-
-进入大屏 **Tab 1（🎯 今日选股决策）**，在表格右上角有一个 **【📋 榜单展示深度】** 下拉框，支持一键切换 `Top-8 (实盘核心组合)`、`Top-15 (重点优选)`、`Top-20 (默认展示)` 或 `Top-30 (全景梯队)`。向下滚动至 K 线区域，即可在下拉菜单中点选任意一只股票查看未来 5 日价格预测。
-</details>
-
-<details>
-<summary><b>Q4: 如何将每日 15:05 的决策卡片推送到企业微信或钉钉群机器人？</b></summary>
-
-只需在 `config/settings.py` 中配置 `NOTIFICATION_WEBHOOK_URL = "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=YOUR_KEY"`，系统巡航完毕后会自动组装富文本决策卡片推送到您的手机端。
+如果仅运行官方生产模型（`hybrid_bagging_ridge`）的批量推理与每日选股，CPU 环境下安装的基础库即可完全满足需求；系统测试用例中涉及 PyTorch 的部分已配备 `importorskip` 容错机制。若需训练或推演前沿研究模型（Gen 5 DeepRank / Temporal Transformer），建议安装 PyTorch。
 </details>
 
 ---
 
-## 12. 📜 开源许可证与声明 (License & Integrity)
+## 11. 📜 开源许可证与免责声明 (License & Disclaimer)
 
-本项目采用 [MIT License](LICENSE) 开源协议。
+本项目基于 **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)** 协议开源。
 
-本系统严格坚守量化科学诚信准则：**NO EVIDENCE => NO VERIFIED**（无真实原始证据绝不认证）。系统内所有行情数据、短线情绪温度（53.1°C）、个股预测胜率（76.8%）及产业催化剂均 100% 具备物理数据血缘，杜绝任何硬编码假造与伪数据，保障投研推演的绝对真实可靠。
+### ⚠️ 金融投资风险免责声明 (Financial Disclaimer)
+1. 本项目所包含的代码、算法、模型、预测分值及相关文档**仅供量化投研学习、学术交流与算法验证**使用，不构成任何实质性投资建议或证券买卖推荐。
+2. 证券市场存在极高风险，量化策略历史回测表现不预示其未来收益，模型前瞻推演结论具有不确定性。投资者据此操作所产生的任何盈利或亏损均由个人独立承担，本项目研发者及贡献者不承担任何直接或间接法律责任。
+3. **严禁在未经过充分模拟盘检验（Paper Trading）与专业合规审查的前提下，将本系统直接用于真实资金交易**。

@@ -31,6 +31,23 @@ logger = logging.getLogger("PromoteModel")
 
 def _parse_evidence(args) -> dict:
     ev = {}
+    if getattr(args, "approval_artifact", None):
+        art_path = Path(args.approval_artifact)
+        if not art_path.exists():
+            raise FileNotFoundError(f"审批凭证制品不存在: {art_path}")
+        data = json.loads(art_path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"审批凭证制品格式错误 (必须为 JSON 对象): {art_path}")
+        # 从外部审批制品中解析认证与实盘证据
+        if "certification_ref" in data:
+            ev["certification_ref"] = data["certification_ref"]
+        if "prospective_validation" in data:
+            ev["prospective_validation"] = data["prospective_validation"]
+        if "paper_trading" in data:
+            ev["paper_trading"] = data["paper_trading"]
+        if "evidence" in data and isinstance(data["evidence"], dict):
+            ev.update(data["evidence"])
+
     if getattr(args, "certification_ref", None):
         ev["certification_ref"] = args.certification_ref
     if getattr(args, "prospective", False):
@@ -59,7 +76,8 @@ def main():
     p_promote = sub.add_parser("promote", help="晋升模型状态")
     p_promote.add_argument("--model-id", type=str, required=True)
     p_promote.add_argument("--to", type=str, required=True, choices=ModelState.all_states())
-    p_promote.add_argument("--approver", type=str, required=True, help="审批人 (人工)")
+    p_promote.add_argument("--approver", type=str, default=None, help="审批人 (人工签名)")
+    p_promote.add_argument("--approval-artifact", type=str, default=None, help="外部审批凭证 JSON 制品路径 (由投研委员会或负责人签署)")
     p_promote.add_argument("--certification-ref", type=str, default=None)
     p_promote.add_argument("--prospective", action="store_true", help="提供前瞻验证证据")
     p_promote.add_argument("--prospective-ref", type=str, default=None)
@@ -103,11 +121,22 @@ def main():
 
     if args.cmd in ("promote", "archive"):
         to_state = args.to if args.cmd == "promote" else ModelState.ARCHIVED
+        approver = getattr(args, "approver", None)
+        if not approver and getattr(args, "approval_artifact", None):
+            try:
+                art_data = json.loads(Path(args.approval_artifact).read_text(encoding="utf-8"))
+                approver = art_data.get("approver")
+            except Exception:
+                pass
+        if not approver:
+            logger.error("晋升失败: 缺少审批人签名 (必须通过 --approver 或 --approval-artifact 指定)")
+            sys.exit(1)
+
         try:
             rec = registry.promote(
                 model_id=args.model_id,
                 to_state=to_state,
-                approver=args.approver,
+                approver=approver,
                 evidence=_parse_evidence(args),
                 note=args.note,
             )

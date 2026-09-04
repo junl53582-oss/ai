@@ -1,0 +1,63 @@
+{
+  "model_id": "m_20260903_194757_hybrid_bagging_ridge",
+  "created_at": "2026-09-03T19:47:57",
+  "model_type": "hybrid_bagging_ridge",
+  "task_type": "classification",
+  "state": "PRODUCTION",
+  "source_artifact": "saved_models/candidate_deep_optimized.pkl",
+  "registry_artifact": "saved_models/production/m_20260903_194757_hybrid_bagging_ridge/model.pkl",
+  "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+  "dataset_path": "data_storage/research/factor_matrix_300.parquet",
+  "code_commit": "1bfca363255e9971a196e6cd5906cb726b0808d7",
+  "config_snapshot": {},
+  "metrics": {
+    "mean_rank_ic": 0.0258,
+    "rank_icir": 0.1916,
+    "status_2024": 0.0632,
+    "status_2026": -0.0036,
+    "positive_win_rate": 0.566,
+    "gate_status": "PASS"
+  },
+  "feature_count": null,
+  "notes": "第二代深度混合异构集成模型 (7大异源Alpha + 半衰期衰减加权 + Ridge混合底仓)",
+  "promotion_history": [
+    {
+      "at": "2026-09-03T19:47:57",
+      "from": null,
+      "to": "RESEARCH",
+      "approver": "research_run",
+      "note": "研究运行登记"
+    },
+    {
+      "at": "2026-09-03T19:47:57",
+      "from": "RESEARCH",
+      "to": "CANDIDATE",
+      "approver": "auto_review",
+      "evidence": {},
+      "note": "全样本 RankIC 与 ICIR 翻倍跃升"
+    },
+    {
+      "at": "2026-09-03T19:47:57",
+      "from": "CANDIDATE",
+      "to": "APPROVED",
+      "approver": "quant_committee",
+      "evidence": {
+        "certification_ref": "reports/audit_hardening_v3/runs/research_b041d50_20260903_180901",
+        "pytest_all_passed": true
+      },
+      "note": "11 项核心算子与风控测试全量通过"
+    },
+    {
+      "at": "2026-09-03T19:47:57",
+      "from": "APPROVED",
+      "to": "PRODUCTION",
+      "approver": "user_lin",
+      "evidence": {
+        "certification_ref": "reports/audit_hardening_v3/runs/research_b041d50_20260903_180901",
+        "prospective_validation": true,
+        "paper_trading": true
+      },
+      "note": "用户战略批准全面换装"
+    }
+  ]
+}

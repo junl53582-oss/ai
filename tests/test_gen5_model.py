@@ -1,7 +1,7 @@
-﻿import pytest
+import pytest
+torch = pytest.importorskip("torch", reason="PyTorch not installed, skipping Gen5 DeepRank model tests")
 import numpy as np
 import pandas as pd
-import torch
 from models.gen5_deep_rank_model import GatedCrossAttention, DeepRankAlphaNet, Gen5DeepRankModel
 
 def test_gated_cross_attention():

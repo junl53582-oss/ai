@@ -10,7 +10,7 @@ concurrency:
 jobs:
   full-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
 
     steps:
       - name: Checkout Code
@@ -31,6 +31,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
       - name: Full Pytest Test Suite
@@ -63,4 +64,3 @@ jobs:
           name: full-certification-reports
           path: |
             reports/
-            FACTOR_RESEARCH_REPORT.md

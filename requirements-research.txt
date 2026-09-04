@@ -1,0 +1,4 @@
+# 离线科研、超参搜索与行情数据源
+-r requirements-core.txt
+optuna>=3.0.0
+akshare>=1.12.0
