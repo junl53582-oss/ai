@@ -1,0 +1,119 @@
+[
+  {
+    "alpha_id": "ALPHA_MOM_ACCEL_5_20",
+    "discovery_rank_ic": 0.0158,
+    "discovery_icir": 0.0843,
+    "positive_ic_ratio": 0.5358,
+    "evaluated_discovery_days": 573,
+    "status": "SCREENED",
+    "decision_reason": "Meets Discovery IC and Stability bounds"
+  },
+  {
+    "alpha_id": "ALPHA_MOM_PERSISTENCE_20D",
+    "discovery_rank_ic": -0.0416,
+    "discovery_icir": -0.2758,
+    "positive_ic_ratio": 0.4042,
+    "evaluated_discovery_days": 574,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_REVERSAL_1D_VOL_ADJ",
+    "discovery_rank_ic": 0.0015,
+    "discovery_icir": 0.0085,
+    "positive_ic_ratio": 0.5096,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_REV_MOM_INTERACTION_5_20",
+    "discovery_rank_ic": 0.0005,
+    "discovery_icir": 0.0037,
+    "positive_ic_ratio": 0.4799,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_PV_DIVERGENCE_ACCEL",
+    "discovery_rank_ic": 0.0042,
+    "discovery_icir": 0.0258,
+    "positive_ic_ratio": 0.5085,
+    "evaluated_discovery_days": 588,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_VOLUME_SURGE_BREAKOUT",
+    "discovery_rank_ic": 0.0002,
+    "discovery_icir": 0.0012,
+    "positive_ic_ratio": 0.4791,
+    "evaluated_discovery_days": 574,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_ILLIQUIDITY_SHOCK_RATIO",
+    "discovery_rank_ic": -0.0811,
+    "discovery_icir": -0.5658,
+    "positive_ic_ratio": 0.2548,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_TURNOVER_ACCEL_5D",
+    "discovery_rank_ic": -0.0024,
+    "discovery_icir": -0.0191,
+    "positive_ic_ratio": 0.4739,
+    "evaluated_discovery_days": 574,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_DOWNSIDE_VOL_ASYMMETRY_20D",
+    "discovery_rank_ic": -0.0527,
+    "discovery_icir": -0.3688,
+    "positive_ic_ratio": 0.3892,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_VOL_COMPRESSION_RATIO",
+    "discovery_rank_ic": 0.0016,
+    "discovery_icir": 0.0142,
+    "positive_ic_ratio": 0.5236,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_CSI300_REL_MOM_20D",
+    "discovery_rank_ic": -0.0549,
+    "discovery_icir": -0.2818,
+    "positive_ic_ratio": 0.4258,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_ANNOUNCEMENT_MOM_PIT",
+    "discovery_rank_ic": -0.0539,
+    "discovery_icir": -0.2781,
+    "positive_ic_ratio": 0.4311,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  },
+  {
+    "alpha_id": "ALPHA_RESIDUAL_SIZE_VOL_NEUT_20D",
+    "discovery_rank_ic": -0.0212,
+    "discovery_icir": -0.125,
+    "positive_ic_ratio": 0.4921,
+    "evaluated_discovery_days": 573,
+    "status": "REJECTED",
+    "decision_reason": "Failed discovery IC / positive ratio threshold"
+  }
+]

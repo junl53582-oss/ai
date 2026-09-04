@@ -1,0 +1,49 @@
+{
+  "baseline_model_id": "lightgbm_clf_baseline",
+  "baseline_code_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
+  "canonical_run_id": "research_9f4e0be_20260905_023708",
+  "dataset_sha": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
+  "factor_matrix_sha": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
+  "calendar_sha": "cf08829d987632359ac12537a2d8659354aa1acc71057670ad81af2921eb0c23",
+  "label_definition": "label_excess_20d (20-day benchmark excess return)",
+  "walk_forward_config": {
+    "n_folds": 20,
+    "purge_gap": 25,
+    "label_horizon": 20
+  },
+  "purge_gap": 25,
+  "seed_list": [
+    42,
+    100,
+    2024
+  ],
+  "cost_model": {
+    "commission_rate": 0.0003,
+    "stamp_duty": 0.001,
+    "slippage_bps": 5.0,
+    "roundtrip_cost_bps": 18.0
+  },
+  "baseline_rank_ic": 0.03595,
+  "baseline_icir": 1.371457,
+  "baseline_icir_nw20": 0.404077,
+  "baseline_positive_ic_ratio": 0.6519,
+  "baseline_quantile_returns": {
+    "Q5_minus_Q1": 4.65,
+    "monotonicity_score": 0.7
+  },
+  "baseline_topk_performance": {
+    "cum_strategy_return": -11.58,
+    "cagr": -3.82,
+    "sharpe_ratio": -0.73,
+    "max_drawdown": -13.0,
+    "win_rate": 43.33
+  },
+  "baseline_turnover": 0.0,
+  "baseline_cost_adjusted_alpha": -28.8,
+  "baseline_multi_seed": {
+    "42": 0.022313,
+    "100": 0.010397,
+    "2024": 0.01764
+  },
+  "baseline_seed_std": 0.004902
+}
