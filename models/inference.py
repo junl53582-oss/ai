@@ -68,12 +68,14 @@ class BatchInference:
     # ---------------------------------------------------------------- 加载
     def _load_model(self):
         artifact = self.registry.resolve_artifact(self.record.model_id)
-        if self.record.model_type in ("lightgbm", "lightgbm_ranker", "lightgbm_reg", "regression", "ranking", "classification"):
-            from models.lightgbm_model import LightGBMQuantModel
-            task_type = self.record.task_type or "classification"
-            m = LightGBMQuantModel(task_type=task_type)
-            return m.load(artifact)
-        raise InferenceError(f"暂不支持推理的模型类型: {self.record.model_type}")
+        from models.adapters import get_adapter
+        try:
+            adapter = get_adapter(self.record.model_type, self.record.task_type or "classification")
+        except ValueError as e:
+            raise InferenceError(f"暂不支持推理的模型类型: {self.record.model_type}") from e
+        adapter.load(artifact)
+        self.adapter = adapter
+        return adapter
 
     # ---------------------------------------------------------------- 漂移检查
     def check_lineage(self, dataset_sha256: Optional[str] = None, strict: bool = False) -> Dict[str, Any]:

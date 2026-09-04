@@ -242,6 +242,34 @@ class ModelRegistry:
                 shutil.copy2(rec.source_artifact, target_file)
             rec.registry_artifact = str(target_file)
 
+            # 若晋升到 PRODUCTION，同步写入统一生产制品目录 (saved_models/production/<model_id>)
+            if to_state == ModelState.PRODUCTION:
+                try:
+                    import hashlib
+                    prod_dir = self.root.parent / "production" / model_id
+                    prod_dir.mkdir(parents=True, exist_ok=True)
+                    prod_file = prod_dir / "model.pkl"
+                    if not prod_file.exists() or prod_file.stat().st_size != target_file.stat().st_size:
+                        shutil.copy2(target_file, prod_file)
+
+                    meta_path = prod_dir / "metadata.json"
+                    meta_path.write_text(json.dumps(rec.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+
+                    f_bytes = prod_file.read_bytes()
+                    manifest_data = {
+                        "model_id": model_id,
+                        "model_type": rec.model_type,
+                        "task_type": rec.task_type,
+                        "file_name": "model.pkl",
+                        "file_sha256": hashlib.sha256(f_bytes).hexdigest(),
+                        "file_size_bytes": len(f_bytes),
+                        "created_at": rec.created_at,
+                        "state": ModelState.PRODUCTION,
+                    }
+                    (prod_dir / "manifest.json").write_text(json.dumps(manifest_data, ensure_ascii=False, indent=2), encoding="utf-8")
+                except Exception as e:
+                    logger.warning(f"同步写入生产制品目录失败 (非致命): {e}")
+
         # 生产唯一性: 新模型进 PRODUCTION 时, 旧 PRODUCTION 自动归档
         if to_state == ModelState.PRODUCTION:
             for mid, raw in index.items():
@@ -294,12 +322,18 @@ class ModelRegistry:
         return sorted(recs, key=lambda r: r.created_at, reverse=True)
 
     def resolve_artifact(self, model_id: str) -> Path:
-        """返回可用于推理的制品路径 (优先注册表内制品, 回退研究制品)"""
+        """返回可用于推理的制品路径 (优先标准生产制品目录，其次注册表内制品, 回退研究制品)"""
         rec = self.get(model_id)
         if rec is None:
             raise PromotionError(f"模型不存在: {model_id}")
+        # 1. 优先检查生产规范目录 saved_models/production/<model_id>/model.pkl
+        prod_path = self.root.parent / "production" / model_id / "model.pkl"
+        if prod_path.exists():
+            return prod_path
+        # 2. 检查注册表制品
         if rec.registry_artifact and Path(rec.registry_artifact).exists():
             return Path(rec.registry_artifact)
+        # 3. 回退源制品
         src = Path(rec.source_artifact)
         if not src.exists():
             raise FileNotFoundError(f"模型制品缺失: {src}")

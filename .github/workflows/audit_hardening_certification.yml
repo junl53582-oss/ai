@@ -2,7 +2,7 @@ name: Audit Hardening Certification & Integrity Regression Suite
 
 on:
   push:
-    branches: [ main, "phase2.1-*" ]
+    branches: [ main, "phase2.1-*", "codex/*" ]
   pull_request:
     branches: [ main ]
 
@@ -21,11 +21,15 @@ jobs:
           python-version: '3.11'
           cache: 'pip'
 
+      - name: Configure Git Safe Directory
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
-          pip install pytest pytest-cov
 
       - name: Run Integrity Hardening Attack Test Suite (32 Gates)
         run: |

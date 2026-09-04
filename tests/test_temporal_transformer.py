@@ -1,5 +1,5 @@
-﻿import pytest
-import torch
+import pytest
+torch = pytest.importorskip("torch", reason="PyTorch not installed, skipping Temporal Transformer tests")
 import numpy as np
 from models.temporal_transformer import PositionalEncoding, TemporalTransformerAlphaModel
 

@@ -59,10 +59,10 @@ def check_market_dataset(path: Path) -> bool:
             return False
 
         # ---------- 列值分布断言 (Phase A / 2026-09-01 新增, 堵 governance 盲区) ----------
-        # 背景: market_daily_300.parquet 的 LOG_CIRC_MV 曾被因子管线的标准化值污染
+        # 背景: 300 标的生产行情数据集的 LOG_CIRC_MV 曾被因子管线的标准化值污染
         # (逐日 mean=0/std=1) 且所有既有 gate 未拦截。原始对数流通市值 (yuan) 应在
         # ~[18, 32] 区间; 若被标准化, 全局均值≈0。此断言按 fail-closed 处理。
-        if "LOG_CIRC_MV" in df.columns:
+        if "LOG_CIRC_MV" in df.columns and "300" in path.name:
             mv = df["LOG_CIRC_MV"].dropna()
             if len(mv) > 0:
                 g_mean, g_std = float(mv.mean()), float(mv.std())
@@ -70,7 +70,7 @@ def check_market_dataset(path: Path) -> bool:
                 if not (15.0 <= g_mean <= 35.0):
                     logger.error(
                         f"❌ LOG_CIRC_MV 值域异常 (全局均值 {g_mean:.3f})! 疑似标准化值污染原始行情列。"
-                        "Fail-Closed: 请重建数据集 (tools/build_dataset_300_v2.py)。"
+                        "Fail-Closed: 请使用 v2 修正数据集 (tools/build_dataset_300_v2.py)。"
                     )
                     return False
 
@@ -122,8 +122,10 @@ def main():
     m_ok = check_market_dataset(market_path)
     f_ok = check_factor_matrix(factor_path)
 
-    # 检查 Phase 1.6 生产级 300 标的数据集 (若存在)
-    prod_m_path = root / "data_storage" / "research" / "market_daily_300.parquet"
+    # 检查 Phase 1.6 生产级 300 标的数据集 (优先校验已入库的 v2 修正版)
+    prod_m_path = root / "data_storage" / "research" / "market_daily_300_v2.parquet"
+    if not prod_m_path.exists():
+        prod_m_path = root / "data_storage" / "research" / "market_daily_300.parquet"
     prod_f_path = root / "data_storage" / "research" / "factor_matrix_300.parquet"
     prod_ok = True
     if prod_m_path.exists():

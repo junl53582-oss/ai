@@ -31,6 +31,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
       - name: Fail-Closed Market Dataset Gate (Phase A: 行情主数据集已入库)
@@ -46,9 +47,6 @@ jobs:
           "
 
       - name: Factor Matrix Reproducibility Check (Phase A)
-        # 认证级因子矩阵 (311MB) 不入库。已入库 market_daily_300.parquet 理论上可确定性重建,
-        # 但 2026-09-01 验证: 重建件与原始认证件存在列集/数值差异 (注册表因子构建路径未锁定),
-        # 属 Phase A 已知阻塞项 —— 修复前此步骤失败并阻断下游研究步骤, 属预期诚实行为。
         run: |
           if [ ! -f data_storage/research/factor_matrix_300.parquet ]; then
             echo "::error::认证级因子矩阵 factor_matrix_300.parquet (311MB) 未入库, 且当前无法从入库代码+数据位级复现。"

@@ -2,7 +2,7 @@ name: Fast CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, "codex/*" ]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -19,7 +19,7 @@ concurrency:
 jobs:
   fast-test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
 
     steps:
       - name: Checkout Code
@@ -40,6 +40,7 @@ jobs:
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install -r requirements.txt
 
       - name: Core Fast Tests
