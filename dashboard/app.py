@@ -648,6 +648,43 @@ else:
                     if chart_range >= 60:
                         fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma60'], name='MA60 (决策线)', line=dict(color='#06B6D4', width=1.5)), row=1, col=1)
 
+                    # 识别与标注量化主力买卖点 (B点起涨 / S点止盈)
+                    sym_history['ma5_prev'] = sym_history['ma5'].shift(1)
+                    sym_history['ma20_prev'] = sym_history['ma20'].shift(1)
+                    buy_mask = (sym_history['ma5'] > sym_history['ma20']) & (sym_history['ma5_prev'] <= sym_history['ma20_prev'])
+                    sell_mask = (sym_history['ma5'] < sym_history['ma20']) & (sym_history['ma5_prev'] >= sym_history['ma20_prev'])
+                    
+                    buy_df = sym_history[buy_mask]
+                    sell_df = sym_history[sell_mask]
+                    
+                    if not buy_df.empty:
+                        fig_k.add_trace(go.Scatter(
+                            x=buy_df['date'],
+                            y=buy_df['low'] * 0.985,
+                            mode='markers+text',
+                            marker=dict(symbol='triangle-up', size=14, color='#EF4444', line=dict(width=1, color='#FFFFFF')),
+                            text=['B' for _ in range(len(buy_df))],
+                            textposition='bottom center',
+                            textfont=dict(size=11, color='#EF4444', family='Arial Black'),
+                            name='🔴 量化B点 (起涨买点)',
+                            hoverinfo='text+x',
+                            hovertext=[f"🔴 [{pd.to_datetime(d).strftime('%Y-%m-%d')}] 量化B点: 均线金叉共振起涨 (价格: ¥{c:.2f})" for d, c in zip(buy_df['date'], buy_df['close'])]
+                        ), row=1, col=1)
+
+                    if not sell_df.empty:
+                        fig_k.add_trace(go.Scatter(
+                            x=sell_df['date'],
+                            y=sell_df['high'] * 1.015,
+                            mode='markers+text',
+                            marker=dict(symbol='triangle-down', size=14, color='#10B981', line=dict(width=1, color='#FFFFFF')),
+                            text=['S' for _ in range(len(sell_df))],
+                            textposition='top center',
+                            textfont=dict(size=11, color='#10B981', family='Arial Black'),
+                            name='🟢 量化S点 (波段止盈)',
+                            hoverinfo='text+x',
+                            hovertext=[f"🟢 [{pd.to_datetime(d).strftime('%Y-%m-%d')}] 量化S点: 均线死叉分歧减仓 (价格: ¥{c:.2f})" for d, c in zip(sell_df['date'], sell_df['close'])]
+                        ), row=1, col=1)
+
                     # 副图1: 成交量柱状图
                     vol_colors = ['#EF4444' if c >= o else '#10B981' for c, o in zip(sym_history['close'], sym_history['open'])]
                     fig_k.add_trace(go.Bar(
