@@ -69,9 +69,11 @@ def sync_latest_quotes_from_live():
                         amount = float(parts[37]) * 10000.0 if len(parts) > 37 and parts[37] else close_p * vol_shares
                         turnover = float(parts[38]) / 100.0 if len(parts) > 38 and parts[38] else 0.0
                         pct = (close_p - pre_close) / pre_close if pre_close > 0 else 0.0
+                        t_time = parts[30] if len(parts) > 30 else ""
+                        item_date = f"{t_time[:4]}-{t_time[4:6]}-{t_time[6:8]}" if len(t_time) >= 8 else "2026-09-04"
 
                         records.append({
-                            "date": trade_date,
+                            "date": item_date,
                             "symbol": sym,
                             "name": name,
                             "open": open_p,

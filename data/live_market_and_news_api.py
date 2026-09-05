@@ -159,6 +159,10 @@ class AutoSyncEngine:
                     q = quote_map.loc[sym]
                     df.at[idx, 'close'] = q['close']
                     df.at[idx, 'pct_change'] = q['pct_change']
+                    if 'trade_time' in q and q['trade_time']:
+                        tt = str(q['trade_time'])
+                        if len(tt) >= 8:
+                            df.at[idx, 'date'] = f"{tt[:4]}-{tt[4:6]}-{tt[6:8]}"
                     
         # 2. 抓取 7x24 实时快讯
         logger.info('[*] 正在拉取 7x24 实时财经电报流...')
