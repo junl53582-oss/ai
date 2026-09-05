@@ -1,0 +1,37 @@
+{
+  "trend_Bull": {
+    "days": 161,
+    "baseline_ann_net": 148.84,
+    "baseline_hit_ratio": 62.1
+  },
+  "trend_Sideways": {
+    "days": 322,
+    "baseline_ann_net": 4.03,
+    "baseline_hit_ratio": 49.7
+  },
+  "trend_Bear": {
+    "days": 111,
+    "baseline_ann_net": -43.62,
+    "baseline_hit_ratio": 47.7
+  },
+  "volatility_Low_Vol": {
+    "days": 308,
+    "baseline_ann_net": 16.93,
+    "baseline_hit_ratio": 50.6
+  },
+  "volatility_High_Vol": {
+    "days": 286,
+    "baseline_ann_net": 53.15,
+    "baseline_hit_ratio": 54.9
+  },
+  "risk_sentiment_Risk_Off": {
+    "days": 396,
+    "baseline_ann_net": -56.97,
+    "baseline_hit_ratio": 39.4
+  },
+  "risk_sentiment_Risk_On": {
+    "days": 198,
+    "baseline_ann_net": 217.06,
+    "baseline_hit_ratio": 79.3
+  }
+}

@@ -1,0 +1,1 @@
+{"gate_type": "Risk_Off_Regime_Gate", "train_window_vol_p75": 0.01104, "breadth_cutoff": 0.4, "action": "Activate Defensive Overlay only on Risk-Off dates, otherwise maintain 100% Baseline", "train_only": true, "timestamp": "2026-09-05T13:17:10.740957"}

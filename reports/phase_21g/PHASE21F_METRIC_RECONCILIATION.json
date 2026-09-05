@@ -1,0 +1,12 @@
+{
+  "audit_item": "Reconciliation of Phase 2.1-F Screening Matrix vs Formal Candidate Table",
+  "findings": {
+    "screening_matrix_baseline": 0.3541,
+    "screening_matrix_exp_f07": 0.3925,
+    "formal_table_baseline": 0.3436,
+    "formal_table_exp_f07": 0.3642,
+    "root_cause": "The screening matrix used compound annualization (prod(1 + net_ret))^(242/N) - 1, whereas the formal comparison table used daily arithmetic average annualization mean(net_ret) * 242. Both operated on the exact same daily net return series.",
+    "mathematical_link": "Compound Top10 Net = 39.25% corresponds exactly to arithmetic Top10 Net = 36.42% due to geometric compounding of volatile daily returns.",
+    "governance_rule": "Going forward, both compound and arithmetic annualized returns must be reported explicitly and labeled, eliminating accounting ambiguity."
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "freeze_timestamp": "2026-09-05T13:16:20.924543",
+  "phase_21f_baseline_commit": "cd152ee14a4d4d32c63d30260f3adc1f26f4f395",
+  "frozen_baseline": {
+    "model_id": "lightgbm_clf_baseline",
+    "type": "LGBMRegressor",
+    "params": {
+      "n_estimators": 100,
+      "learning_rate": 0.05,
+      "max_depth": 5,
+      "num_leaves": 31,
+      "subsample": 0.8,
+      "colsample_bytree": 0.8,
+      "random_state": 42
+    },
+    "target_label": "label_excess_20d",
+    "feature_count": 106
+  },
+  "frozen_candidate": {
+    "candidate_id": "EXP_F07_COMBINED_RIDGE_V6",
+    "candidate_status": "PROMISING_DIAGNOSTIC_ARTIFACT",
+    "production_candidate": false,
+    "type": "Ridge",
+    "params": {
+      "alpha": 100.0,
+      "fit_intercept": true
+    },
+    "target_label": "label_v6_exec_net_20d",
+    "feature_count": 127,
+    "hyp_fixed": true
+  },
+  "governance_rule": "Candidate is strictly frozen as a diagnostic artifact; hyperparameter re-tuning is strictly prohibited."
+}

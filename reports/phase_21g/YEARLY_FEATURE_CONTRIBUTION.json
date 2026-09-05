@@ -1,0 +1,266 @@
+{
+  "2024": {
+    "top_positive_features": [
+      {
+        "feature": "benchmark_open",
+        "contrib": 0.039176
+      },
+      {
+        "feature": "ALPHA_VOL_COMPRESSION_20_60",
+        "contrib": 0.030745
+      },
+      {
+        "feature": "ALPHA_TREND_R2_60D",
+        "contrib": 0.007793
+      },
+      {
+        "feature": "adj_low",
+        "contrib": 0.006757
+      },
+      {
+        "feature": "adj_open",
+        "contrib": 0.006602
+      }
+    ],
+    "top_negative_features": [
+      {
+        "feature": "benchmark_close",
+        "contrib": -0.037401
+      },
+      {
+        "feature": "adj_high",
+        "contrib": -0.017115
+      },
+      {
+        "feature": "ALPHA_REL_CONSISTENCY_60D",
+        "contrib": -0.009597
+      },
+      {
+        "feature": "limit_up_price",
+        "contrib": -0.006317
+      },
+      {
+        "feature": "ALPHA_FUND_ROE_STABILITY",
+        "contrib": -0.004446
+      }
+    ],
+    "all_features_abs_ranked": [
+      {
+        "feature": "benchmark_open",
+        "contrib": 0.039176
+      },
+      {
+        "feature": "benchmark_close",
+        "contrib": -0.037401
+      },
+      {
+        "feature": "ALPHA_VOL_COMPRESSION_20_60",
+        "contrib": 0.030745
+      },
+      {
+        "feature": "adj_high",
+        "contrib": -0.017115
+      },
+      {
+        "feature": "ALPHA_REL_CONSISTENCY_60D",
+        "contrib": -0.009597
+      },
+      {
+        "feature": "ALPHA_TREND_R2_60D",
+        "contrib": 0.007793
+      },
+      {
+        "feature": "adj_low",
+        "contrib": 0.006757
+      },
+      {
+        "feature": "adj_open",
+        "contrib": 0.006602
+      },
+      {
+        "feature": "limit_up_price",
+        "contrib": -0.006317
+      },
+      {
+        "feature": "ALPHA_FUND_GROSS_MARGIN_PIT",
+        "contrib": 0.005626
+      }
+    ]
+  },
+  "2025": {
+    "top_positive_features": [
+      {
+        "feature": "benchmark_open",
+        "contrib": 0.044855
+      },
+      {
+        "feature": "ALPHA_VOL_COMPRESSION_20_60",
+        "contrib": 0.030845
+      },
+      {
+        "feature": "adj_low",
+        "contrib": 0.008533
+      },
+      {
+        "feature": "adj_open",
+        "contrib": 0.008327
+      },
+      {
+        "feature": "ALPHA_TREND_R2_60D",
+        "contrib": 0.007809
+      }
+    ],
+    "top_negative_features": [
+      {
+        "feature": "benchmark_close",
+        "contrib": -0.042846
+      },
+      {
+        "feature": "adj_high",
+        "contrib": -0.021585
+      },
+      {
+        "feature": "ALPHA_REL_CONSISTENCY_60D",
+        "contrib": -0.009044
+      },
+      {
+        "feature": "limit_up_price",
+        "contrib": -0.00775
+      },
+      {
+        "feature": "ALPHA_FUND_ROE_STABILITY",
+        "contrib": -0.00521
+      }
+    ],
+    "all_features_abs_ranked": [
+      {
+        "feature": "benchmark_open",
+        "contrib": 0.044855
+      },
+      {
+        "feature": "benchmark_close",
+        "contrib": -0.042846
+      },
+      {
+        "feature": "ALPHA_VOL_COMPRESSION_20_60",
+        "contrib": 0.030845
+      },
+      {
+        "feature": "adj_high",
+        "contrib": -0.021585
+      },
+      {
+        "feature": "ALPHA_REL_CONSISTENCY_60D",
+        "contrib": -0.009044
+      },
+      {
+        "feature": "adj_low",
+        "contrib": 0.008533
+      },
+      {
+        "feature": "adj_open",
+        "contrib": 0.008327
+      },
+      {
+        "feature": "ALPHA_TREND_R2_60D",
+        "contrib": 0.007809
+      },
+      {
+        "feature": "limit_up_price",
+        "contrib": -0.00775
+      },
+      {
+        "feature": "ALPHA_FUND_GROSS_MARGIN_PIT",
+        "contrib": 0.005557
+      }
+    ]
+  },
+  "2026": {
+    "top_positive_features": [
+      {
+        "feature": "benchmark_open",
+        "contrib": 0.051108
+      },
+      {
+        "feature": "ALPHA_VOL_COMPRESSION_20_60",
+        "contrib": 0.033115
+      },
+      {
+        "feature": "adj_low",
+        "contrib": 0.011027
+      },
+      {
+        "feature": "adj_open",
+        "contrib": 0.010844
+      },
+      {
+        "feature": "ALPHA_TREND_R2_60D",
+        "contrib": 0.007754
+      }
+    ],
+    "top_negative_features": [
+      {
+        "feature": "benchmark_close",
+        "contrib": -0.048788
+      },
+      {
+        "feature": "adj_high",
+        "contrib": -0.028294
+      },
+      {
+        "feature": "limit_up_price",
+        "contrib": -0.009683
+      },
+      {
+        "feature": "ALPHA_REL_CONSISTENCY_60D",
+        "contrib": -0.00895
+      },
+      {
+        "feature": "ALPHA_FUND_ROE_STABILITY",
+        "contrib": -0.005336
+      }
+    ],
+    "all_features_abs_ranked": [
+      {
+        "feature": "benchmark_open",
+        "contrib": 0.051108
+      },
+      {
+        "feature": "benchmark_close",
+        "contrib": -0.048788
+      },
+      {
+        "feature": "ALPHA_VOL_COMPRESSION_20_60",
+        "contrib": 0.033115
+      },
+      {
+        "feature": "adj_high",
+        "contrib": -0.028294
+      },
+      {
+        "feature": "adj_low",
+        "contrib": 0.011027
+      },
+      {
+        "feature": "adj_open",
+        "contrib": 0.010844
+      },
+      {
+        "feature": "limit_up_price",
+        "contrib": -0.009683
+      },
+      {
+        "feature": "ALPHA_REL_CONSISTENCY_60D",
+        "contrib": -0.00895
+      },
+      {
+        "feature": "ALPHA_TREND_R2_60D",
+        "contrib": 0.007754
+      },
+      {
+        "feature": "limit_down_price",
+        "contrib": 0.006604
+      }
+    ]
+  }
+}

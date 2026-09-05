@@ -1,0 +1,2 @@
+{"type": "overlay_lambda_selection", "best_lambda": 0.2, "candidates": [0.1, 0.2, 0.3], "train_only": true, "timestamp": "2026-09-05T13:17:10.713637"}
+{"total_regime_hypotheses": 7, "total_neutralization_variants": 3, "total_overlay_variants": 2, "total_bootstrap_tests": 8, "total_diagnostics": 20, "timestamp": "2026-09-05T13:17:28.677428"}

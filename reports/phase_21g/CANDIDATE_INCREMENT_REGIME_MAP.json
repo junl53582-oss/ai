@@ -1,0 +1,44 @@
+{
+  "trend_Bull": {
+    "days": 161,
+    "candidate_ann_net": 119.27,
+    "delta_ann_net": -29.57,
+    "positive_delta_ratio": 42.9
+  },
+  "trend_Sideways": {
+    "days": 322,
+    "candidate_ann_net": -3.56,
+    "delta_ann_net": -7.59,
+    "positive_delta_ratio": 50.6
+  },
+  "trend_Bear": {
+    "days": 111,
+    "candidate_ann_net": -40.26,
+    "delta_ann_net": 3.36,
+    "positive_delta_ratio": 53.2
+  },
+  "volatility_Low_Vol": {
+    "days": 308,
+    "candidate_ann_net": -4.34,
+    "delta_ann_net": -21.28,
+    "positive_delta_ratio": 46.8
+  },
+  "volatility_High_Vol": {
+    "days": 286,
+    "candidate_ann_net": 52.18,
+    "delta_ann_net": -0.97,
+    "positive_delta_ratio": 51.4
+  },
+  "risk_sentiment_Risk_Off": {
+    "days": 396,
+    "candidate_ann_net": -63.15,
+    "delta_ann_net": -6.18,
+    "positive_delta_ratio": 50.0
+  },
+  "risk_sentiment_Risk_On": {
+    "days": 198,
+    "candidate_ann_net": 194.92,
+    "delta_ann_net": -22.14,
+    "positive_delta_ratio": 47.0
+  }
+}
