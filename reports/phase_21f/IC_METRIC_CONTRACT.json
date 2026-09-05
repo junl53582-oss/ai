@@ -1,0 +1,6 @@
+{
+  "raw_icir": "mean(daily_rank_ic) / std(daily_rank_ic)",
+  "period_annualized_icir": "raw_icir * sqrt(242 / horizon) = raw_icir * 3.478505",
+  "daily_annualized_icir": "raw_icir * sqrt(242) = raw_icir * 15.556349",
+  "mathematical_note": "3.4785 == sqrt(242/20), 15.556 == sqrt(242). Values reflect true mathematical definitions."
+}

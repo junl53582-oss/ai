@@ -1,0 +1,32 @@
+[
+  {
+    "label_id": "LABEL_V1_CONTROL",
+    "formula": "20D Canonical Excess Return",
+    "hypothesis": "Baseline benchmark control",
+    "status": "CONTROL"
+  },
+  {
+    "label_id": "LABEL_V6_EXEC_NET_20D",
+    "formula": "T+1 Open to T+21 Open Executable Excess Return minus 20 bps",
+    "hypothesis": "Directly train model on post-cost executable alpha",
+    "status": "CANDIDATE"
+  },
+  {
+    "label_id": "LABEL_V7_PERSISTENT_20D",
+    "formula": "20D Excess Return scaled by 10D path consistency",
+    "hypothesis": "Penalize volatile paths, favor monotonic trend",
+    "status": "CANDIDATE"
+  },
+  {
+    "label_id": "LABEL_V8_TOPK_UTILITY",
+    "formula": "Max(0, RankPct - 0.80) / 0.20 on Net Executable Return",
+    "hypothesis": "Directly incentivize top decile selection accuracy",
+    "status": "CANDIDATE"
+  },
+  {
+    "label_id": "LABEL_V9_TURNOVER_PENALIZED",
+    "formula": "Exec Net Return minus dynamic turnover penalty",
+    "hypothesis": "Downweight stocks requiring frequent rebalance",
+    "status": "CANDIDATE"
+  }
+]

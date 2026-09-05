@@ -1,0 +1,29 @@
+{
+  "baseline_id": "lightgbm_clf_baseline",
+  "model_family": "LightGBM Classifier",
+  "code_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
+  "dataset_sha": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
+  "factor_matrix_sha": "artifacts/factor_matrix_300_v2.parquet",
+  "feature_set": "97 certified baseline features",
+  "label_id": "label_excess_20d (LABEL_V1_CONTROL)",
+  "holding_period": "20 Trading Days",
+  "portfolio_construction": "20-Sleeve Overlapping Portfolio Accounting",
+  "turnover_definition": "Daily one-way holdings change (0.5 * sum(|W_t - W_{t-1}|))",
+  "cost_model": "Turnover-linked daily deduction (cost_t = turnover_t * cost_rate)",
+  "seed_list": [
+    42,
+    100,
+    2024
+  ],
+  "archived_candidate": {
+    "candidate_id": "EXP_09_DYNAMIC_RANK_BLEND",
+    "status": "REJECTED",
+    "reasons": [
+      "NO_ROBUST_INCREMENTAL_ALPHA",
+      "TAIL_ALPHA_NOT_SUPPORTED (Delta Top-10 win rate 10.1%, Q5-Q1 win rate 26.7%)",
+      "BOOTSTRAP_95_CI_CROSSES_ZERO (Delta RankIC CI [-0.0065, 0.0093])",
+      "TEMPORALLY_DECAYED (2026 Q5-Q1 spread negative -0.03%)"
+    ],
+    "instruction": "Permanently archived. Forbidden as tuning target or baseline."
+  }
+}
