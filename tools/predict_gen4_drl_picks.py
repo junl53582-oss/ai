@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import json
 import joblib
@@ -64,4 +64,4 @@ for i, (_, row) in enumerate(res_df.head(8).iterrows(), 1):
     p = row.get('close', 0.0)
     sc = row['pred_score']
     w = row['target_weight']
-    print(f'  {i}. {sym} | {name:<6} | {ind:<6} | 2026-09-03收盘: {p:6.2f}元 | 预测分: {sc:.4f} | DRL最优仓位: {w*100:4.1f}%')
+    print(f'  {i}. {sym} | {name:<6} | {ind:<6} | {dt_str}收盘: {p:6.2f}元 | 预测分: {sc:.4f} | DRL最优仓位: {w*100:4.1f}%')

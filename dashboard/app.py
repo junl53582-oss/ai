@@ -463,7 +463,7 @@ else:
                 </div>
             </div>
             <div style="font-size: 11px; color: #92400E; margin-top: 6px; border-top: 1px dashed #FDE68A; padding-top: 4px;">
-                📌 <strong>统计口径说明</strong>：上方数据为 <strong>2026-09-03 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多模态模型严格选拔出的 <strong>全景优选标的池 (前 8 支实盘买入满仓 95%，第 9 支及后续为战略储备观察池)</strong>！
+                📌 <strong>统计口径说明</strong>：上方数据为 <strong>{latest_date.strftime('%Y-%m-%d')} 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多模态模型严格选拔出的 <strong>全景优选标的池 (前 8 支实盘买入满仓 95%，第 9 支及后续为战略储备观察池)</strong>！
             </div>
         </div>
         """, unsafe_allow_html=True)
