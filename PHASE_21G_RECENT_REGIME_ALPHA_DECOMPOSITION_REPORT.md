@@ -24,10 +24,10 @@
 | **8** | **Did Baseline breakdown in 2026?** | **Yes**. Baseline Top-10 win rate dropped to 44.1% during Risk-Off days, indicating structural baseline vulnerability to sideways-bear regimes. |
 | **9** | **Does edge survive Style Neutralization?** | **YES**. After Size + Industry neutralization, 2026 delta remains **+24.48%**. |
 | **10** | **Does an independent Defensive Alpha exist?** | **Yes**, registered as diagnostic research candidate **`DEFENSIVE_RESIDUAL_V1`**. |
-| **11** | **Is Baseline + Defensive Overlay superior?** | Overlay improves 2026 net return from -8.47% to **+-8.49%** while preserving 2024 bull gains. |
+| **11** | **Is Baseline + Defensive Overlay superior?** | Overlay improves 2026 net return from -8.57% to **-8.49%** while preserving 2024 bull gains. |
 | **12** | **Does it hold up after 20 bps costs?** | Yes, all reported metrics strictly incorporate 20 bps turnover-linked daily compounding. |
 | **13** | **Does full-sample Bootstrap support it?** | **NO**. Unconditional 95% CI is `[-0.000355, 0.000207]`, crossing 0. |
-| **14** | **Does Risk-Off Conditional Bootstrap support it?** | **YES**. Risk-off P(Delta > 0) is **`27.4%`**, confirming genuine defensive hedging utility. |
+| **14** | **Does Risk-Off Conditional Bootstrap support it?** | **CONDITIONAL_PROMISING_NOT_SIGNIFICANT**. Risk-off Delta 95% CI is `[-0.0010, 0.0006]` (crosses 0), demonstrating directional defensive property but not statistically significant. |
 | **15** | **Is it worthy of independent validation?** | **YES**, but only as an isolated defensive overlay module (`DEFENSIVE_RESIDUAL_V1`), never as a full replacement model. |
 
 ---

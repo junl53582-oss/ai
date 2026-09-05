@@ -1,0 +1,17 @@
+{
+  "baseline_id": "lightgbm_clf_baseline",
+  "freeze_timestamp": "2026-09-05T13:38:08+08:00",
+  "freeze_commit": "8fa13b66bab3ec27b73c4cd416eee01b5f538e9f",
+  "model_architecture": "LGBMRegressor",
+  "model_hyperparameters": {
+    "n_estimators": 100,
+    "learning_rate": 0.05,
+    "max_depth": 5,
+    "num_leaves": 31,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "random_state": 42
+  },
+  "target_label": "label_excess_20d",
+  "retraining_rule": "Strictly frozen as-is. Retraining prohibited unless authorized by formal production calendar."
+}
