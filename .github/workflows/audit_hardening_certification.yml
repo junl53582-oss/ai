@@ -13,7 +13,10 @@ concurrency:
 jobs:
   integrity-audit-certification:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # 2026-09-07: 20min 硬超时掐死了 Full Pytest Regression Suite
+    # （feature 分支较 main 多 ~7 万行代码后全量套件需要更久；前 3 个门禁套件全绿，
+    #   失败时间线与 timeout 时刻吻合）。放宽到 60min 并保留 concurrency 取消机制。
+    timeout-minutes: 60
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v7
