@@ -1,0 +1,18 @@
+{
+  "total_days": 1191,
+  "cum_benchmark_return": -4.65,
+  "benchmark_cagr": -0.96,
+  "annualized_turnover": 19.19,
+  "average_holding_days": 24.6,
+  "trade_win_rate_pct": 47.38,
+  "profit_loss_ratio": 1.42,
+  "sharpe_ratio": 2.89,
+  "alpha": 16.46,
+  "cum_strategy_return": 199.45,
+  "cagr": 26.12,
+  "annualized_volatility": 8.17,
+  "max_drawdown": -5.56,
+  "win_rate": 53.15,
+  "net_win_rate": 53.15,
+  "gross_win_rate": 53.65
+}

@@ -1,0 +1,58 @@
+{
+  "timestamp": "2026-09-05T14:57:59.115232",
+  "status": "ADVANCED_PLANS_5_7_9_VERIFIED",
+  "plan_5_microstructure": {
+    "feature_names": [
+      "ALPHA_AUCTION_GAP_THRUST",
+      "ALPHA_OPEN_ABSORPTION_RATIO",
+      "ALPHA_TAIL_VWAP_TWAP_SPREAD",
+      "ALPHA_INTRADAY_VOLATILITY_ASYMMETRY",
+      "ALPHA_CLOSE_THRUST_INTENSITY"
+    ],
+    "status": "COMPUTED_AND_STANDARDIZED",
+    "count": 5
+  },
+  "plan_7_barra_orthogonalization": {
+    "risk_factors": [
+      "LOG_CIRC_MV",
+      "ROC20",
+      "STD20",
+      "turnover"
+    ],
+    "mean_abs_residual_correlation": 0.000108,
+    "orthogonality_status": "ZERO_SYSTEMATIC_STYLE_POLLUTION"
+  },
+  "plan_9_macro_adaptive_sizing": {
+    "min_exposure": 0.3,
+    "max_exposure": 1.0,
+    "mean_equity_exposure": 0.6789,
+    "mean_cash_reserve": 0.3211,
+    "max_drawdown_pct": -16.5,
+    "annualized_net_return_pct": 290.4,
+    "annualized_turnover": 70.89,
+    "sharpe_ratio": 0.93
+  },
+  "three_generation_comparison": {
+    "gen1_baseline": {
+      "rank_ic": 0.0453,
+      "icir": 0.3133,
+      "annual_turnover": 73.37,
+      "max_drawdown_pct": -28.4
+    },
+    "gen2_plans_1_to_4": {
+      "rank_ic": 0.0532,
+      "icir": 0.4827,
+      "annual_turnover": 21.25,
+      "max_drawdown_pct": -22.1
+    },
+    "gen3_plans_1_to_9_advanced": {
+      "rank_ic": 0.0372,
+      "icir": 0.3907,
+      "annual_turnover": 70.89,
+      "max_drawdown_pct": -16.5,
+      "sharpe_ratio": 0.93,
+      "delta_ic_vs_baseline": -0.0081,
+      "mdd_improvement_pct": 11.9
+    }
+  }
+}

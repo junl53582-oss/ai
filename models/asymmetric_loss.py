@@ -18,12 +18,18 @@ class AsymmetricLossObjective:
         self.fp_penalty = false_positive_penalty
         self.gamma = gamma
 
-    def __call__(self, preds: np.ndarray, train_data) -> Tuple[np.ndarray, np.ndarray]:
+    def __call__(self, arg1, arg2) -> Tuple[np.ndarray, np.ndarray]:
         """
-        LightGBM 自定义目标函数接口:
+        LightGBM 自定义目标函数接口 (同时兼容 Native Dataset 与 scikit-learn API):
         返回一阶梯度 (grad) 与二阶梯度 (hess)
         """
-        labels = train_data.get_label()
+        if hasattr(arg2, "get_label"):
+            preds = arg1
+            labels = arg2.get_label()
+        else:
+            labels = arg1
+            preds = arg2
+
         # preds 为模型输出的 raw logits (margin)
         p = 1.0 / (1.0 + np.exp(-np.clip(preds, -15.0, 15.0)))
         p = np.clip(p, 1e-7, 1.0 - 1e-7)
@@ -55,8 +61,14 @@ class AsymmetricRegressionObjective:
         self.under_gain = underpredict_gain
         self.over_loss = overpredict_loss
 
-    def __call__(self, preds: np.ndarray, train_data) -> Tuple[np.ndarray, np.ndarray]:
-        labels = train_data.get_label()
+    def __call__(self, arg1, arg2) -> Tuple[np.ndarray, np.ndarray]:
+        if hasattr(arg2, "get_label"):
+            preds = arg1
+            labels = arg2.get_label()
+        else:
+            labels = arg1
+            preds = arg2
+
         residual = preds - labels
 
         # residual > 0: 预测偏高 (实际比预期更差) -> 高度惩罚

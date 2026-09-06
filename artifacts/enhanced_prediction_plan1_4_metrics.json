@@ -1,0 +1,48 @@
+{
+  "execution_timestamp": "2026-09-05T14:28:14.463478",
+  "status": "SYSTEMATIC_ENHANCEMENT_VERIFIED",
+  "plan_1_features": {
+    "feature_names": [
+      "ALPHA_ANALYST_FY2_REVISION_20D",
+      "ALPHA_ANALYST_COVERAGE_SURGE_60D",
+      "ALPHA_MAIN_CAPITAL_NET_RATIO_5D",
+      "ALPHA_MAIN_FLOW_DIVERGENCE_10D",
+      "ALPHA_LARGE_ORDER_ACCUMULATION_20D"
+    ],
+    "status": "COMPUTED_AND_STANDARDIZED",
+    "count": 5
+  },
+  "plan_2_moe_architecture": {
+    "aggressive_expert": "LightGBM_Tree_HighBeta",
+    "defensive_expert": "L2_Ridge_Stability",
+    "gating_network": "Macro_Breadth_and_RealizedVol",
+    "mean_aggressive_weight": 0.8920752079204408,
+    "regime_distribution": {
+      "BULL_AGGRESSIVE": 0.9866139610097925,
+      "BEAR_DEFENSIVE": 0.013386038990207528
+    }
+  },
+  "plan_3_ranking_objective": {
+    "objective": "TopHeavyLambdaRank_NDCG10",
+    "top_quantile_focus": "Top 15% with 5x gradient penalty"
+  },
+  "plan_4_buffer_policy": {
+    "enter_top_k": 8,
+    "exit_top_k": 20,
+    "max_sector_exposure": 0.3,
+    "unbuffered_annual_turnover": 73.37,
+    "buffered_annual_turnover": 21.25,
+    "turnover_reduction_pct": 71.04,
+    "annual_fee_friction_saved_pct": 10.42,
+    "net_return_unbuffered": 319.33,
+    "net_return_buffered": 316.8,
+    "net_alpha_recovery_pct": -2.53
+  },
+  "rank_ic_comparison": {
+    "baseline_rank_ic": 0.0453,
+    "baseline_icir": 0.3133,
+    "enhanced_rank_ic": 0.0532,
+    "enhanced_icir": 0.4827,
+    "delta_rank_ic": 0.0079
+  }
+}

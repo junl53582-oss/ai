@@ -45,6 +45,41 @@ def _proc_sina_stock(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 
+def _resolve_pct_change(df: pd.DataFrame, label: str) -> pd.Series:
+    """解析日收益率列，杜绝「上游缺失即静默填 0」导致的整列恒零缺陷。
+
+    历史缺陷背景:
+        旧实现为 `pd.to_numeric(raw.get("pct_change", 0), errors="coerce") / 100.0`。
+        当上游接口未返回涨跌幅字段时，`raw.get("pct_change", 0)` 返回**标量 0**，
+        赋值后使整列恒为 0.0 且无任何告警。下游 `research_v2/alphas/novel_alphas.py`
+        的 `_ensure_pct_change()` 因该列「已存在」而跳过重算，导致依赖日收益率的
+        ALPHA_IDIO_VOL_PENALTY / ALPHA_LIQUIDITY_X_VOL / ALPHA_SHORT_REVERSAL_5 /
+        ALPHA_RESIDUAL_MOMENTUM_20 全部退化为常量，因子矩阵被静默污染。
+
+    解析优先级:
+        1. 上游提供涨跌幅 (东财口径为百分数, 如 1.23 表示 1.23%) -> /100 还原小数
+        2. 该列缺失、全空或恒为 0 -> 视为无效, 改由 close 派生真实日收益率
+        3. close 亦不可用 -> fail-fast 抛 DataFetchError, 绝不静默填 0
+    """
+    if "pct_change" in df.columns:
+        s = pd.to_numeric(df["pct_change"], errors="coerce")
+        if bool((s.notna() & (s != 0)).any()):
+            return s / 100.0
+        logger.warning(
+            "[%s] 上游 pct_change 缺失或恒为 0，已改由 close 派生日收益率", label
+        )
+
+    if "close" in df.columns:
+        close = pd.to_numeric(df["close"], errors="coerce")
+        if int(close.notna().sum()) >= 2:
+            return close.pct_change()
+
+    raise DataFetchError(
+        f"[{label}] 无法解析日收益率: 上游既未提供有效 pct_change，close 列也不可用。"
+        f"严禁静默填 0 —— 整列恒零会使下游波动率/流动性类 Alpha 全部退化为常量。"
+    )
+
+
 class DataFetcher:
     """数据拉取与格式统一器"""
 
@@ -216,7 +251,7 @@ class DataFetcher:
             if c in raw.columns:
                 raw[c] = pd.to_numeric(raw[c], errors="coerce").astype(float)
 
-        raw["pct_change"] = pd.to_numeric(raw.get("pct_change", 0), errors="coerce") / 100.0
+        raw["pct_change"] = _resolve_pct_change(raw, f"stock:{symbol}")
         raw["turnover"] = pd.to_numeric(raw.get("turnover", 0), errors="coerce") / 100.0
 
         if adj_df is not None and not adj_df.empty:
@@ -267,7 +302,7 @@ class DataFetcher:
             if c in df.columns:
                 df[c] = pd.to_numeric(df[c], errors="coerce").astype(float)
 
-        df["pct_change"] = pd.to_numeric(df.get("pct_change", 0), errors="coerce") / 100.0
+        df["pct_change"] = _resolve_pct_change(df, f"index:{symbol}")
         df["data_source"] = "akshare"
         df.sort_values("date", inplace=True)
         df.reset_index(drop=True, inplace=True)

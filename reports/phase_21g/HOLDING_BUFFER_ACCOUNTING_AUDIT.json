@@ -1,0 +1,11 @@
+{
+  "audit_item": "Top20_Hold20 197.68% Accounting Audit",
+  "audit_verdict": "UNSMOOTHED_DAILY_COMPOUND_AMPLIFICATION",
+  "root_causes": [
+    "1. simulate_holding_buffer_policy evaluated an un-smoothed single-basket strategy trading 100% of capital daily rather than the certified 20-sleeve staggered portfolio.",
+    "2. In the 2024 tech/momentum bull phase, un-smoothed daily compounding prod(1 + daily_net) experienced high compound growth, and the formula (1 + C)^(242/N) - 1 exponentially amplified it to 197.68%.",
+    "3. When tested under canonical 20-sleeve overlapping accounting or arithmetic annualization, net annual returns normalize to ~34%-38%.",
+    "4. Holding Buffer policy study was an exploratory portfolio policy diagnostic, not a production model result."
+  ],
+  "remediation_status": "EXPLICITLY_DISCLAIMED_AND_STANDARDIZED"
+}

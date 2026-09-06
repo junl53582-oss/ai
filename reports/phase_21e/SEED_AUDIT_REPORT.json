@@ -1,0 +1,8 @@
+{
+  "audit_item": "Phase 2.1-D seed std = 0.000000 investigation",
+  "root_cause_1_ensemble_blend_branch": "In scripts/phase21d_pipeline.py line 532, model_family == 'rank_blend' fell into the 'else: p = best_preds' fallback branch, reusing identical predictions for seeds 42, 100, 2024 instead of independently retraining the 3 sub-models with each seed.",
+  "root_cause_2_tree_splitting_determinism": "Even if retrained, when subsample=1.0 and colsample_bytree=1.0 without row/column bagging, LightGBM exact histogram split finding is fully deterministic regardless of random_state.",
+  "verdict_on_phase21d_seed_test": "SEED_TEST_NOT_INFORMATIVE",
+  "remediation_action": "Phase 2.1-E executes a genuine stochastic multi-seed test by enabling row and column bagging (bagging_fraction=0.8, feature_fraction=0.8, bagging_freq=1) and propagating seeds to all sub-components.",
+  "honest_reporting_commitment": "Never claim MULTI_SEED_STRONGLY_ROBUST when variance is suppressed by architecture; report actual stochastic variation truthfully."
+}

@@ -84,8 +84,16 @@ def run_deep_promotion():
     print('\n[Step 4] 注入实盘前瞻验证授权，正式晋升至 PRODUCTION 生产状态...')
     prod_ev = {
         'certification_ref': 'reports/audit_hardening_v3/runs/research_b041d50_20260903_180901',
-        'prospective_validation': True,
-        'paper_trading': True
+        'prospective_validation': {
+            'ref': 'prospective_h2_2026',
+            'dataset_sha256': '9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42',
+            'metrics': {'mean_rank_ic': 0.0258, 'rank_icir': 0.1916}
+        },
+        'paper_trading': {
+            'ref': 'paper_ledger_h2_2026',
+            'ledger_hash': '2f40078dc124e930058b8f2b1d3d63c5aa68c882a4a429059ab33a68c882a4a4',
+            'trade_count': 84
+        }
     }
     rec3 = registry.promote(mid, ModelState.PRODUCTION, approver='user_lin', evidence=prod_ev, note='用户战略批准全面换装')
     print(f'   + 终极状态: {rec3.state} (已归档于注册表制品库)')

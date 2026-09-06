@@ -1,0 +1,9 @@
+{
+  "quarantine_date": "2026-09-06",
+  "reason": "Hash-washed legacy metrics without raw trade ledgers or physical recomputation",
+  "status": "LEGACY_UNVERIFIED",
+  "artifacts": [
+    "performance_all_generations.json",
+    "performance_all_generations.manifest.json"
+  ]
+}

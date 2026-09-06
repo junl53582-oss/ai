@@ -1,0 +1,637 @@
+[
+  {
+    "feature": "ALPHA_REL_STRENGTH_60D",
+    "coefficient": -0.14986,
+    "abs_coefficient": 0.14986
+  },
+  {
+    "feature": "ALPHA_MOM_20D",
+    "coefficient": -0.086416,
+    "abs_coefficient": 0.086416
+  },
+  {
+    "feature": "ALPHA_MOM_60D",
+    "coefficient": 0.046822,
+    "abs_coefficient": 0.046822
+  },
+  {
+    "feature": "ALPHA_TREND_SLOPE_60D",
+    "coefficient": 0.046822,
+    "abs_coefficient": 0.046822
+  },
+  {
+    "feature": "ALPHA_MOM_PERSISTENCE_60D",
+    "coefficient": 0.044855,
+    "abs_coefficient": 0.044855
+  },
+  {
+    "feature": "ALPHA_RESIDUAL_MOM_SIZE_NEUT",
+    "coefficient": 0.037537,
+    "abs_coefficient": 0.037537
+  },
+  {
+    "feature": "ALPHA_VOL_COMPRESSION_20_60",
+    "coefficient": 0.032295,
+    "abs_coefficient": 0.032295
+  },
+  {
+    "feature": "ALPHA_REL_CONSISTENCY_60D",
+    "coefficient": -0.019967,
+    "abs_coefficient": 0.019967
+  },
+  {
+    "feature": "ALPHA_ADV_GROWTH_20_60",
+    "coefficient": -0.01178,
+    "abs_coefficient": 0.01178
+  },
+  {
+    "feature": "ALPHA_QUALITY_MOM_COMPOSITE",
+    "coefficient": -0.010288,
+    "abs_coefficient": 0.010288
+  },
+  {
+    "feature": "ALPHA_TURNOVER_STABILITY_60D",
+    "coefficient": -0.010018,
+    "abs_coefficient": 0.010018
+  },
+  {
+    "feature": "ROC120",
+    "coefficient": -0.010015,
+    "abs_coefficient": 0.010015
+  },
+  {
+    "feature": "MA_RATIO_250",
+    "coefficient": -0.008946,
+    "abs_coefficient": 0.008946
+  },
+  {
+    "feature": "ALPHA_TREND_R2_60D",
+    "coefficient": 0.008757,
+    "abs_coefficient": 0.008757
+  },
+  {
+    "feature": "ROC60",
+    "coefficient": -0.007896,
+    "abs_coefficient": 0.007896
+  },
+  {
+    "feature": "STD120",
+    "coefficient": 0.007864,
+    "abs_coefficient": 0.007864
+  },
+  {
+    "feature": "ROC_STD_60",
+    "coefficient": 0.007245,
+    "abs_coefficient": 0.007245
+  },
+  {
+    "feature": "MOM_ACC_20_60",
+    "coefficient": -0.006887,
+    "abs_coefficient": 0.006887
+  },
+  {
+    "feature": "ROC_STD_120",
+    "coefficient": 0.006435,
+    "abs_coefficient": 0.006435
+  },
+  {
+    "feature": "ROC_STD_20",
+    "coefficient": 0.006343,
+    "abs_coefficient": 0.006343
+  },
+  {
+    "feature": "ENTITY_RATIO",
+    "coefficient": -0.005905,
+    "abs_coefficient": 0.005905
+  },
+  {
+    "feature": "MIN_RATIO_60",
+    "coefficient": -0.005892,
+    "abs_coefficient": 0.005892
+  },
+  {
+    "feature": "UPPER_SHADOW_RATIO",
+    "coefficient": -0.005811,
+    "abs_coefficient": 0.005811
+  },
+  {
+    "feature": "ATR_RATIO_60",
+    "coefficient": -0.005361,
+    "abs_coefficient": 0.005361
+  },
+  {
+    "feature": "STD250",
+    "coefficient": -0.004757,
+    "abs_coefficient": 0.004757
+  },
+  {
+    "feature": "MAX_RATIO_250",
+    "coefficient": 0.004596,
+    "abs_coefficient": 0.004596
+  },
+  {
+    "feature": "ALPHA_MOM_CONSISTENCY_60D",
+    "coefficient": -0.004492,
+    "abs_coefficient": 0.004492
+  },
+  {
+    "feature": "WVMA_10",
+    "coefficient": -0.00406,
+    "abs_coefficient": 0.00406
+  },
+  {
+    "feature": "TURNOVER_SURGE_20",
+    "coefficient": 0.003843,
+    "abs_coefficient": 0.003843
+  },
+  {
+    "feature": "STD20",
+    "coefficient": -0.003744,
+    "abs_coefficient": 0.003744
+  },
+  {
+    "feature": "MA_RATIO_20",
+    "coefficient": 0.003726,
+    "abs_coefficient": 0.003726
+  },
+  {
+    "feature": "ALPHA_REL_STRENGTH_20D",
+    "coefficient": 0.003456,
+    "abs_coefficient": 0.003456
+  },
+  {
+    "feature": "MIN_RATIO_20",
+    "coefficient": 0.003305,
+    "abs_coefficient": 0.003305
+  },
+  {
+    "feature": "LOWER_SHADOW_RATIO",
+    "coefficient": -0.003139,
+    "abs_coefficient": 0.003139
+  },
+  {
+    "feature": "STD60",
+    "coefficient": 0.003116,
+    "abs_coefficient": 0.003116
+  },
+  {
+    "feature": "ATR_RATIO_20",
+    "coefficient": 0.003036,
+    "abs_coefficient": 0.003036
+  },
+  {
+    "feature": "MA_RATIO_60",
+    "coefficient": -0.002903,
+    "abs_coefficient": 0.002903
+  },
+  {
+    "feature": "MAX_RATIO_20",
+    "coefficient": -0.002617,
+    "abs_coefficient": 0.002617
+  },
+  {
+    "feature": "FLOW_ACCUMULATION_20D",
+    "coefficient": -0.002528,
+    "abs_coefficient": 0.002528
+  },
+  {
+    "feature": "IS_LIMIT_DOWN_LAG1",
+    "coefficient": -0.002496,
+    "abs_coefficient": 0.002496
+  },
+  {
+    "feature": "TURNOVER_SURGE_5",
+    "coefficient": -0.002487,
+    "abs_coefficient": 0.002487
+  },
+  {
+    "feature": "ROC_STD_250",
+    "coefficient": -0.002401,
+    "abs_coefficient": 0.002401
+  },
+  {
+    "feature": "STD10",
+    "coefficient": 0.002362,
+    "abs_coefficient": 0.002362
+  },
+  {
+    "feature": "VOLATILITY_SQUEEZE_20",
+    "coefficient": -0.002133,
+    "abs_coefficient": 0.002133
+  },
+  {
+    "feature": "MA_RATIO_10",
+    "coefficient": 0.001996,
+    "abs_coefficient": 0.001996
+  },
+  {
+    "feature": "STD30",
+    "coefficient": 0.001992,
+    "abs_coefficient": 0.001992
+  },
+  {
+    "feature": "AMIHUD_ILLIQUIDITY_20",
+    "coefficient": 0.001956,
+    "abs_coefficient": 0.001956
+  },
+  {
+    "feature": "ROC250",
+    "coefficient": -0.001951,
+    "abs_coefficient": 0.001951
+  },
+  {
+    "feature": "ROC20",
+    "coefficient": -0.001876,
+    "abs_coefficient": 0.001876
+  },
+  {
+    "feature": "MAX_RATIO_60",
+    "coefficient": -0.001831,
+    "abs_coefficient": 0.001831
+  },
+  {
+    "feature": "INDUSTRY_LEAD_LAG_MOM_5D",
+    "coefficient": -0.001766,
+    "abs_coefficient": 0.001766
+  },
+  {
+    "feature": "INTRADAY_CLOSE_LOC",
+    "coefficient": -0.001754,
+    "abs_coefficient": 0.001754
+  },
+  {
+    "feature": "BOLL_PCT_B",
+    "coefficient": 0.001724,
+    "abs_coefficient": 0.001724
+  },
+  {
+    "feature": "VMA_RATIO_5",
+    "coefficient": -0.001717,
+    "abs_coefficient": 0.001717
+  },
+  {
+    "feature": "WVMA_20",
+    "coefficient": -0.001697,
+    "abs_coefficient": 0.001697
+  },
+  {
+    "feature": "KYLE_LAMBDA_PROXY",
+    "coefficient": -0.001697,
+    "abs_coefficient": 0.001697
+  },
+  {
+    "feature": "MIN_RATIO_10",
+    "coefficient": -0.00167,
+    "abs_coefficient": 0.00167
+  },
+  {
+    "feature": "ROC5",
+    "coefficient": 0.001669,
+    "abs_coefficient": 0.001669
+  },
+  {
+    "feature": "MAX_RATIO_30",
+    "coefficient": -0.001655,
+    "abs_coefficient": 0.001655
+  },
+  {
+    "feature": "KMID2",
+    "coefficient": 0.001592,
+    "abs_coefficient": 0.001592
+  },
+  {
+    "feature": "MAX_RATIO_120",
+    "coefficient": -0.001578,
+    "abs_coefficient": 0.001578
+  },
+  {
+    "feature": "MA_BULL_ALIGNMENT",
+    "coefficient": -0.001498,
+    "abs_coefficient": 0.001498
+  },
+  {
+    "feature": "STD5",
+    "coefficient": 0.001494,
+    "abs_coefficient": 0.001494
+  },
+  {
+    "feature": "VMA_RATIO_60",
+    "coefficient": -0.001459,
+    "abs_coefficient": 0.001459
+  },
+  {
+    "feature": "MIN_RATIO_120",
+    "coefficient": -0.001449,
+    "abs_coefficient": 0.001449
+  },
+  {
+    "feature": "VMA_RATIO_10",
+    "coefficient": 0.001318,
+    "abs_coefficient": 0.001318
+  },
+  {
+    "feature": "KLOW",
+    "coefficient": -0.001296,
+    "abs_coefficient": 0.001296
+  },
+  {
+    "feature": "VMA_RATIO_20",
+    "coefficient": 0.001194,
+    "abs_coefficient": 0.001194
+  },
+  {
+    "feature": "WVMA_5",
+    "coefficient": -0.001192,
+    "abs_coefficient": 0.001192
+  },
+  {
+    "feature": "ATR_RATIO_5",
+    "coefficient": 0.001105,
+    "abs_coefficient": 0.001105
+  },
+  {
+    "feature": "MOM_ACC_60_120",
+    "coefficient": -0.000982,
+    "abs_coefficient": 0.000982
+  },
+  {
+    "feature": "KAUFMAN_EFFICIENCY_20",
+    "coefficient": 0.000868,
+    "abs_coefficient": 0.000868
+  },
+  {
+    "feature": "MA_RATIO_30",
+    "coefficient": -0.000852,
+    "abs_coefficient": 0.000852
+  },
+  {
+    "feature": "KMID",
+    "coefficient": -0.000794,
+    "abs_coefficient": 0.000794
+  },
+  {
+    "feature": "DOWNSIDE_VOL_RATIO_20",
+    "coefficient": -0.000789,
+    "abs_coefficient": 0.000789
+  },
+  {
+    "feature": "KUP",
+    "coefficient": 0.000769,
+    "abs_coefficient": 0.000769
+  },
+  {
+    "feature": "MIN_RATIO_250",
+    "coefficient": 0.000763,
+    "abs_coefficient": 0.000763
+  },
+  {
+    "feature": "MIN_RATIO_5",
+    "coefficient": 0.000726,
+    "abs_coefficient": 0.000726
+  },
+  {
+    "feature": "GP_ALPHA_VOL_PRESSURE_10",
+    "coefficient": -0.000691,
+    "abs_coefficient": 0.000691
+  },
+  {
+    "feature": "VSTD_60",
+    "coefficient": -0.000682,
+    "abs_coefficient": 0.000682
+  },
+  {
+    "feature": "ALPHA_FUND_ROE_STABILITY",
+    "coefficient": -0.000678,
+    "abs_coefficient": 0.000678
+  },
+  {
+    "feature": "GP_ALPHA_PRICE_RANGE_ACCEL_20",
+    "coefficient": -0.000668,
+    "abs_coefficient": 0.000668
+  },
+  {
+    "feature": "CORR_PV_10",
+    "coefficient": 0.000654,
+    "abs_coefficient": 0.000654
+  },
+  {
+    "feature": "MA_RATIO_5",
+    "coefficient": 0.000629,
+    "abs_coefficient": 0.000629
+  },
+  {
+    "feature": "FLOW_NET_BUY_RATIO_5D",
+    "coefficient": -0.000587,
+    "abs_coefficient": 0.000587
+  },
+  {
+    "feature": "LIMIT_UP_SPACE",
+    "coefficient": 0.000539,
+    "abs_coefficient": 0.000539
+  },
+  {
+    "feature": "MAX_RATIO_5",
+    "coefficient": -0.000519,
+    "abs_coefficient": 0.000519
+  },
+  {
+    "feature": "YANG_ZHANG_VOL_20",
+    "coefficient": -0.00051,
+    "abs_coefficient": 0.00051
+  },
+  {
+    "feature": "KSFT",
+    "coefficient": 0.000453,
+    "abs_coefficient": 0.000453
+  },
+  {
+    "feature": "adj_high",
+    "coefficient": -0.000436,
+    "abs_coefficient": 0.000436
+  },
+  {
+    "feature": "TURNOVER_STD_20",
+    "coefficient": 0.000422,
+    "abs_coefficient": 0.000422
+  },
+  {
+    "feature": "GP_ALPHA_REVERSAL_STRENGTH_5",
+    "coefficient": 0.000393,
+    "abs_coefficient": 0.000393
+  },
+  {
+    "feature": "VSTD_20",
+    "coefficient": -0.000348,
+    "abs_coefficient": 0.000348
+  },
+  {
+    "feature": "ALPHA_FUND_ROE_PIT",
+    "coefficient": 0.000329,
+    "abs_coefficient": 0.000329
+  },
+  {
+    "feature": "MACD_HIST_SLOPE_5",
+    "coefficient": 0.000313,
+    "abs_coefficient": 0.000313
+  },
+  {
+    "feature": "SHADOW_ASYMMETRY_RATIO",
+    "coefficient": 0.000306,
+    "abs_coefficient": 0.000306
+  },
+  {
+    "feature": "ROC10",
+    "coefficient": 0.000285,
+    "abs_coefficient": 0.000285
+  },
+  {
+    "feature": "RSI_14",
+    "coefficient": -0.000263,
+    "abs_coefficient": 0.000263
+  },
+  {
+    "feature": "ROC30",
+    "coefficient": 0.000243,
+    "abs_coefficient": 0.000243
+  },
+  {
+    "feature": "EFFICIENCY_RATIO_10",
+    "coefficient": 0.000222,
+    "abs_coefficient": 0.000222
+  },
+  {
+    "feature": "VP_DIVERGENCE_10D",
+    "coefficient": -0.000217,
+    "abs_coefficient": 0.000217
+  },
+  {
+    "feature": "ALPHA_FUND_GROSS_MARGIN_PIT",
+    "coefficient": 0.000184,
+    "abs_coefficient": 0.000184
+  },
+  {
+    "feature": "KLEN",
+    "coefficient": 0.000182,
+    "abs_coefficient": 0.000182
+  },
+  {
+    "feature": "adj_low",
+    "coefficient": 0.000178,
+    "abs_coefficient": 0.000178
+  },
+  {
+    "feature": "adj_open",
+    "coefficient": 0.000171,
+    "abs_coefficient": 0.000171
+  },
+  {
+    "feature": "VSTD_5",
+    "coefficient": 0.000169,
+    "abs_coefficient": 0.000169
+  },
+  {
+    "feature": "MA_RATIO_120",
+    "coefficient": 0.000153,
+    "abs_coefficient": 0.000153
+  },
+  {
+    "feature": "limit_up_price",
+    "coefficient": -0.000129,
+    "abs_coefficient": 0.000129
+  },
+  {
+    "feature": "ALPHA_FUND_REV_YOY_PIT",
+    "coefficient": -0.000123,
+    "abs_coefficient": 0.000123
+  },
+  {
+    "feature": "limit_down_price",
+    "coefficient": 0.000118,
+    "abs_coefficient": 0.000118
+  },
+  {
+    "feature": "MAX_RATIO_10",
+    "coefficient": 0.000115,
+    "abs_coefficient": 0.000115
+  },
+  {
+    "feature": "adj_close",
+    "coefficient": 0.000103,
+    "abs_coefficient": 0.000103
+  },
+  {
+    "feature": "MIN_RATIO_30",
+    "coefficient": 9.8e-05,
+    "abs_coefficient": 9.8e-05
+  },
+  {
+    "feature": "IS_LIMIT_UP_LAG1",
+    "coefficient": -9.6e-05,
+    "abs_coefficient": 9.6e-05
+  },
+  {
+    "feature": "CORR_PV_20",
+    "coefficient": 6.5e-05,
+    "abs_coefficient": 6.5e-05
+  },
+  {
+    "feature": "ALPHA_UPSIDE_DOWNSIDE_VOL_RATIO_60D",
+    "coefficient": -5.4e-05,
+    "abs_coefficient": 5.4e-05
+  },
+  {
+    "feature": "CORR_PV_5",
+    "coefficient": 5.1e-05,
+    "abs_coefficient": 5.1e-05
+  },
+  {
+    "feature": "VSTD_10",
+    "coefficient": -4e-05,
+    "abs_coefficient": 4e-05
+  },
+  {
+    "feature": "ATR_RATIO_14",
+    "coefficient": -2.6e-05,
+    "abs_coefficient": 2.6e-05
+  },
+  {
+    "feature": "ALPHA_FUND_REV_SURPRISE",
+    "coefficient": 2.1e-05,
+    "abs_coefficient": 2.1e-05
+  },
+  {
+    "feature": "AMOUNT_RATIO_5_20",
+    "coefficient": 1.3e-05,
+    "abs_coefficient": 1.3e-05
+  },
+  {
+    "feature": "benchmark_open",
+    "coefficient": 1.1e-05,
+    "abs_coefficient": 1.1e-05
+  },
+  {
+    "feature": "benchmark_close",
+    "coefficient": -1e-05,
+    "abs_coefficient": 1e-05
+  },
+  {
+    "feature": "ALPHA_FUND_EARNINGS_SURPRISE",
+    "coefficient": -1e-06,
+    "abs_coefficient": 1e-06
+  },
+  {
+    "feature": "AMIHUD_20",
+    "coefficient": 0.0,
+    "abs_coefficient": 0.0
+  },
+  {
+    "feature": "AMIHUD_20_LN",
+    "coefficient": 0.0,
+    "abs_coefficient": 0.0
+  },
+  {
+    "feature": "days_since_listing",
+    "coefficient": -0.0,
+    "abs_coefficient": 0.0
+  }
+]

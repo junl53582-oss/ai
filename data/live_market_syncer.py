@@ -69,9 +69,11 @@ def sync_latest_quotes_from_live():
                         amount = float(parts[37]) * 10000.0 if len(parts) > 37 and parts[37] else close_p * vol_shares
                         turnover = float(parts[38]) / 100.0 if len(parts) > 38 and parts[38] else 0.0
                         pct = (close_p - pre_close) / pre_close if pre_close > 0 else 0.0
+                        t_time = parts[30] if len(parts) > 30 else ""
+                        item_date = f"{t_time[:4]}-{t_time[4:6]}-{t_time[6:8]}" if len(t_time) >= 8 else "2026-09-04"
 
                         records.append({
-                            "date": trade_date,
+                            "date": item_date,
                             "symbol": sym,
                             "name": name,
                             "open": open_p,
@@ -103,28 +105,24 @@ def sync_latest_quotes_from_live():
         print(f"   - 当日涨跌幅: {r['pct_change']*100:+.2f}%")
         print(f"   - 成交量(手): {int(r['volume']/100):,} 手")
 
-    # 将 2026-09-03 最新行情合并追加进 factor_matrix_300.parquet
-    df_old['date'] = pd.to_datetime(df_old['date'])
-    df_latest['date'] = pd.to_datetime(df_latest['date'])
-    
-    # 补齐特征列 (继承前值)
-    for col in df_old.columns:
-        if col not in df_latest.columns:
-            df_latest[col] = np.nan
+    # 严禁直接向 factor_matrix 全局追加并跨股票 ffill 继承旧因子！
+    # 1. 行业必须严格由该股票自身真实 SecurityMaster/PIT 映射提供，绝对禁止继承其他股票行业
+    industry_map = df_old.dropna(subset=['industry']).drop_duplicates(subset=['symbol'], keep='last').set_index('symbol')['industry'].to_dict()
+    df_latest['industry'] = df_latest['symbol'].map(industry_map).fillna('UNKNOWN')
 
-    df_merged = pd.concat([df_old, df_latest], ignore_index=True)
-    df_merged = df_merged.drop_duplicates(subset=['date', 'symbol'], keep='last')
-    df_merged = df_merged.sort_values(['date', 'symbol']).reset_index(drop=True)
-    df_merged = df_merged.ffill()
-    
-    # 区分数值类型和字符类型填充
-    num_cols = df_merged.select_dtypes(include=[np.number]).columns
-    str_cols = df_merged.select_dtypes(include=['object']).columns
-    df_merged[num_cols] = df_merged[num_cols].fillna(0.0)
-    df_merged[str_cols] = df_merged[str_cols].fillna('')
+    # 2. 检查当日覆盖率门禁
+    coverage = len(df_latest) / len(symbols) if symbols else 0.0
+    if coverage < 0.90:
+        print(f"[-] [门禁拦截] 当日行情覆盖率仅为 {coverage*100:.1f}% (< 90%)，拒绝直接合并进正式生产因子矩阵！")
+        staging_path = settings.DATA_DIR / "research" / "staging_incremental_market.parquet"
+        df_latest.to_parquet(staging_path, index=False)
+        print(f"[+] 原始切片已存入隔离暂存区: {staging_path}")
+        return df_latest
 
-    df_merged.to_parquet(matrix_path, index=False)
-    print(f"\n[+] 全量特征矩阵已成功升级到最新日期: {df_merged['date'].max().strftime('%Y-%m-%d')}")
+    # 3. 若覆盖率满足，将规范化行情保存至 market_daily 层，禁止直接填充伪造因子
+    staging_path = settings.DATA_DIR / "research" / "staging_incremental_market.parquet"
+    df_latest.to_parquet(staging_path, index=False)
+    print(f"[+] 最新标准行情已存入暂存区: {staging_path} (后续需经由统一 FactorProcessor 重新计算真实因子)")
     return df_latest
 
 if __name__ == '__main__':

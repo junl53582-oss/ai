@@ -38,15 +38,9 @@ def run_latest_prediction():
     df['date'] = pd.to_datetime(df['date'])
 
     # 动态注入 7 大高胜率异源 Alpha
-    logger.info('正在注入 7 大高胜率异源 Alpha 因子群...')
-    from research_v2.alphas.novel_alphas import NovelAlphaFactory
-    df['ALPHA_RESIDUAL_MOMENTUM_20'] = NovelAlphaFactory.calc_residual_momentum(df, window=20)
-    df['ALPHA_TURNOVER_SURPRISE_5_20'] = NovelAlphaFactory.calc_turnover_surprise(df, short_w=5, long_w=20)
-    df['ALPHA_QUALITY_X_MOMENTUM'] = NovelAlphaFactory.calc_quality_x_momentum(df)
-    df['ALPHA_LIQUIDITY_X_VOL'] = NovelAlphaFactory.calc_liquidity_x_volatility(df)
-    df['ALPHA_SHORT_REVERSAL_5'] = NovelAlphaFactory.calc_short_term_reversal(df, window=5)
-    df['ALPHA_IDIO_VOL_PENALTY'] = NovelAlphaFactory.calc_idio_vol_penalty(df, window=20)
-    df['ALPHA_MONEY_FLOW_DIV_10'] = NovelAlphaFactory.calc_money_flow_divergence(df, window=10)
+    logger.info('正在注入 7 大高胜率异源 Alpha 因子群 (通过统一 FactorProcessor)...')
+    from factors.processor import FactorProcessor
+    df = FactorProcessor.compute_advanced_alpha_features(df)
 
     latest_date = df['date'].max()
     dt_str = latest_date.strftime("%Y-%m-%d")
@@ -61,47 +55,17 @@ def run_latest_prediction():
         if 'name' in sm_df.columns:
             name_map = dict(zip(sm_df['symbol'], sm_df['name']))
 
-    # 加载生产注册模型
-    prod_model_path = root_dir / 'saved_models' / 'latest_lightgbm.pkl'
-    latest_model = None
-    if prod_model_path.exists():
-        try:
-            with open(prod_model_path, 'rb') as f:
-                latest_model = pickle.load(f)
-            logger.info('成功加载最新生产模型: latest_lightgbm.pkl')
-        except Exception as e:
-            logger.warning(f'加载生产模型失败: {e}')
+    # 严格使用已注册生产模型执行批量推理 (单一生产链 Fail-Closed)
+    from models.inference import BatchInference, InferenceError
+    logger.info('正在加载 ModelRegistry 已上线的生产模型...')
+    try:
+        engine = BatchInference()
+        logger.info(f"成功载入生产模型: {engine.model_id} (Schema Hash: {engine.expected_schema_hash[:12]}...)")
+        latest_slice = engine.predict(df, date=latest_date)
+    except Exception as e:
+        logger.error(f"生产模型推理失败 (Fail-Closed: 拒绝无生产模型或特征缺失时退化重训): {e}")
+        raise
 
-    # 获取特征列 (若生产模型已明确指定特征列则严格对齐)
-    if latest_model is not None and hasattr(latest_model, 'feature_names') and latest_model.feature_names:
-        feature_cols = [f for f in latest_model.feature_names if f in df.columns]
-    else:
-        feature_cols = [c for c in df.columns if c not in [
-            'date', 'symbol', 'in_universe', 'label_excess_20d', 'label_up_down_20d',
-            'is_suspended', 'is_limit_up_locked', 'is_limit_down_locked', 'benchmark_open',
-            'benchmark_close', 'open', 'high', 'low', 'close', 'volume', 'amount', 'pct_change',
-            'is_st', 'limit_up_price', 'limit_down_price', 'industry', 'list_date', 'days_since_listing'
-        ] and np.issubdtype(df[c].dtype, np.number)]
-
-    latest_slice = df[df['date'] == latest_date].copy()
-    X_latest = latest_slice[feature_cols].fillna(0.0)
-
-    if latest_model is not None and hasattr(latest_model, 'predict'):
-        preds = latest_model.predict(X_latest)
-        latest_slice['pred_score'] = preds
-    else:
-        # 使用时序走步训练器快速产出
-        from models.walk_forward import WalkForwardTrainer
-        from models.labeler import TargetLabeler
-        logger.info('正在执行 Walk-Forward 最新折模型预测...')
-        labeler = TargetLabeler(horizon=settings.LABEL_HORIZON)
-        df = labeler.compute_excess_return_label(df)
-        trainer = WalkForwardTrainer(random_state=42)
-        oos_df, latest_model = trainer.run_walk_forward(df, feature_cols=feature_cols[:25])
-        latest_slice = oos_df[oos_df['date'] == latest_date].copy()
-
-    # 计算截面百分比排名
-    latest_slice['pred_rank'] = latest_slice['pred_score'].rank(pct=True, ascending=False)
     latest_slice['name'] = latest_slice['symbol'].map(lambda s: name_map.get(s, ''))
 
     # 构建组合优化器
@@ -118,18 +82,18 @@ def run_latest_prediction():
     print(f"[PREDICTION] A股最新多因子预测结果与选股决策清单 (信号日期: {dt_str})")
     print('=' * 75)
     print("   选股股票池: 沪深300核心成分股 | 组合优化: 倒波动率加权 (Inverse Volatility)")
-    print(f"   预测目标: 未来 {settings.LABEL_HORIZON} 个交易日预期超额收益率\n")
+    print(f"   生产模型: {engine.model_id} | 预测任务: 未来 {settings.LABEL_HORIZON} 个交易日超额概率\n")
 
     rows = []
-    print(f"{'排名':<4} | {'代码':<9} | {'股票名称':<8} | {'所属行业':<10} | {'收盘价':<8} | {'预测超额':<10} | {'建议配置权重':<10}")
+    print(f"{'排名':<4} | {'代码':<9} | {'股票名称':<8} | {'所属行业':<10} | {'收盘价':<8} | {'预测概率/得分':<14} | {'建议配置权重':<10}")
     print('-' * 75)
     for idx, r in target_portfolio.reset_index().iterrows():
         s_name = r['name'] if pd.notna(r['name']) and r['name'] else 'N/A'
         ind = r.get('industry', '未知')
         close_p = f"{r['close']:.2f}元"
-        pred_pct = f"{r['pred_score']*100:+.2f}%"
+        pred_pct = f"{r['pred_score']:.4f}"
         w_pct = f"{r['target_weight']*100:.2f}%"
-        print(f"{idx+1:<4} | {r['symbol']:<9} | {s_name:<8} | {ind:<10} | {close_p:<8} | {pred_pct:<10} | {w_pct:<10}")
+        print(f"{idx+1:<4} | {r['symbol']:<9} | {s_name:<8} | {ind:<10} | {close_p:<8} | {pred_pct:<14} | {w_pct:<10}")
         rows.append({
             'rank': idx + 1,
             'symbol': r['symbol'],
@@ -137,12 +101,17 @@ def run_latest_prediction():
             'industry': ind,
             'close': r['close'],
             'pred_score': r['pred_score'],
-            'target_weight': r['target_weight']
+            'target_weight': r['target_weight'],
+            'model_id': engine.model_id,
+            'model_state': engine.record.state,
+            'data_as_of': dt_str,
+            'feature_schema_hash': engine.expected_schema_hash,
+            'is_synthetic_demo': False
         })
 
     # 特征重要性
-    if hasattr(latest_model, 'get_feature_importance'):
-        fi = latest_model.get_feature_importance(top_n=8)
+    if hasattr(engine.model, 'get_feature_importance'):
+        fi = engine.model.get_feature_importance(top_n=8)
         print('\n' + '-' * 75)
         print('[ALPHA_CONTRIBUTION] 驱动本次预测的核心有效 Alpha 因子 Top 8:')
         for _, f_row in fi.iterrows():

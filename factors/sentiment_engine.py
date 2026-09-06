@@ -1,4 +1,4 @@
-﻿"""
+"""
 A股多模态真实市场情绪度量与个股催化剂引擎 (factors/sentiment_engine.py)
 完全杜绝 Mock 虚假数据，100% 基于真实截面 300 支标的逐日计算
 包含 30 支核心成长高弹性龙头的专属深度产业催化库
@@ -10,6 +10,7 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 from typing import Dict, List, Any
+from config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -276,16 +277,67 @@ class MarketSentimentDetector:
 
 
 class NewsCatalystScorer:
-    """个股真实催化剂提取器"""
+    """个股真实催化剂与海外科技映射提取器"""
     
-    @staticmethod
-    def get_stock_catalyst(symbol: str) -> Dict[str, Any]:
+    # 属于海外科技映射（如英伟达、特斯拉）核心产业链的 A 股标的清单
+    TECH_RESONANCE_SYMBOLS = {
+        '688256.SH', '688041.SH', '300502.SZ', '300308.SZ', '300394.SZ',
+        '601138.SH', '002463.SZ', '688012.SH', '603986.SH', '002594.SZ',
+        '300750.SZ', '600584.SH', '688981.SH', '002241.SZ', '601689.SH'
+    }
+    
+    @classmethod
+    def get_stock_catalyst(cls, symbol: str) -> Dict[str, Any]:
+        base_cat = None
         if symbol in STOCK_AUTHENTIC_CATALYSTS:
-            return STOCK_AUTHENTIC_CATALYSTS[symbol]
+            base_cat = dict(STOCK_AUTHENTIC_CATALYSTS[symbol])
         else:
-            return {
+            base_cat = {
                 'headline': '行业景气度稳健修复，核心业务基本面边际向好',
                 'event_type': '稳健发展',
                 'sentiment_score': 85,
                 'sentiment_stage': '温和多头'
             }
+            
+        # 动态联动海外科技映射 (NVDA / TSLA / AAPL)
+        try:
+            snap_file = settings.ARTIFACTS_DIR / 'global_macro_sentiment_snapshot.json'
+            if snap_file.exists():
+                with open(snap_file, 'r', encoding='utf-8') as f:
+                    snap = json.load(f)
+                tech_res = snap.get('overseas_tech_resonance', {})
+                nvda_chg = tech_res.get('nvda_change_pct', 0.0)
+                
+                if symbol in cls.TECH_RESONANCE_SYMBOLS:
+                    if nvda_chg > 0:
+                        boost = min(5, int(nvda_chg * 2.5))
+                        base_cat['sentiment_score'] = min(98, base_cat['sentiment_score'] + boost)
+                        base_cat['overseas_driver'] = f"🚀 英伟达 (NVDA) 隔夜 {nvda_chg:+.2f}% 驱动全球 AI 算力供应链共振"
+                    elif nvda_chg < -2.0:
+                        penalty = min(6, int(abs(nvda_chg) * 1.5))
+                        base_cat['sentiment_score'] = max(70, base_cat['sentiment_score'] - penalty)
+                        base_cat['overseas_driver'] = f"⚠️ 海外科技巨头调整 (NVDA {nvda_chg:+.2f}%)，板块面临外部扰动"
+                    else:
+                        base_cat['overseas_driver'] = "🌐 海外巨头走势平稳，国内自主景气主导"
+        except Exception:
+            pass
+            
+        return base_cat
+
+    @staticmethod
+    def get_macro_sentiment_context() -> Dict[str, Any]:
+        """获取当前落盘的全球宏观与情绪上下文"""
+        snap_file = settings.ARTIFACTS_DIR / 'global_macro_sentiment_snapshot.json'
+        if snap_file.exists():
+            try:
+                with open(snap_file, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except Exception:
+                pass
+        return {
+            'macro_regime_index': 0.50,
+            'regime_state': 'Neutral (结构平衡分化)',
+            'suggested_total_position': 0.80,
+            'regime_summary': '全球宏观处于震荡平衡期，多空博弈势均力敌。'
+        }
+

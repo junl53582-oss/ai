@@ -110,6 +110,8 @@ class FactorRegistry:
             grp_copy = grp.copy()
             grp_copy.sort_values(by="date", inplace=True)
             for meta in target_factors:
+                if meta.name in grp_copy.columns and grp_copy[meta.name].notna().sum() > 0:
+                    continue
                 try:
                     grp_copy[meta.name] = meta.func(grp_copy)
                 except Exception as e:

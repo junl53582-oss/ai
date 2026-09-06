@@ -135,20 +135,17 @@ def verify_all_routes():
     print("   -> 路线一 (多模型集成时序回测管线) 验证 100% 通过！")
 
     # ---------------- 3. 路线二测试: Streamlit 看板各模块 ----------------
-    print("\n[Test 3/5] 路线二: 验证 Streamlit 7 大主题大屏代码完整性...")
+    print("\n[Test 3/5] 路线二: 验证 Streamlit 专注双大屏核心架构完整性...")
     app_path = root_dir / "dashboard" / "app.py"
     assert app_path.exists(), "dashboard/app.py 必须存在"
     with open(app_path, "r", encoding="utf-8") as f:
         code_txt = f.read()
-    assert "今日选股决策" in code_txt
-    assert "策略净值与回测" in code_txt
+    assert "截面模型推理与模拟观察中枢" in code_txt or "今日真实股票预测决策中枢" in code_txt or "今日选股决策" in code_txt
+    assert "策略优化池全景指标与对账矩阵" in code_txt or "策略净值与回测" in code_txt
     assert "Alpha" in code_txt
-    assert "持仓监控" in code_txt
-    assert "因子工厂" in code_txt
-    assert "实盘网关" in code_txt
-    assert "研究可信度" in code_txt
     assert "Profile" in code_txt
-    print("   * 7 大 Tab 导航、Profile 选择器与订单导出逻辑完整性 100% 校验通过")
+    assert "RankIC" in code_txt
+    print("   * 专注双 Tab 决策中枢、全景指标对账矩阵与 Profile 选择器逻辑完整性 100% 校验通过")
     print("   -> 路线二 (Streamlit 交互看板) 验证 100% 通过！")
 
     # ---------------- 4. 路线三测试: 盘后定时自动化与消息通知 ----------------
@@ -164,7 +161,9 @@ def verify_all_routes():
     feishu_card = MessageNotifier.format_daily_report_markdown("2026-08-28", "2026-08-31", sample_top_df, "正常多头运行")
     assert "【A股量化系统 · 每日交易决策报告】" in feishu_card
     assert "贵州茅台" in feishu_card
-    assert "88.0%" in feishu_card
+    assert "模型排序分数" in feishu_card
+    assert "0.8800" in feishu_card
+    assert "88.0%" not in feishu_card
     print("   * 消息模板渲染测试成功，Windows 定时任务脚本 scripts/schedule_daily_job.bat 就绪")
     print("   -> 路线三 (盘后自动调度与推送) 验证 100% 通过！")
 

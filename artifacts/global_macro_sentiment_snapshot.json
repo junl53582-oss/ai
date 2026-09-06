@@ -1,0 +1,69 @@
+{
+  "timestamp": "2026-09-06 23:47:39",
+  "audit_source": "OFFICIAL_REALTIME_GLOBAL_MACRO_FEED",
+  "is_authentic": true,
+  "macro_regime_index": 0.458,
+  "regime_state": "Neutral (结构平衡分化)",
+  "suggested_total_position": 0.8,
+  "regime_summary": "全球宏观处于震荡平衡期，多空博弈势均力敌，聚焦业绩与资金面共振的确定性龙头，保持波段纪律。",
+  "overseas_tech_resonance": {
+    "resonance_score": 0.3523,
+    "nvda_change_pct": 0.84,
+    "aapl_change_pct": -2.51,
+    "tsla_change_pct": -5.92,
+    "tech_avg_change_pct": -1.18
+  },
+  "usdcnh_forex": {
+    "symbol": "USDCNH",
+    "name": "离岸人民币汇率",
+    "rate": 6.7079,
+    "pre_close": 6.7166,
+    "pct_change": -0.14,
+    "date": "2026-09-05",
+    "status": "SUCCESS"
+  },
+  "us_china_bonds": {
+    "cn_10y": 1.6804,
+    "us_10y": 4.78,
+    "spread_us_cn": 3.0996,
+    "us_10y_2y_term_spread": 0.41,
+    "date": "2026-09-04"
+  },
+  "commodities": {
+    "GOLD": {
+      "name": "纽约黄金",
+      "price": 4482.05,
+      "pct_change": -1.27,
+      "date": "2026-09-05"
+    },
+    "OIL": {
+      "name": "纽约原油",
+      "price": 91.31,
+      "pct_change": 0.02,
+      "date": "2026-09-05"
+    }
+  },
+  "tech_giants": {
+    "NVDA": {
+      "name": "英伟达",
+      "price": 230.36,
+      "pre_close": 228.45,
+      "pct_change": 0.84,
+      "update_time": ""
+    },
+    "TSLA": {
+      "name": "特斯拉",
+      "price": 354.08,
+      "pre_close": 376.37,
+      "pct_change": -5.92,
+      "update_time": ""
+    },
+    "AAPL": {
+      "name": "苹果",
+      "price": 319.97,
+      "pre_close": 328.21,
+      "pct_change": -2.51,
+      "update_time": ""
+    }
+  }
+}

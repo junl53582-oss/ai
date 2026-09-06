@@ -216,10 +216,8 @@ def run_pipeline(
         s_name = f"({row['name']})" if "name" in row and pd.notna(row["name"]) else ""
         st_tag = "[ST]" if bool(row.get("current_is_st", False)) else ""
         ind_str = f"[{row.get('industry', 'UNKNOWN')}]"
-        if settings.is_classification:
-            score_str = f"{settings.LABEL_HORIZON}日上涨概率: {row['pred_score']*100:.1f}%"
-        else:
-            score_str = f"{settings.LABEL_HORIZON}日预期超额: {row['pred_score']*100:+.2f}%"
+        score_val = float(row['pred_score'])
+        score_str = f"模型排序分数: {score_val:.4f}"
         print(f"     [{idx+1}] {row['symbol']} {s_name} {st_tag} {ind_str:<8} | {score_str} | 目标权重: {row['target_weight']*100:.1f}% | 收盘价: {row['close']:.2f}元")
 
     # 5. A股实盘级走步回测 (T日信号 -> T+1日开盘撮合)

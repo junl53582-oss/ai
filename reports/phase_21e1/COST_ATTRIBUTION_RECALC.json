@@ -1,0 +1,67 @@
+{
+  "0_bps": {
+    "cost_rate_bps": 0,
+    "cost_rate_decimal": 0.0,
+    "annualized_turnover_turns": 3.9011,
+    "q5_gross_annual_compound": 0.253153,
+    "q5_net_annual_compound": 0.253153,
+    "q5_cost_drag_annual": 0.0,
+    "q5q1_gross_annual_compound": 0.119005,
+    "q5q1_net_annual_compound": 0.119005,
+    "q5q1_cost_drag_annual": 0.0,
+    "linear_approximation_net_spread": 0.124193,
+    "spread_viable_compound": true
+  },
+  "10_bps": {
+    "cost_rate_bps": 10,
+    "cost_rate_decimal": 0.001,
+    "annualized_turnover_turns": 3.9011,
+    "q5_gross_annual_compound": 0.253153,
+    "q5_net_annual_compound": 0.247776,
+    "q5_cost_drag_annual": 0.004302,
+    "q5q1_gross_annual_compound": 0.119005,
+    "q5q1_net_annual_compound": 0.109303,
+    "q5q1_cost_drag_annual": 0.008709,
+    "linear_approximation_net_spread": 0.115484,
+    "spread_viable_compound": true
+  },
+  "20_bps": {
+    "cost_rate_bps": 20,
+    "cost_rate_decimal": 0.002,
+    "annualized_turnover_turns": 3.9011,
+    "q5_gross_annual_compound": 0.253153,
+    "q5_net_annual_compound": 0.242421,
+    "q5_cost_drag_annual": 0.008604,
+    "q5q1_gross_annual_compound": 0.119005,
+    "q5q1_net_annual_compound": 0.099683,
+    "q5q1_cost_drag_annual": 0.017417,
+    "linear_approximation_net_spread": 0.106776,
+    "spread_viable_compound": true
+  },
+  "30_bps": {
+    "cost_rate_bps": 30,
+    "cost_rate_decimal": 0.003,
+    "annualized_turnover_turns": 3.9011,
+    "q5_gross_annual_compound": 0.253153,
+    "q5_net_annual_compound": 0.237089,
+    "q5_cost_drag_annual": 0.012906,
+    "q5q1_gross_annual_compound": 0.119005,
+    "q5q1_net_annual_compound": 0.090145,
+    "q5q1_cost_drag_annual": 0.026126,
+    "linear_approximation_net_spread": 0.098067,
+    "spread_viable_compound": true
+  },
+  "50_bps": {
+    "cost_rate_bps": 50,
+    "cost_rate_decimal": 0.005,
+    "annualized_turnover_turns": 3.9011,
+    "q5_gross_annual_compound": 0.253153,
+    "q5_net_annual_compound": 0.226491,
+    "q5_cost_drag_annual": 0.02151,
+    "q5q1_gross_annual_compound": 0.119005,
+    "q5q1_net_annual_compound": 0.07131,
+    "q5q1_cost_drag_annual": 0.043543,
+    "linear_approximation_net_spread": 0.08065,
+    "spread_viable_compound": true
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "final_holdout_available": false,
+  "historical_oos_status": true,
+  "live_trading_ready": false,
+  "production_model_promotion": false,
+  "source_code_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
+  "created_at": "2026-09-05T02:41:27.336882"
+}

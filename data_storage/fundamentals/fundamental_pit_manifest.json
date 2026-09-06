@@ -1,0 +1,24 @@
+{
+  "dataset_name": "A_SHARE_FUNDAMENTAL_ANNOUNCEMENTS_PIT_TIMELINE",
+  "dataset_version": "1.0",
+  "provenance": {
+    "source_type": "OFFICIAL_EXCHANGE_DISCLOSURE",
+    "source_directory": "data_storage/fundamentals",
+    "source_file_pattern": "yjbb_*.parquet",
+    "source_file_count": 34,
+    "builder_script": "tools/build_fundamental_pit_timeline.py"
+  },
+  "total_raw_rows": 275860,
+  "official_announcement_rows": 116701,
+  "official_coverage_ratio": 0.423044,
+  "synthetic_delay_certified_count": 0,
+  "invalid_chronology_count": 0,
+  "symbol_count": 11710,
+  "report_date_min": "2018-03-31",
+  "report_date_max": "2026-06-30",
+  "announcement_date_min": "2018-04-16",
+  "announcement_date_max": "2026-08-28",
+  "created_at": "2026-09-04T18:11:03.674776+00:00",
+  "source_code_sha": "7183459e2ce3bf7151db79cce1b862be0924a38d",
+  "file_sha256": "8a7aa38aec382e590aa86487e3b0941a8e4b8ffad86a5ec2293b4ee7a0244569"
+}

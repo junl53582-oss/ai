@@ -1,4 +1,4 @@
-﻿import os
+import os
 import sys
 import json
 import time
@@ -82,20 +82,13 @@ if new_records:
     df_new['date'] = pd.to_datetime(df_new['date'])
     df_old['date'] = pd.to_datetime(df_old['date'])
     
-    # 对齐基础因子 (用历史滚动均值或填充)
-    for col in df_old.columns:
-        if col not in df_new.columns:
-            # 填补因子缺失
-            df_new[col] = np.nan
+    # 行业必须从该股票自身真实历史/SecurityMaster 映射关联，绝对禁止跨股票继承！
+    industry_map = df_old.dropna(subset=['industry']).drop_duplicates(subset=['symbol'], keep='last').set_index('symbol')['industry'].to_dict()
+    df_new['industry'] = df_new['symbol'].map(industry_map).fillna('UNKNOWN')
 
-    # 合并去重
-    df_combined = pd.concat([df_old, df_new], ignore_index=True)
-    df_combined = df_combined.drop_duplicates(subset=['date', 'symbol'], keep='last')
-    df_combined = df_combined.sort_values(['date', 'symbol']).reset_index(drop=True)
-    
-    # 填充缺失因子
-    df_combined = df_combined.ffill().fillna(0.0)
-    
-    df_combined.to_parquet(matrix_path, index=False)
-    print(f"\n[+] 全量行情矩阵已成功升级保存: {matrix_path}")
-    print(f"    最新覆盖范围: {df_combined['date'].min().strftime('%Y-%m-%d')} 至 {df_combined['date'].max().strftime('%Y-%m-%d')}")
+    # 规范化存储到原始行情 staging 层，禁止在缺失因子时对全矩阵无分组 ffill 冒充因子！
+    staging_path = settings.DATA_DIR / "research" / "staging_incremental_market.parquet"
+    df_new.to_parquet(staging_path, index=False)
+    print(f"\n[+] 最新抓取行情切片已存入隔离暂存区: {staging_path}")
+    print(f"    包含交易日: {df_new['date'].dt.strftime('%Y-%m-%d').unique().tolist()}, 记录数: {len(df_new)}")
+    print(f"    【规范化约束】: 禁止直接将行情追加进 factor_matrix 并无分组 ffill 伪造因子，全量因子计算必须经由统一 FactorProcessor 重新计算！")

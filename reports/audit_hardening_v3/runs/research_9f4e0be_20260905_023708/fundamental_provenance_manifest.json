@@ -1,0 +1,9 @@
+{
+  "source_code_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
+  "synthetic_delay_certified_count": 0,
+  "invalid_chronology_count": 0,
+  "official_announcement_rows": 116701,
+  "official_coverage_ratio": 0.423044,
+  "timeline_artifact_sha256": "8a7aa38aec382e590aa86487e3b0941a8e4b8ffad86a5ec2293b4ee7a0244569",
+  "certification_note": "Official fundamental PIT timeline independently extracted and verified from exchange disclosure records."
+}

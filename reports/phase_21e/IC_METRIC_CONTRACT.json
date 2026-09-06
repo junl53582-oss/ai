@@ -1,0 +1,19 @@
+{
+  "metric_definitions": {
+    "daily_rank_ic_mean": "Cross-sectional Spearman rank correlation mean across trading days",
+    "daily_rank_ic_std": "Standard deviation of daily rank IC series",
+    "raw_icir": "daily_rank_ic_mean / daily_rank_ic_std (unannualized, per-day ratio)",
+    "period_annualized_icir": "raw_icir * sqrt(242 / label_horizon) = raw_icir * sqrt(242 / 20) = raw_icir * 3.4785",
+    "daily_annualized_icir": "raw_icir * sqrt(242) = raw_icir * 15.5563",
+    "newey_west_icir": "daily_rank_ic_mean / NeweyWest_HAC_std"
+  },
+  "baseline_reconciliation": {
+    "daily_rank_ic_mean": 0.03595,
+    "daily_rank_ic_std": 0.091182,
+    "raw_icir_unannualized": 0.394266,
+    "period_annualized_icir (certified matrix reported value)": 1.371457,
+    "daily_annualized_icir": 6.133341,
+    "certified_matrix_label": "1.371457 (which exactly matches period_annualized_icir: 0.39426 * 3.4785)"
+  },
+  "audit_finding": "The certified baseline reported period-annualized ICIR (1.3715 = 0.3943 * sqrt(242/20)), while Phase 2.1-C and 2.1-D pipeline tables displayed raw unannualized daily ICIR (~0.28-0.30). There is no mathematical conflict; they represent raw vs period-annualized scales."
+}

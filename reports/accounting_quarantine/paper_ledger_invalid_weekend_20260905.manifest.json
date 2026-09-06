@@ -1,0 +1,20 @@
+{
+  "original_path": "data_storage/paper_trading_ledger.json",
+  "original_sha256": "1a17311c3e80b9dbceca164db0e00977f46f8cd15fcaf29566eef7edc9f353e9",
+  "invalid_trade_dates": [
+    "2026-09-05"
+  ],
+  "invalid_trade_ids": [
+    "6a1dc084",
+    "50981108",
+    "56b0d338",
+    "14b4cc47",
+    "162dbff2",
+    "359b3529",
+    "d2641cec",
+    "c2a4c23e"
+  ],
+  "reason": "Weekend trades (Saturday 2026-09-05) executed outside canonical exchange trading hours and sessions; quarantined per independent audit",
+  "quarantined_at": "2026-09-06T00:00:00Z",
+  "excluded_from_all_evidence": true
+}

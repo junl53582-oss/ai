@@ -224,3 +224,114 @@ def calc_vp_divergence_10d(df: pd.DataFrame) -> pd.Series:
     vol_chg = vol.pct_change()
     corr = ret.rolling(10).corr(vol_chg)
     return corr.fillna(0.0)
+
+
+# ---------------- 5. 7 大高阶异源 Alpha 因子 ----------------
+
+@FactorRegistry.register(
+    "ALPHA_RESIDUAL_MOMENTUM_20",
+    category="momentum",
+    description="剥离基准指数收益后的纯个股20日残差动量",
+    lookback_days=20
+)
+def calc_reg_residual_momentum(df: pd.DataFrame) -> pd.Series:
+    close = df["adj_close"] if "adj_close" in df.columns else df["close"]
+    stock_ret = close.pct_change().rolling(20).sum()
+    if "benchmark_close" in df.columns:
+        bm_ret = df["benchmark_close"].pct_change(20)
+    else:
+        bm_ret = 0.0
+    return stock_ret - bm_ret
+
+
+@FactorRegistry.register(
+    "ALPHA_TURNOVER_SURPRISE_5_20",
+    category="volume",
+    description="5日对比20日换手率突增比率",
+    lookback_days=20
+)
+def calc_reg_turnover_surprise(df: pd.DataFrame) -> pd.Series:
+    to_col = df["turnover"] if "turnover" in df.columns else df["volume"]
+    short_to = to_col.rolling(5).mean()
+    long_to = to_col.rolling(20).mean()
+    return short_to / (long_to + 1e-8) - 1.0
+
+
+@FactorRegistry.register(
+    "ALPHA_QUALITY_X_MOMENTUM",
+    category="composite",
+    description="截面估值/市值残差 x 20日相对动量复合非线性因子",
+    lookback_days=20
+)
+def calc_reg_quality_x_momentum(df: pd.DataFrame) -> pd.Series:
+    close = df["adj_close"] if "adj_close" in df.columns else df["close"]
+    mom = close.pct_change().rolling(20).sum()
+    if "LOG_CIRC_MV" in df.columns:
+        log_mv = df["LOG_CIRC_MV"]
+    elif "circ_mv" in df.columns:
+        log_mv = np.log(df["circ_mv"].astype(float) + 1.0)
+    else:
+        log_mv = np.log(close * df.get("volume", 1.0) + 1.0)
+    return mom * (-log_mv)
+
+
+@FactorRegistry.register(
+    "ALPHA_LIQUIDITY_X_VOL",
+    category="volatility",
+    description="Amihud非流动性冲击 x 20日波动率收敛",
+    lookback_days=20
+)
+def calc_reg_liquidity_x_vol(df: pd.DataFrame) -> pd.Series:
+    close = df["adj_close"] if "adj_close" in df.columns else df["close"]
+    ret = close.pct_change()
+    amt = df["amount"] if "amount" in df.columns else df["volume"] * close
+    amihud = ret.abs() / (amt + 1.0)
+    amihud_roll = amihud.rolling(20).mean()
+    vol_20 = ret.rolling(20).std()
+    return amihud_roll * (vol_20 + 1e-6)
+
+
+@FactorRegistry.register(
+    "ALPHA_SHORT_REVERSAL_5",
+    category="reversal",
+    description="5日短期超跌缩量反转因子",
+    lookback_days=5
+)
+def calc_reg_short_reversal(df: pd.DataFrame) -> pd.Series:
+    close = df["adj_close"] if "adj_close" in df.columns else df["close"]
+    ret_5 = close.pct_change().rolling(5).sum()
+    vol_col = df["volume"] if "volume" in df.columns else df["amount"]
+    vol_short = vol_col.rolling(5).mean()
+    vol_long = vol_col.rolling(20).mean()
+    vol_ratio = np.clip(vol_short / (vol_long + 1e-6), 0.1, 3.0)
+    return -ret_5 * (1.5 - np.clip(vol_ratio, 0.5, 1.5))
+
+
+@FactorRegistry.register(
+    "ALPHA_IDIO_VOL_PENALTY",
+    category="volatility",
+    description="20日特质波动率惩罚 (低特质波动为优)",
+    lookback_days=20
+)
+def calc_reg_idio_vol_penalty(df: pd.DataFrame) -> pd.Series:
+    close = df["adj_close"] if "adj_close" in df.columns else df["close"]
+    stock_vol = close.pct_change().rolling(20).std()
+    if "benchmark_close" in df.columns:
+        bm_vol = df["benchmark_close"].pct_change().rolling(20).std()
+    else:
+        bm_vol = 0.0
+    idio_vol = np.maximum(stock_vol - bm_vol, 0.0)
+    return -idio_vol
+
+
+@FactorRegistry.register(
+    "ALPHA_MONEY_FLOW_DIV_10",
+    category="money_flow",
+    description="10日VWAP相对价格偏离度之真实量价背离动量",
+    lookback_days=10
+)
+def calc_reg_money_flow_div(df: pd.DataFrame) -> pd.Series:
+    price = df["adj_close"] if "adj_close" in df.columns else df["close"]
+    vwap = df["amount"] / (df["volume"] + 1e-6)
+    div_daily = (vwap - price) / (price + 1e-6)
+    return div_daily.rolling(10).mean()

@@ -1,0 +1,15 @@
+{
+  "freeze_timestamp": "2026-09-05T13:38:08+08:00",
+  "calibration_window": "Historical Train Window Only",
+  "regimes": {
+    "Bull": "Benchmark 20D return > +3.0%",
+    "Bear": "Benchmark 20D return < -3.0%",
+    "Sideways": "-3.0% <= Benchmark 20D return <= +3.0%",
+    "High_Vol": "Benchmark 20D rolling vol > train-window 75th percentile (0.0163)",
+    "Low_Vol": "Benchmark 20D rolling vol <= train-window median (0.0112)",
+    "Risk_Off": "Benchmark down day OR 20D vol > 75th percentile OR breadth < 40%",
+    "Risk_On": "Benchmark up day AND normal volatility",
+    "Breadth": "Fraction of advancing stocks (High >= 55%, Low <= 45%)"
+  },
+  "candidate_blind_guarantee": "Regime definitions use macro benchmark indicators only; zero dependence on candidate model PnL."
+}
