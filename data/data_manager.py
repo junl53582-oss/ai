@@ -332,6 +332,7 @@ class DataManager:
 
         # 2. 循环拉取所有股票
         stock_dfs = []
+        failed_symbols: List[str] = []
         for sym in req_symbols:
             try:
                 sdf = self.fetcher.fetch_stock_daily(sym, start_date, end_date)
@@ -345,9 +346,19 @@ class DataManager:
                     if not sdf.empty:
                         stock_dfs.append(sdf)
             except DataFetchError as e:
-                logger.error(f"拉取标的 {sym} 失败: {e}")
-                if not settings.ALLOW_SYNTHETIC_DATA:
-                    raise
+                # PIT 历史成分全集必然包含已退市/长期停牌标的, 个别源无法覆盖属预期;
+                # 如实记录缺失(供 manifest 审计), 仅当失败率超 5% 阈值时判定为数据源故障 fail-fast。
+                logger.warning(f"标的 {sym} 无法从任何数据源获取 (已记录缺失, 继续重建): {e}")
+                failed_symbols.append(sym)
+
+        self.failed_symbols = failed_symbols
+        fail_ratio = len(failed_symbols) / max(len(req_symbols), 1)
+        if fail_ratio > 0.05:
+            raise DataFetchError(
+                f"数据拉取失败率 {fail_ratio:.1%} ({len(failed_symbols)}/{len(req_symbols)}) "
+                f"超过 5% 容忍阈值, 疑似数据源大面积故障, fail-fast 终止重建。"
+                f"失败清单前 20: {failed_symbols[:20]}"
+            )
 
         if not stock_dfs:
             raise ValueError("未能获取到任何有效股票数据！请检查网络配置或开启 ALLOW_SYNTHETIC_DATA 进行离线测试。")
@@ -477,7 +488,9 @@ class DataManager:
             "industry_coverage_ratio": self.industry_coverage_ratio,
             "historical_st_coverage_complete": self.historical_st_coverage_complete,
             "empty_universe_day_count": self.empty_universe_day_count,
-            "unknown_membership_row_count": self.unknown_membership_row_count
+            "unknown_membership_row_count": self.unknown_membership_row_count,
+            "failed_symbols": getattr(self, "failed_symbols", []),
+            "failed_symbol_count": len(getattr(self, "failed_symbols", []))
         })
 
         with open(manifest_file, "w", encoding="utf-8") as f:
