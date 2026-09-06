@@ -39,9 +39,8 @@ def _proc_sina_stock(df: pd.DataFrame) -> pd.DataFrame:
         d["volume"] = d["volume"] / 100.0
     # 新浪无涨跌幅列，用收盘价计算
     d["pct_change"] = d["close"].pct_change()
-    # 新浪换手率已是小数形式 (0.002678 = 0.2678%)，保持原样
-    if "turnover" not in d.columns:
-        d["turnover"] = 0.0
+    # 新浪换手率已是小数形式 (0.002678 = 0.2678%)；缺列时诚实回退 NaN，不伪造 0
+    d["turnover"] = _resolve_turnover(d, "stock:sina", percent_scale=False)
     return d
 
 
@@ -78,6 +77,41 @@ def _resolve_pct_change(df: pd.DataFrame, label: str) -> pd.Series:
         f"[{label}] 无法解析日收益率: 上游既未提供有效 pct_change，close 列也不可用。"
         f"严禁静默填 0 —— 整列恒零会使下游波动率/流动性类 Alpha 全部退化为常量。"
     )
+
+
+def _resolve_turnover(df: pd.DataFrame, label: str, percent_scale: bool) -> pd.Series:
+    """解析换手率列，杜绝「上游缺失即静默填 0」造成的整列恒零缺陷。
+
+    历史缺陷背景:
+        东财路径旧实现为 `pd.to_numeric(raw.get("turnover", 0), errors="coerce") / 100.0`，
+        上游未返回换手率字段时 `raw.get("turnover", 0)` 返回**标量 0**，赋值后整列恒为
+        0.0 且无任何告警；新浪路径同样在缺列时静默填 0.0。下游 DataManager 虽有
+        `replace(0, nan).fillna(0.01)` 先验兜底，但「真实换手率为 0」与「字段缺失」
+        被混为一谈，且无告警可审计 —— 恒零换手率会令 circ_mv = amount/turnover 的
+        流通市值估算与 TURNOVER_SURGE_* 类因子全部失真。
+
+    与 pct_change 修复的差异:
+        日收益率可由 close 数学派生（精确），而换手率 = 成交量 / 流通股本，行情数据
+        中不含流通股本，无法从 open/high/low/close/volume/amount 派生。故缺失时回退
+        **NaN（诚实缺失）**并告警，交由下游显式先验（DataManager fillna(0.01)）接管，
+        绝不静默填 0、也绝不 fail-fast（新浪源天然不提供换手率，报错会阻断正常同步）。
+
+    参数:
+        percent_scale: True 表示上游为百分数口径（东财, 2.5 = 2.5% -> 0.025）；
+                       False 表示上游已是小数口径（新浪, 0.002678 = 0.2678%），保持原样。
+    """
+    if "turnover" in df.columns:
+        s = pd.to_numeric(df["turnover"], errors="coerce")
+        if bool((s.notna() & (s != 0)).any()):
+            return s / 100.0 if percent_scale else s
+        logger.warning(
+            "[%s] 上游 turnover 恒为 0 或全空，已回退 NaN（由下游先验兜底），不伪造 0 值", label
+        )
+    else:
+        logger.warning(
+            "[%s] 上游未提供 turnover 列，已回退 NaN（由下游先验兜底），不伪造 0 值", label
+        )
+    return pd.Series(np.nan, index=df.index, dtype=float)
 
 
 class DataFetcher:
@@ -252,7 +286,7 @@ class DataFetcher:
                 raw[c] = pd.to_numeric(raw[c], errors="coerce").astype(float)
 
         raw["pct_change"] = _resolve_pct_change(raw, f"stock:{symbol}")
-        raw["turnover"] = pd.to_numeric(raw.get("turnover", 0), errors="coerce") / 100.0
+        raw["turnover"] = _resolve_turnover(raw, f"stock:{symbol}", percent_scale=True)
 
         if adj_df is not None and not adj_df.empty:
             adj = adj_df.copy()
