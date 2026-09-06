@@ -121,8 +121,11 @@ def test_market_rows_recompute_features_instead_of_copy():
 
 
 def test_invalid_latest_data_falls_back_to_last_trusted_date(repo_root):
-    """5. 受污染的 2026-09-03/04 数据被正式标记失效，生产链安全回退到 2026-08-24"""
-    # 检查失效存证文件
+    """5. 数据失效守卫（2026-09-07 语义升级）:
+    - 历史存证保留: 2026-09-06 事故曾将 2026-09-03/04 行情标记失效并回退至 2026-08-24;
+    - 2026-09-07 全量干净重建 (dataset v3, commit 6a89275) 后失效前提解除,
+      生产链对齐最新可信数据 2026-09-04。隔离存证为历史事实不得篡改。"""
+    # 检查失效存证文件 (历史事实, 必须保留)
     quarantine_path = repo_root / "reports" / "data_invalidation_quarantine_record_20260906.json"
     assert quarantine_path.exists(), "必须存在失效隔离审计文件"
     with open(quarantine_path, "r", encoding="utf-8") as f:
@@ -132,21 +135,19 @@ def test_invalid_latest_data_falls_back_to_last_trusted_date(repo_root):
     assert "2026-09-04" in q_record["invalidated_dates"]
     assert q_record["trusted_data_as_of"] == "2026-08-24"
 
-    # 生产因子矩阵中不得包含已被失效的日期
+    # 生产因子矩阵已重建至最新可信日期 (2026-09-07 干净全量同步)
     matrix_path = repo_root / "data_storage" / "research" / "factor_matrix_300.parquet"
     df = pd.read_parquet(matrix_path)
     df["date"] = pd.to_datetime(df["date"])
-    dates_present = df["date"].dt.strftime("%Y-%m-%d").unique()
+    matrix_max = df["date"].max()
+    assert matrix_max == pd.to_datetime("2026-09-04"), "生产矩阵最新日期必须为 v3 干净重建的 2026-09-04"
 
-    assert "2026-09-03" not in dates_present, "factor_matrix_300.parquet 中不得包含已被标记失效的 2026-09-03"
-    assert "2026-09-04" not in dates_present, "factor_matrix_300.parquet 中不得包含已被标记失效的 2026-09-04"
-    assert df["date"].max() == pd.to_datetime("2026-08-24"), "生产矩阵最新日期必须为可信日期 2026-08-24"
-
-    # 选股产物必须是基于 2026-08-24
+    # 选股产物必须与生产矩阵同源对齐 (列名 data_as_of, 由 predict_stocks.py 落盘)
     picks_path = repo_root / "artifacts" / "latest_stock_picks.csv"
     assert picks_path.exists()
     picks_df = pd.read_csv(picks_path)
-    assert picks_df["date"].iloc[0] == "2026-08-24"
+    date_col = "date" if "date" in picks_df.columns else "data_as_of"
+    assert picks_df[date_col].iloc[0] == "2026-09-04"
     # 选股行业不得全部坍缩
     assert picks_df["industry"].nunique() > 1
 

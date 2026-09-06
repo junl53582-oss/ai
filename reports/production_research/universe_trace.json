@@ -5,24 +5,24 @@
   "rejected_unique_symbols": 0,
   "accepted_symbols_count": 300,
   "rejected_symbols_count": 0,
-  "daily_membership_rows_total": 349379,
-  "daily_membership_rows_active": 348536,
-  "daily_membership_rows_rejected": 843,
+  "daily_membership_rows_total": 465544,
+  "daily_membership_rows_active": 349580,
+  "daily_membership_rows_rejected": 115964,
   "rejected_daily_rows_by_reason": {
-    "subnew_under_60_trading_days": 843,
+    "subnew_under_60_trading_days": 0,
     "st_risk_filtered": 0,
     "suspended_filtered": 0
   },
   "rejected_by_reason": {
-    "subnew_listing_under_60_days": 843,
+    "subnew_listing_under_60_days": 0,
     "st_risk_filtered": 0,
     "suspended_filtered": 0
   },
   "daily_active_count_summary": {
-    "min": 279,
-    "p10": 284,
-    "median": 297,
-    "mean": 294.3,
+    "min": 256,
+    "p10": 267,
+    "median": 295,
+    "mean": 287.6,
     "p90": 299,
     "max": 300
   },

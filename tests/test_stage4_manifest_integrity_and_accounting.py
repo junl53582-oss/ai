@@ -46,7 +46,8 @@ def test_manifest_matches_physical_parquet():
 
     # 2. Row count matches exactly
     assert manifest["row_count"] == len(df)
-    assert manifest["row_count"] == 349379
+    # 2026-09-07 dataset v3 (clean full-market sync, commit 6a89275): 465,544 rows
+    assert manifest["row_count"] == 465544
 
     # 3. Symbol count matches
     assert manifest["symbol_count"] == df["symbol"].nunique()
@@ -56,12 +57,12 @@ def test_manifest_matches_physical_parquet():
     dt_series = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
     assert manifest["date_min"] == dt_series.min()
     assert manifest["date_max"] == dt_series.max()
-    assert manifest["date_min"] == "2021-09-29"
-    assert manifest["date_max"] == "2026-08-24"
+    assert manifest["date_min"] == "2020-01-02"
+    assert manifest["date_max"] == "2026-09-04"
 
     # 5. Feature count matches
     assert manifest["feature_count"] == len(df.columns)
-    assert manifest["feature_count"] == 126
+    assert manifest["feature_count"] == 152
 
 
 def test_verify_manifest_consistency_detects_tamper(tmp_path):
