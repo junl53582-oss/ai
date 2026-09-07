@@ -1,0 +1,141 @@
+{
+  "generated_at": "20260907_153548",
+  "dataset": "v3 factor_matrix_300.parquet (sha=bb1593ed)",
+  "label": "label_up_down_20d",
+  "windows": {
+    "full_2021_2026": [
+      "2021-09-01",
+      "2026-09-04"
+    ],
+    "recent_2025_2026": [
+      "2025-01-01",
+      "2026-09-04"
+    ],
+    "h1_2026": [
+      "2026-01-01",
+      "2026-06-30"
+    ],
+    "q3_2026": [
+      "2026-07-01",
+      "2026-09-04"
+    ]
+  },
+  "n_factors_screened": 107,
+  "alive_in_2025_2026": {
+    "criteria": "mean_ic > 0.01 and icir > 1.5 and positive_ratio > 0.53",
+    "factors": [
+      {
+        "factor": "turnover",
+        "recent_ic": 0.0322,
+        "recent_icir": 2.193,
+        "recent_positive_ratio": 0.627,
+        "full_period_ic": -0.02351
+      },
+      {
+        "factor": "MA_RATIO_60",
+        "recent_ic": 0.03108,
+        "recent_icir": 3.524,
+        "recent_positive_ratio": 0.552,
+        "full_period_ic": 0.02919
+      },
+      {
+        "factor": "KAUFMAN_EFFICIENCY_20",
+        "recent_ic": 0.0305,
+        "recent_icir": 5.838,
+        "recent_positive_ratio": 0.627,
+        "full_period_ic": 0.01708
+      },
+      {
+        "factor": "ALPHA_LIQUIDITY_X_VOL",
+        "recent_ic": 0.02553,
+        "recent_icir": 3.562,
+        "recent_positive_ratio": 0.588,
+        "full_period_ic": 0.02472
+      },
+      {
+        "factor": "STD250",
+        "recent_ic": 0.02525,
+        "recent_icir": 2.184,
+        "recent_positive_ratio": 0.583,
+        "full_period_ic": -0.02977
+      },
+      {
+        "factor": "IS_LIMIT_UP_LAG1",
+        "recent_ic": 0.02426,
+        "recent_icir": 5.48,
+        "recent_positive_ratio": 0.667,
+        "full_period_ic": -0.00932
+      },
+      {
+        "factor": "STD120",
+        "recent_ic": 0.02257,
+        "recent_icir": 2.106,
+        "recent_positive_ratio": 0.611,
+        "full_period_ic": -0.03064
+      },
+      {
+        "factor": "EFFICIENCY_RATIO_10",
+        "recent_ic": 0.02175,
+        "recent_icir": 4.271,
+        "recent_positive_ratio": 0.609,
+        "full_period_ic": 0.00967
+      },
+      {
+        "factor": "ATR_RATIO_60",
+        "recent_ic": 0.01884,
+        "recent_icir": 1.955,
+        "recent_positive_ratio": 0.578,
+        "full_period_ic": -0.02724
+      },
+      {
+        "factor": "STD60",
+        "recent_ic": 0.01627,
+        "recent_icir": 1.563,
+        "recent_positive_ratio": 0.611,
+        "full_period_ic": -0.03236
+      }
+    ]
+  },
+  "top10_full_period": [
+    {
+      "factor": "turnover",
+      "full_2021_2026_ic": -0.02351
+    },
+    {
+      "factor": "log_circ_mv",
+      "full_2021_2026_ic": -0.02776
+    },
+    {
+      "factor": "LOG_CIRC_MV",
+      "full_2021_2026_ic": -0.02774
+    },
+    {
+      "factor": "KMID",
+      "full_2021_2026_ic": -0.00014
+    },
+    {
+      "factor": "KLEN",
+      "full_2021_2026_ic": -0.01714
+    },
+    {
+      "factor": "KMID2",
+      "full_2021_2026_ic": 0.00235
+    },
+    {
+      "factor": "KUP",
+      "full_2021_2026_ic": -0.01048
+    },
+    {
+      "factor": "KLOW",
+      "full_2021_2026_ic": -0.00664
+    },
+    {
+      "factor": "KSFT",
+      "full_2021_2026_ic": 0.0014
+    },
+    {
+      "factor": "ROC5",
+      "full_2021_2026_ic": -0.00424
+    }
+  ]
+}

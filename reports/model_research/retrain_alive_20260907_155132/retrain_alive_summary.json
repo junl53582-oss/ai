@@ -1,0 +1,67 @@
+{
+  "generated_at": "2026-09-07T15:51:57",
+  "config": "lightgbm_ranker on 2025-2026 alive factors",
+  "factors": [
+    "turnover",
+    "MA_RATIO_60",
+    "KAUFMAN_EFFICIENCY_20",
+    "ALPHA_LIQUIDITY_X_VOL",
+    "STD250",
+    "IS_LIMIT_UP_LAG1",
+    "STD120",
+    "EFFICIENCY_RATIO_10",
+    "ATR_RATIO_60",
+    "STD60"
+  ],
+  "n_folds": 30,
+  "n_oos_rows": 352079,
+  "purge_gap_days": 25,
+  "windows": [
+    {
+      "window": "full_oos",
+      "n_days": 1174,
+      "mean_rank_ic": 0.03488,
+      "icir_annualized": 5.313,
+      "positive_ratio": 0.6082,
+      "per_year": {
+        "2021": 0.0454,
+        "2022": 0.04586,
+        "2023": 0.05689,
+        "2024": 0.06507,
+        "2025": 0.00058,
+        "2026": -0.01814
+      }
+    },
+    {
+      "window": "recent_2025_2026",
+      "n_days": 386,
+      "mean_rank_ic": -0.00636,
+      "icir_annualized": -1.096,
+      "positive_ratio": 0.4249,
+      "per_year": {
+        "2025": 0.00058,
+        "2026": -0.01814
+      }
+    },
+    {
+      "window": "y2026",
+      "n_days": 143,
+      "mean_rank_ic": -0.01814,
+      "icir_annualized": -2.9105,
+      "positive_ratio": 0.3986,
+      "per_year": {
+        "2026": -0.01814
+      }
+    },
+    {
+      "window": "q3_2026",
+      "n_days": 27,
+      "mean_rank_ic": 0.0851,
+      "icir_annualized": 15.9576,
+      "positive_ratio": 0.8889,
+      "per_year": {
+        "2026": 0.0851
+      }
+    }
+  ]
+}
