@@ -1,0 +1,44 @@
+{
+  "AUM_100k": {
+    "portfolio_aum_rmb": 100000,
+    "order_per_stock_rmb": 4000.0,
+    "participation_rate": "0.0027% ADV",
+    "estimated_market_impact_bps": 5.16,
+    "viable": true
+  },
+  "AUM_500k": {
+    "portfolio_aum_rmb": 500000,
+    "order_per_stock_rmb": 20000.0,
+    "participation_rate": "0.0133% ADV",
+    "estimated_market_impact_bps": 11.55,
+    "viable": true
+  },
+  "AUM_1000k": {
+    "portfolio_aum_rmb": 1000000,
+    "order_per_stock_rmb": 40000.0,
+    "participation_rate": "0.0267% ADV",
+    "estimated_market_impact_bps": 16.33,
+    "viable": true
+  },
+  "AUM_5000k": {
+    "portfolio_aum_rmb": 5000000,
+    "order_per_stock_rmb": 200000.0,
+    "participation_rate": "0.1333% ADV",
+    "estimated_market_impact_bps": 36.51,
+    "viable": true
+  },
+  "AUM_10000k": {
+    "portfolio_aum_rmb": 10000000,
+    "order_per_stock_rmb": 400000.0,
+    "participation_rate": "0.2667% ADV",
+    "estimated_market_impact_bps": 51.64,
+    "viable": true
+  },
+  "AUM_50000k": {
+    "portfolio_aum_rmb": 50000000,
+    "order_per_stock_rmb": 2000000.0,
+    "participation_rate": "1.3333% ADV",
+    "estimated_market_impact_bps": 115.47,
+    "viable": true
+  }
+}

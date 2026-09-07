@@ -1,18 +1,45 @@
 {
   "dataset_name": "A_SHARE_PIT_RESEARCH_FACTOR_MATRIX_300",
-  "dataset_version": "1.6",
+  "dataset_version": "3.0",
   "is_ci_fixture": false,
   "production_ready": true,
   "symbol_count": 300,
-  "row_count": 349379,
+  "row_count": 465544,
+  "date_min": "2020-01-02",
+  "date_max": "2026-09-04",
   "date_range": [
-    "2021-09-29",
-    "2026-08-24"
+    "2020-01-02",
+    "2026-09-04"
   ],
-  "daily_cross_section_median": 297.0,
-  "benchmark_open_coverage": 1.0,
-  "benchmark_close_coverage": 1.0,
-  "factor_count": 97,
-  "parent_market_manifest_hash": "47dc1429f20acfbd254c3c23f172c80f5d87852fa04bb4d6f60579af310033be",
-  "file_sha256": "ad672d9cf58597566024f83ade5e5dfc9e4efde8604a7268f66bd3c7c16b4bb1"
+  "daily_cross_section_median": 295.0,
+  "feature_count": 152,
+  "factor_count": 105,
+  "parent_market_manifest_hash": "cd11cbbb1efc5f263657efc9c8c89ef30883076f5badf97af4aca6087e8f1c0b",
+  "builder_version": "tools/rebuild_dataset_300_from_sync.py",
+  "code_commit": "f757c778e3964f78d901436921c2b98dbbf898d2",
+  "created_at": "2026-09-06T17:45:00.251535+00:00",
+  "alpha_revival_audit": {
+    "ALPHA_RESIDUAL_MOMENTUM_20": {
+      "iqr": 1.2085031362169814,
+      "expected_train_iqr": 0.1229,
+      "nonconstant": true
+    },
+    "ALPHA_QUALITY_X_MOMENTUM": {
+      "iqr": 1.2402851751226427,
+      "expected_train_iqr": 0.3118,
+      "nonconstant": true
+    },
+    "ALPHA_SHORT_REVERSAL_5": {
+      "iqr": 1.2139932806372677,
+      "expected_train_iqr": 0.0207,
+      "nonconstant": true
+    },
+    "ALPHA_IDIO_VOL_PENALTY": {
+      "iqr": 1.2813713573412944,
+      "expected_train_iqr": 0.0147,
+      "nonconstant": true
+    }
+  },
+  "supersedes": "factor_matrix_300.parquet legacy (built from pct_change=0 poisoned data, 4 dead Alphas)",
+  "file_sha256": "bb1593ed91bec4a84fa2beb94fa5cc0e34a54db2f423e04eb8e9c6c45b20ed90"
 }

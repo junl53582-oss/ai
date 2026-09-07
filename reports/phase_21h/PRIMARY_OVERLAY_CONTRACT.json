@@ -1,0 +1,11 @@
+{
+  "overlay_id": "PRIMARY_OVERLAY_V1",
+  "freeze_timestamp": "2026-09-05T13:38:08+08:00",
+  "formula": "overlay_score = baseline_rank_pct + 0.20 * defensive_residual_rank_pct",
+  "primary_lambda": 0.2,
+  "secondary_configurations": {
+    "overlay_0_10": "SECONDARY_DIAGNOSTIC_ONLY",
+    "overlay_0_30": "SECONDARY_DIAGNOSTIC_ONLY"
+  },
+  "governance_rule": "Primary scientific verdict strictly adheres to lambda = 0.20. Retroactive switching based on future performance is prohibited."
+}

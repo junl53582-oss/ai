@@ -25,6 +25,66 @@ from data.fundamentals import FUNDAMENTAL_FACTOR_NAMES
 
 logger = logging.getLogger(__name__)
 
+# 7 大高阶异源 Alpha 因子规约 (严格 PIT 与 Warmup NaN 策略)
+ADVANCED_ALPHA_SPECS: Dict[str, Dict[str, Any]] = {
+    "ALPHA_RESIDUAL_MOMENTUM_20": {
+        "inputs": ["adj_close", "benchmark_close"],
+        "warmup": 20,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_t_minus_20_to_t",
+        "dtype": "float64",
+        "description": "剥离基准指数收益后的纯个股20日残差动量",
+    },
+    "ALPHA_TURNOVER_SURPRISE_5_20": {
+        "inputs": ["turnover", "volume"],
+        "warmup": 20,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_t_minus_20_to_t",
+        "dtype": "float64",
+        "description": "5日对比20日换手率突增比率",
+    },
+    "ALPHA_QUALITY_X_MOMENTUM": {
+        "inputs": ["adj_close", "LOG_CIRC_MV"],
+        "warmup": 20,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_cross_sectional",
+        "dtype": "float64",
+        "description": "截面估值/市值残差 x 20日相对动量复合非线性因子",
+    },
+    "ALPHA_LIQUIDITY_X_VOL": {
+        "inputs": ["adj_close", "amount"],
+        "warmup": 20,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_t_minus_20_to_t",
+        "dtype": "float64",
+        "description": "Amihud非流动性冲击 x 20日波动率收敛",
+    },
+    "ALPHA_SHORT_REVERSAL_5": {
+        "inputs": ["adj_close", "volume"],
+        "warmup": 20,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_t_minus_5_to_t",
+        "dtype": "float64",
+        "description": "5日短期超跌缩量反转因子",
+    },
+    "ALPHA_IDIO_VOL_PENALTY": {
+        "inputs": ["adj_close", "benchmark_close"],
+        "warmup": 20,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_t_minus_20_to_t",
+        "dtype": "float64",
+        "description": "20日特质波动率惩罚 (低特质波动为优)",
+    },
+    "ALPHA_MONEY_FLOW_DIV_10": {
+        "inputs": ["adj_close", "amount", "volume"],
+        "warmup": 10,
+        "missing_policy": "warmup_nan",
+        "pit_causality": "strictly_past_t_minus_10_to_t",
+        "dtype": "float64",
+        "description": "10日VWAP相对价格偏离度之真实量价背离动量",
+    },
+}
+
 
 class MembershipIntegrityError(ValueError):
     """股票池成员完整性异常 (P0-5 Fail-Closed)"""
@@ -535,6 +595,8 @@ class FactorProcessor:
         logger.info("开始执行端到端因子构建流程...")
         df_alpha = self.alpha_calc.compute_all(market_df)
         df_full = self.ashare_calc.compute_all(df_alpha)
+        # 计算 7 大高阶异源 Alpha 因子
+        df_full = self.compute_advanced_alpha_features(df_full)
         # 高阶因子注册表 (另类/微观结构/遗传挖掘) 开关: 实测其弱特征会稀释信噪比，留出 A/B 开关
         if getattr(settings, "ENABLE_REGISTRY_FACTORS", True):
             df_full = FactorRegistry.compute_all_registered(df_full)
@@ -577,7 +639,7 @@ class FactorProcessor:
         # 保证行情/基准与可交易性核心字段完整保留在因子矩阵中 (Fail-Closed)
         core_market_cols = [
             "open", "high", "low", "close", "adj_open", "adj_high", "adj_low", "adj_close",
-            "volume", "amount", "benchmark_open", "benchmark_close", "in_universe",
+            "volume", "amount", "turnover", "circ_mv_raw", "circ_mv", "benchmark_open", "benchmark_close", "in_universe",
             "is_st", "is_suspended", "is_limit_up_locked", "is_limit_down_locked",
             "limit_up_price", "limit_down_price"
         ]
@@ -714,9 +776,69 @@ class FactorProcessor:
         return res
 
     @classmethod
+    def compute_feature_schema_hash(cls, feature_names: List[str]) -> str:
+        """计算特征列表的标准 Schema 哈希 (Canonical Schema Hash)"""
+        schema_repr = ";".join(feature_names)
+        return hashlib.sha256(schema_repr.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def compute_advanced_alpha_features(cls, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        计算 7 大高阶异源 Alpha 因子并写入 DataFrame:
+        1. ALPHA_RESIDUAL_MOMENTUM_20: 剥离基准指数收益后的纯个股20日残差动量
+        2. ALPHA_TURNOVER_SURPRISE_5_20: 5日对比20日换手率突增比率
+        3. ALPHA_QUALITY_X_MOMENTUM: 截面估值/市值残差 x 20日相对动量复合非线性因子
+        4. ALPHA_LIQUIDITY_X_VOL: Amihud非流动性冲击 x 20日波动率收敛
+        5. ALPHA_SHORT_REVERSAL_5: 5日短期超跌缩量反转因子
+        6. ALPHA_IDIO_VOL_PENALTY: 20日特质波动率惩罚 (低特质波动为优)
+        7. ALPHA_MONEY_FLOW_DIV_10: 10日VWAP相对价格偏离度之真实量价背离动量
+        严格遵循 Point-In-Time 原则与 warmup_nan 策略。
+        """
+        df = df.copy()
+        if "symbol" not in df.columns or "date" not in df.columns:
+            return df
+
+        # 补齐 LOG_CIRC_MV 若缺失
+        if "LOG_CIRC_MV" not in df.columns:
+            if "circ_mv" in df.columns:
+                df["LOG_CIRC_MV"] = np.log(df["circ_mv"].astype(float) + 1.0)
+            elif "circ_mv_raw" in df.columns:
+                df["LOG_CIRC_MV"] = np.log(df["circ_mv_raw"].astype(float) + 1.0)
+            elif "close" in df.columns and "volume" in df.columns:
+                df["LOG_CIRC_MV"] = np.log(df["close"] * df["volume"] + 1.0)
+
+        # 补齐 turnover 若缺失
+        if "turnover" not in df.columns and "volume" in df.columns:
+            if "circ_mv" in df.columns and "close" in df.columns:
+                circ_shares = df["circ_mv"] / (df["close"] + 1e-8)
+                df["turnover"] = df["volume"] / (circ_shares + 1e-8)
+            else:
+                df["turnover"] = df["volume"]
+
+        # 补齐 benchmark_close 若缺失
+        if "benchmark_close" not in df.columns:
+            if "close" in df.columns:
+                df["benchmark_close"] = df["close"]
+            else:
+                df["benchmark_close"] = 1.0
+
+        from research_v2.alphas.novel_alphas import NovelAlphaFactory
+        df["ALPHA_RESIDUAL_MOMENTUM_20"] = NovelAlphaFactory.calc_residual_momentum(df, window=20)
+        df["ALPHA_TURNOVER_SURPRISE_5_20"] = NovelAlphaFactory.calc_turnover_surprise(df, short_w=5, long_w=20)
+        df["ALPHA_QUALITY_X_MOMENTUM"] = NovelAlphaFactory.calc_quality_x_momentum(df)
+        df["ALPHA_LIQUIDITY_X_VOL"] = NovelAlphaFactory.calc_liquidity_x_volatility(df)
+        df["ALPHA_SHORT_REVERSAL_5"] = NovelAlphaFactory.calc_short_term_reversal(df, window=5)
+        df["ALPHA_IDIO_VOL_PENALTY"] = NovelAlphaFactory.calc_idio_vol_penalty(df, window=20)
+        df["ALPHA_MONEY_FLOW_DIV_10"] = NovelAlphaFactory.calc_money_flow_divergence(df, window=10)
+        return df
+
+    @classmethod
     def get_all_factor_cols(cls) -> List[str]:
-        """获取全量因子特征名称集合 (Alpha158 + A股定制 + 另类高阶特征 + 基本面)"""
+        """获取全量因子特征名称集合 (Alpha158 + A股定制 + 7大高阶异源Alpha + 另类高阶特征 + 基本面)"""
         cols = Alpha158Subset.get_factor_names() + AShareFactorCalculator.get_factor_names()
+        for adv_col in ADVANCED_ALPHA_SPECS.keys():
+            if adv_col not in cols:
+                cols.append(adv_col)
         if getattr(settings, "ENABLE_REGISTRY_FACTORS", True):
             for f in FactorRegistry.list_all_factors():
                 if f not in cols:

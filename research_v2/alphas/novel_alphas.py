@@ -24,8 +24,8 @@ class NovelAlphaFactory:
         """剥离基准指数收益后的纯个股残差动量"""
         df_sorted = df.sort_values(['symbol', 'date']).copy()
         df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
-        stock_ret = df_sorted.groupby('symbol')['pct_change'].rolling(window).sum().reset_index(0, drop=True)
-        bm_ret = df_sorted.groupby('symbol')['benchmark_close'].pct_change(window).reset_index(0, drop=True)
+        stock_ret = df_sorted.groupby('symbol')['pct_change'].rolling(window).sum().droplevel(0)
+        bm_ret = df_sorted.groupby('symbol')['benchmark_close'].pct_change(window)
         return (stock_ret - bm_ret).reindex(df.index)
 
     @staticmethod
@@ -33,8 +33,8 @@ class NovelAlphaFactory:
         """换手率突增比率 (Turnover Surprise)"""
         df_sorted = df.sort_values(['symbol', 'date'])
         to_col = 'turnover' if 'turnover' in df.columns else 'volume'
-        short_to = df_sorted.groupby('symbol')[to_col].rolling(short_w).mean().reset_index(0, drop=True)
-        long_to = df_sorted.groupby('symbol')[to_col].rolling(long_w).mean().reset_index(0, drop=True)
+        short_to = df_sorted.groupby('symbol')[to_col].rolling(short_w).mean().droplevel(0)
+        long_to = df_sorted.groupby('symbol')[to_col].rolling(long_w).mean().droplevel(0)
         return (short_to / (long_to + 1e-8) - 1.0).reindex(df.index)
 
     @staticmethod
@@ -42,11 +42,11 @@ class NovelAlphaFactory:
         """复合非线性: 估值/市值残差 x 相对动量"""
         df_sorted = df.sort_values(['symbol', 'date']).copy()
         df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
-        mom = df_sorted.groupby('symbol')['pct_change'].rolling(20).sum().reset_index(0, drop=True)
-        log_mv = df_sorted['LOG_CIRC_MV'] if 'LOG_CIRC_MV' in df.columns else np.log(df_sorted['close'] * df_sorted['volume'] + 1.0)
+        mom = df_sorted.groupby('symbol')['pct_change'].rolling(20).sum().droplevel(0)
+        log_mv = df_sorted['LOG_CIRC_MV'] if 'LOG_CIRC_MV' in df_sorted.columns else np.log(df_sorted['close'] * df_sorted['volume'] + 1.0)
         # 截面 Rank 交互
         res = []
-        temp = pd.DataFrame({'date': df_sorted['date'], 'mom': mom, 'log_mv': log_mv})
+        temp = pd.DataFrame({'date': df_sorted['date'], 'mom': mom, 'log_mv': log_mv}, index=df_sorted.index)
         for dt, grp in temp.groupby('date'):
             r_mom = grp['mom'].rank(pct=True)
             r_val = (-grp['log_mv']).rank(pct=True)
@@ -59,10 +59,10 @@ class NovelAlphaFactory:
         """复合非线性: 非流动性冲击 x 波动率收敛"""
         df_sorted = df.sort_values(['symbol', 'date']).copy()
         df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
-        amt = df_sorted['amount'] if 'amount' in df.columns else df_sorted['volume'] * df_sorted['close']
+        amt = df_sorted['amount'] if 'amount' in df_sorted.columns else df_sorted['volume'] * df_sorted['close']
         amihud = df_sorted['pct_change'].abs() / (amt + 1.0)
-        amihud_roll = df_sorted.groupby('symbol').apply(lambda g: (g['pct_change'].abs() / (g['amount'] + 1.0)).rolling(20).mean()).reset_index(0, drop=True)
-        vol_20 = df_sorted.groupby('symbol')['pct_change'].rolling(20).std().reset_index(0, drop=True)
+        amihud_roll = amihud.groupby(df_sorted['symbol']).rolling(20).mean().droplevel(0)
+        vol_20 = df_sorted.groupby('symbol')['pct_change'].rolling(20).std().droplevel(0)
         return (amihud_roll * (vol_20 + 1e-6)).reindex(df.index)
 
     @staticmethod
@@ -70,10 +70,10 @@ class NovelAlphaFactory:
         """短期超跌缩量反转 (捕捉过度恐慌后的弹性反弹)"""
         df_sorted = df.sort_values(['symbol', 'date']).copy()
         df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
-        ret_5 = df_sorted.groupby('symbol')['pct_change'].rolling(window).sum().reset_index(0, drop=True)
+        ret_5 = df_sorted.groupby('symbol')['pct_change'].rolling(window).sum().droplevel(0)
         vol_col = 'volume' if 'volume' in df_sorted.columns else 'amount'
-        vol_short = df_sorted.groupby('symbol')[vol_col].rolling(window).mean().reset_index(0, drop=True)
-        vol_long = df_sorted.groupby('symbol')[vol_col].rolling(20).mean().reset_index(0, drop=True)
+        vol_short = df_sorted.groupby('symbol')[vol_col].rolling(window).mean().droplevel(0)
+        vol_long = df_sorted.groupby('symbol')[vol_col].rolling(20).mean().droplevel(0)
         vol_ratio = np.clip(vol_short / (vol_long + 1e-6), 0.1, 3.0)
         # 负向动量 * 缩量倍数 (跌得越深且缩量越明显，反弹期望越大)
         reversal = -ret_5 * (1.5 - np.clip(vol_ratio, 0.5, 1.5))
@@ -84,9 +84,9 @@ class NovelAlphaFactory:
         """特质波动率惩罚 (低特质波动高质量因子)"""
         df_sorted = df.sort_values(['symbol', 'date']).copy()
         df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
-        stock_vol = df_sorted.groupby('symbol')['pct_change'].rolling(window).std().reset_index(0, drop=True)
-        bm_ret = df_sorted.groupby('symbol')['benchmark_close'].pct_change().reset_index(0, drop=True)
-        bm_vol = df_sorted.groupby('symbol')['benchmark_close'].pct_change().rolling(window).std().reset_index(0, drop=True)
+        stock_vol = df_sorted.groupby('symbol')['pct_change'].rolling(window).std().droplevel(0)
+        bm_chg = df_sorted.groupby('symbol')['benchmark_close'].pct_change()
+        bm_vol = bm_chg.groupby(df_sorted['symbol']).rolling(window).std().droplevel(0)
         idio_vol = np.maximum(stock_vol - bm_vol, 0.0)
         # 低特质波动为优: 取负值
         return (-idio_vol).reindex(df.index)
@@ -98,8 +98,7 @@ class NovelAlphaFactory:
         price = df_sorted['adj_close'] if 'adj_close' in df_sorted.columns else df_sorted['close']
         vwap = df_sorted['amount'] / (df_sorted['volume'] + 1e-6)
         div_daily = (vwap - price) / (price + 1e-6)
-        df_sorted['__div_daily__'] = div_daily
-        div_roll = df_sorted.groupby('symbol')['__div_daily__'].rolling(window).mean().reset_index(0, drop=True)
+        div_roll = div_daily.groupby(df_sorted['symbol']).rolling(window).mean().droplevel(0)
         return div_roll.reindex(df.index)
 
     @staticmethod
@@ -108,6 +107,5 @@ class NovelAlphaFactory:
         df_sorted = df.sort_values(['symbol', 'date']).copy()
         df_sorted = NovelAlphaFactory._ensure_pct_change(df_sorted)
         elasticity = df_sorted['pct_change'] / np.log1p(df_sorted['amount'] + 1e-4)
-        df_sorted['__elasticity__'] = elasticity
-        bias = df_sorted.groupby('symbol')['__elasticity__'].rolling(window).mean().reset_index(0, drop=True)
+        bias = elasticity.groupby(df_sorted['symbol']).rolling(window).mean().droplevel(0)
         return bias.reindex(df.index)

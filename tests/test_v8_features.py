@@ -212,11 +212,11 @@ class TestExecutionGateway:
         assert broker.get_positions()["600519.SH"].total_shares == 500
 
     def test_miniqmt_broker_mock_fallback(self):
+        """MiniQMT 严禁静默 Mock 假成交，必须执行多因子网关 fail-closed 拦截"""
+        from execution.live_gate import LiveGateAuthError
         qmt = MiniQMTBroker()
-        # 未连接时走安全 Mock 保护
-        ord_res = qmt.send_order(symbol="600519.SH", side=OrderSide.BUY, shares=200, price=150.0)
-        assert ord_res is not None
-        assert ord_res.requested_shares == 200
+        with pytest.raises((LiveGateAuthError, RuntimeError)):
+            qmt.send_order(symbol="600519.SH", side=OrderSide.BUY, shares=200, price=150.0)
 
 
 class TestMessageNotification:
@@ -239,7 +239,9 @@ class TestMessageNotification:
         )
         assert "贵州茅台" in md_text
         assert "宁德时代" in md_text
-        assert "85.2%" in md_text
+        assert "模型排序分数" in md_text
+        assert "0.8520" in md_text
+        assert "85.2%" not in md_text
         assert "2026-08-28" in md_text
 
 

@@ -1,0 +1,37 @@
+{
+  "invalidation_id": "INVAL_20260906_CROSS_SYMBOL_FFILL_CONTAMINATION",
+  "created_at": "2026-09-06T01:55:00+08:00",
+  "reason": "Cross-symbol forward-fill contamination and 100% industry collapse to '半导体'",
+  "root_cause": "data/live_market_syncer.py and tools/sync_latest_market_quotes.py performed un-grouped global ffill() on panel sorted by ['date', 'symbol'], causing all 300 stocks on 2026-09-03 and 220 stocks on 2026-09-04 to inherit '半导体' and uncomputed factors from preceding symbols. In addition, intermediate trading days between 2026-08-24 and 2026-09-03 were completely missing, making rolling factor calculations scientifically invalid.",
+  "invalidated_dates": [
+    "2026-09-03",
+    "2026-09-04"
+  ],
+  "trusted_data_as_of": "2026-08-24",
+  "quarantined_artifacts": [
+    {
+      "file": "data_storage/research/factor_matrix_300.parquet",
+      "original_sha256": "a8a4be7d08d0c74974f7ece892f3614ac4c74acd025fb0a7ea63791e2b7aafed",
+      "original_rows": 349899,
+      "remediated_rows": 349379,
+      "remediated_sha256": "b195a8a73999fef0715c5106006bc9e0ab60d7a0efd9b0e13ec6ca6109e7793c",
+      "action": "EXCLUDED_CORRUPTED_DATES_REVERTED_TO_TRUSTED_SLICE"
+    },
+    {
+      "file": "artifacts/latest_stock_picks.csv",
+      "original_sha256": "945c545a81ec23a6c0e14e19de9d5b9ab8a97723ffe1919a4925faaad073caf6",
+      "action": "INVALIDATED_AND_REBUILT_FROM_TRUSTED_AS_OF_20260824"
+    },
+    {
+      "file": "artifacts/aggressive_stock_picks.csv",
+      "original_sha256": "892b5a306f1dec532a6bf0284d6cdd7a1c95840bd8428bf5595656c588b3e836",
+      "action": "INVALIDATED_AND_REBUILT_FROM_TRUSTED_AS_OF_20260824"
+    },
+    {
+      "file": "artifacts/csi500_stock_picks.csv",
+      "original_sha256": "bcd1683ec731c7013aa6929250fba14ce8f7ed0de37f0c9eb9f783ec97328e22",
+      "action": "INVALIDATED_AND_REBUILT_FROM_TRUSTED_AS_OF_20260824"
+    }
+  ],
+  "verification_status": "REMEDIATED_AND_ENFORCED"
+}

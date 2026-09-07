@@ -12,7 +12,7 @@ import time
 import logging
 import traceback
 from pathlib import Path
-from typing import Optional, Dict, Any, Callable, Set
+from typing import Optional, Dict, Any, Callable, Set, Union
 import pandas as pd
 
 # 加入项目根目录
@@ -21,6 +21,7 @@ if str(root_dir) not in sys.path:
     sys.path.insert(0, str(root_dir))
 
 from config.settings import settings
+from data.trading_calendar import CanonicalTradingCalendar
 from data.universe_provider import create_universe_provider
 from data.data_manager import DataManager
 from factors.processor import FactorProcessor
@@ -98,6 +99,7 @@ def run_daily_automation(
     current_holdings: Optional[Set[str]] = None,
     mode: str = "inference",
     production_runtime: Optional[bool] = None,
+    shadow_ledger_file: Optional[Union[str, Path]] = None,
 ) -> Dict[str, Any]:
     """执行每日盘后自动化任务并推送决策清单
 
@@ -181,6 +183,94 @@ def run_daily_automation(
             lambda: builder.build_target_portfolio(daily_df, current_holdings=holdings, date=latest_date),
             retries=1
         )
+        if top_df is not None and not top_df.empty:
+            if "pred_score" not in top_df.columns and "pred_score" in daily_df.columns:
+                top_df = top_df.merge(daily_df[["symbol", "pred_score"]].drop_duplicates("symbol"), on="symbol", how="left")
+
+        # 4.5 触发前瞻信号封存与影子观察账本记录 (ProspectiveStateMachine + execute_observed)
+        cal = CanonicalTradingCalendar.get_instance()
+        sig_str = latest_date.strftime("%Y-%m-%d")
+        shadow_rec = None
+        sealed_rec = None
+        if cal.is_trading_day(sig_str):
+            if mode == "inference":
+                active_mid = getattr(engine.record, "model_id", "PRODUCTION_MODEL")
+            else:
+                active_mid = f"RESEARCH_REPLAY_{latest_date.strftime('%Y%m%d')}"
+
+            sig_store_dir = Path(shadow_ledger_file).parent / "prospective_signals" if shadow_ledger_file else None
+            matrix_p = getattr(builder, "last_factor_matrix_path", None) or (settings.DATA_DIR / "features" / "factor_matrix_latest.parquet")
+
+            # 4.5a 封存前瞻信号 (SIGNAL_SEALED: 观察天数+0)
+            try:
+                from execution.prospective_state_machine import seal_signal, execute_observed
+                if sig_str <= "2026-08-24":
+                    sealed_rec = {
+                        "status": "CALENDAR_COVERAGE_BLOCKED",
+                        "reason": f"禁止回填历史日期 ({sig_str} <= 2026-08-24) 冒充 prospective 信号",
+                        "observed_trading_days_added": 0
+                    }
+                else:
+                    sealed_rec = seal_signal(
+                        signal_date=sig_str,
+                        picks_df=top_df,
+                        model_id=active_mid,
+                        factor_matrix_path=matrix_p if matrix_p and Path(matrix_p).exists() else None,
+                        storage_dir=sig_store_dir,
+                    )
+                    logger.info(f"✅ 前瞻信号封存完成 (SIGNAL_SEALED): 信号日 {sig_str} | 模型 {active_mid} | 观察天数+0")
+            except Exception as seal_err:
+                logger.warning(f"⚠️ 前瞻信号封存跳过或告警: {seal_err}")
+                sealed_rec = {"error": str(seal_err)}
+
+            # 4.5b 影子观察记录 (严格通过 execute_observed 驱动，严禁直接调用 record_shadow_observation)
+            if shadow_ledger_file:
+                try:
+                    from execution.paper_ledger import ShadowTradingLedger
+                    shadow = ShadowTradingLedger(ledger_file=shadow_ledger_file)
+
+                    if sig_str <= "2026-08-24":
+                        shadow_rec = {
+                            "status": "CALENDAR_COVERAGE_BLOCKED",
+                            "reason": f"Historical date ({sig_str} <= 2026-08-24) cannot be executed as prospective observation",
+                            "observed_trading_days_added": 0
+                        }
+                        logger.warning(f"⚠️ 历史日期阻断 (CALENDAR_COVERAGE_BLOCKED): 信号日 {sig_str} 禁止回填历史样本")
+                    elif not cal.is_trading_day(sig_str) or cal.next_trading_day(sig_str) is None:
+                        shadow_rec = {
+                            "status": "CALENDAR_COVERAGE_BLOCKED",
+                            "reason": "Trading session exceeds canonical calendar coverage (2026-08-24) or no next trading day",
+                            "observed_trading_days_added": 0
+                        }
+                        logger.warning(f"⚠️ 物理日历覆盖阻断 (CALENDAR_COVERAGE_BLOCKED): 信号日 {sig_str} 前瞻执行保持冻结")
+                    else:
+                        prev_day = cal.prev_trading_day(sig_str)
+                        if prev_day and sig_store_dir:
+                            prev_signal_file = sig_store_dir / f"SIGNAL_SEALED_{prev_day}.json"
+                            if not prev_signal_file.exists():
+                                logger.warning(f"⚠️ 前一交易日 ({prev_day}) 信号未真实封存，跳过影子观察撮合")
+                                shadow_rec = {
+                                    "status": "PREV_SIGNAL_NOT_FOUND",
+                                    "reason": f"未找到前一交易日 ({prev_day}) 的真实封存信号制品，拒绝伪造历史信号",
+                                    "observed_trading_days_added": 0
+                                }
+                            else:
+                                quotes_df = market_df.copy() if market_df is not None and not market_df.empty else top_df.copy()
+                                shadow_rec = execute_observed(
+                                    signal_date=prev_day,
+                                    execution_date=sig_str,
+                                    quotes_df=quotes_df,
+                                    shadow_ledger=shadow,
+                                    storage_dir=sig_store_dir,
+                                )
+                                logger.info(f"✅ 影子观察经由 execute_observed 撮合完成: 执行日 {sig_str} | 模型 {active_mid}")
+                        else:
+                            shadow_rec = {
+                                "status": "CALENDAR_COVERAGE_BLOCKED",
+                                "observed_trading_days_added": 0
+                            }
+                except Exception as shadow_err:
+                    logger.warning(f"⚠️ 影子观察执行跳过或告警: {shadow_err}")
 
         # 5. 构建报告并推送通知
         sig_str = latest_date.strftime("%Y-%m-%d")
@@ -192,7 +282,12 @@ def run_daily_automation(
         )
 
         print("\n" + "-" * 70)
-        print(report_md)
+        try:
+            print(report_md)
+        except UnicodeEncodeError:
+            # 防御 Windows 控制台 GBK 编码无法打印 Unicode 表情符
+            enc = getattr(sys.stdout, "encoding", "utf-8") or "utf-8"
+            print(report_md.encode(enc, errors="replace").decode(enc))
         print("-" * 70)
 
         if webhook_url:
@@ -213,7 +308,9 @@ def run_daily_automation(
             "signal_date": sig_str,
             "execution_date": exec_str,
             "top_portfolio": top_df,
-            "markdown_report": report_md
+            "markdown_report": report_md,
+            "shadow_observation": shadow_rec,
+            "sealed_signal": sealed_rec
         }
 
     except Exception as stage_err:

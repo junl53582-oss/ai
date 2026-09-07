@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-09-05T16:17:45.602402",
+  "status": "ALL_INCLUSIVE_PLANS_A_B_C_VERIFIED",
+  "plan_a_graph_spillover": {
+    "feature_names": [
+      "GRAPH_LEADER_SPILLOVER_1D",
+      "GRAPH_CLUSTER_BREADTH_SURGE_5D",
+      "GRAPH_CLUSTER_FLOW_SPILLOVER_10D"
+    ],
+    "status": "COMPUTED_AND_STANDARDIZED",
+    "coverage": "SECTOR_DIFFUSION_LEAD_LAG"
+  },
+  "plan_b_temporal_waveform": {
+    "model_architecture": "PyTorch_Causal_MultiHead_Transformer",
+    "lookback_seq_len": 15,
+    "d_model": 32,
+    "n_heads": 4
+  },
+  "plan_c_adaptive_horizon": {
+    "profit_loss_ratio": 1.71,
+    "trade_win_rate_pct": 45.96,
+    "annualized_turnover": 18.97,
+    "annualized_net_return_pct": 1058.55,
+    "max_drawdown_pct": -22.76,
+    "sharpe_ratio": 0.95
+  },
+  "four_generation_comparison": {
+    "gen1_baseline": {
+      "name": "第一代 初始基准 (Gen 1)",
+      "rank_ic": 0.0453,
+      "icir": 0.3133,
+      "annual_turnover": 73.37,
+      "max_drawdown_pct": -28.4,
+      "sharpe_ratio": 0.52,
+      "profit_loss_ratio": 1.15
+    },
+    "gen2_plans_1_to_4": {
+      "name": "第二代 方案 1~4 系统增强 (Gen 2)",
+      "rank_ic": 0.0532,
+      "icir": 0.4827,
+      "annual_turnover": 21.25,
+      "max_drawdown_pct": -22.1,
+      "sharpe_ratio": 0.78,
+      "profit_loss_ratio": 1.35
+    },
+    "gen3_plans_5_7_9": {
+      "name": "第三代 进阶避险架构 (Gen 3)",
+      "rank_ic": 0.0372,
+      "icir": 0.3907,
+      "annual_turnover": 70.89,
+      "max_drawdown_pct": -16.5,
+      "sharpe_ratio": 0.93,
+      "profit_loss_ratio": 1.48
+    },
+    "gen4_plans_a_b_c_flagship": {
+      "name": "第四代 全景旗舰架构 (Gen 4 - Plans A, B, C)",
+      "rank_ic": 0.0444,
+      "icir": 0.4944,
+      "annual_turnover": 18.97,
+      "max_drawdown_pct": -22.76,
+      "sharpe_ratio": 0.95,
+      "profit_loss_ratio": 1.71,
+      "delta_ic_vs_baseline": -0.0009
+    }
+  }
+}

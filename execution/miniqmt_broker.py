@@ -4,9 +4,10 @@
 """
 import logging
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Union, Any
 import pandas as pd
 
+from config.settings import settings
 from .broker_base import BaseBroker, Account, Position, ExecutionOrder, OrderSide, OrderType, ExecutionStatus
 
 logger = logging.getLogger(__name__)
@@ -27,12 +28,14 @@ class MiniQMTBroker(BaseBroker):
         qmt_path: str = r"D:\国金证券QMT交易端\userdata_mini",
         account_id: str = "5500123456",
         account_type: str = "STOCK",
-        session_id: int = 123456
+        session_id: int = 123456,
+        live_confirm: bool = False,
     ):
         self.qmt_path = qmt_path
         self.account_id = account_id
         self.account_type = account_type
         self.session_id = session_id
+        self.live_confirm = live_confirm
 
         self.trader: Optional[Any] = None
         self.acc: Optional[Any] = None
@@ -40,6 +43,12 @@ class MiniQMTBroker(BaseBroker):
         self.orders: List[ExecutionOrder] = []
 
     def connect(self) -> bool:
+        from execution.live_gate import verify_live_connection_gate
+        # 实盘连接前置网关鉴权 (Fail-Closed)
+        verify_live_connection_gate(
+            account_id=self.account_id,
+            live_confirm=self.live_confirm
+        )
         if not XTQUANT_AVAILABLE:
             logger.warning("未检测到 xtquant 依赖包！如需使用 MiniQMT 实盘，请在 Python 环境中安装 xtquant。")
             return False
@@ -109,8 +118,20 @@ class MiniQMTBroker(BaseBroker):
         side: OrderSide,
         shares: int,
         price: float,
-        order_type: OrderType = OrderType.LIMIT
+        order_type: OrderType = OrderType.LIMIT,
+        quote_timestamp: Optional[Union[datetime, float, str]] = None
     ) -> ExecutionOrder:
+        from execution.live_gate import verify_live_order_gate
+        # 实盘发单前置网关鉴权 (Fail-Closed)
+        verify_live_order_gate(
+            account_id=self.account_id,
+            live_confirm=self.live_confirm,
+            quote_timestamp=quote_timestamp,
+            order_shares=shares,
+            order_price=price,
+            order_symbol=symbol,
+            order_side=side.name if hasattr(side, "name") else str(side),
+        )
         order_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         if not self.is_connected or self.trader is None:
             msg = "FATAL: MiniQMT 未连接或断线！实盘安全风控已阻断新订单并冻结状态，严禁在未对账情况下假想仿真成交。"

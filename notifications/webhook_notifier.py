@@ -2,6 +2,7 @@
 企业级量化决策推送中枢 (notifications/webhook_notifier.py)
 支持: 飞书 (Feishu)、企业微信 (WeCom)、钉钉 (DingTalk) 机器人 Webhook 自动推送
 """
+import math
 import os
 import json
 import logging
@@ -39,21 +40,61 @@ class QuantWebhookNotifier:
         ]
         
         for idx, s in enumerate(top_stocks[:8], 1):
-            sym = s.get('symbol', '')
-            name = s.get('name', '个股')
+            sym = s.get('symbol')
+            if not sym:
+                raise ValueError("Stock entry missing required 'symbol'")
+
+            if 'pred_score' not in s or s['pred_score'] is None:
+                raise ValueError(f"Stock {sym} missing required 'pred_score'")
+            try:
+                score = float(s['pred_score'])
+            except (ValueError, TypeError):
+                raise ValueError(f"Stock {sym} non-numeric pred_score: {s['pred_score']}")
+            if math.isnan(score) or math.isinf(score):
+                raise ValueError(f"Stock {sym} invalid pred_score: {score}")
+
+            if 'close' not in s or s['close'] is None:
+                raise ValueError(f"Stock {sym} missing required 'close'")
+            try:
+                price = float(s['close'])
+            except (ValueError, TypeError):
+                raise ValueError(f"Stock {sym} non-numeric close: {s['close']}")
+            if math.isnan(price) or math.isinf(price) or price <= 0:
+                raise ValueError(f"Stock {sym} invalid close price: {price}")
+
+            if 'target_weight' not in s or s['target_weight'] is None:
+                raise ValueError(f"Stock {sym} missing required 'target_weight'")
+            try:
+                weight = float(s['target_weight'])
+            except (ValueError, TypeError):
+                raise ValueError(f"Stock {sym} non-numeric target_weight: {s['target_weight']}")
+            if math.isnan(weight) or math.isinf(weight) or weight < 0:
+                raise ValueError(f"Stock {sym} invalid target_weight: {weight}")
+
+            name = s.get('name', sym)
             ind = s.get('industry', '主板')
-            price = s.get('close', 0.0)
-            score = s.get('pred_score', 0.0) * 100
-            w = s.get('target_weight', 0.0) * 100
-            lines.append(f"{idx}. **{name}** ({sym}) - {ind} | 现价: {price:.2f}元 | 预测超额: +{score:.1f}% | 建议仓位: {w:.1f}%")
+            w_pct = weight * 100
+            lines.append(f"{idx}. **{name}** ({sym}) - {ind} | 现价: {price:.2f}元 | 模型排序分数: {score:.4f} | 建议仓位: {w_pct:.1f}%")
 
         if account_info:
+            total_eq = account_info.get('total_equity')
+            cash_val = account_info.get('cash')
+            if total_eq is None or cash_val is None:
+                raise ValueError("account_info missing required 'total_equity' or 'cash'")
+            try:
+                total_eq = float(total_eq)
+                cash_val = float(cash_val)
+            except (ValueError, TypeError):
+                raise ValueError("account_info total_equity or cash must be numeric")
+            if math.isnan(total_eq) or math.isnan(cash_val) or total_eq < 0 or cash_val < 0:
+                raise ValueError("account_info contains invalid NaN or negative values")
+
             lines.extend([
                 "",
                 "### 💼 虚拟账户最新账本:",
-                f"- **总资产**: {account_info.get('total_equity', 1000000.0):,.2f} 元",
-                f"- **可用现金**: {account_info.get('cash', 1000000.0):,.2f} 元",
-                f"- **持仓标的数**: {account_info.get('holding_count', 0)} 只"
+                f"- **总资产**: {total_eq:,.2f} 元",
+                f"- **可用现金**: {cash_val:,.2f} 元",
+                f"- **持仓标的数**: {int(account_info.get('holding_count', 0))} 只"
             ])
 
         if safety_events:

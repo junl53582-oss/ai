@@ -1,0 +1,7 @@
+{
+  "raw_icir": "mean(daily_rank_ic) / std(daily_rank_ic)",
+  "period_annualized_icir": "raw_icir * sqrt(242 / horizon) = raw_icir * 3.478505 (when horizon=20)",
+  "daily_annualized_icir": "raw_icir * sqrt(242) = raw_icir * 15.556349",
+  "audit_assertion": "multiplier_period == np.sqrt(242 / 20.0) and multiplier_daily == np.sqrt(242.0)",
+  "reconciliation": "Phase 2.1-F report text mistakenly omitted sqrt symbol in prose while calculation correctly applied sqrt. Phase 2.1-G formalizes exact sqrt formulas in both docs and code."
+}

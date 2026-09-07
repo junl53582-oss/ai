@@ -99,8 +99,27 @@ class TestProductionModelAdapterCompatibility:
         )
         reg.promote(mid, ModelState.CANDIDATE, approver="test")
         reg.promote(mid, ModelState.APPROVED, approver="test", evidence={"certification_ref": "c"})
+        from data.crypto_anchor import TRUSTED_KEY_REGISTRY, generate_keypair
+        from models.registry import EvidenceArtifact
+        from datetime import datetime
+        sk, pk = generate_keypair()
+        key_id = "HARDENING_TEST_KEY"
+        TRUSTED_KEY_REGISTRY[key_id] = {
+            "algorithm": "ED25519", "key_id": key_id, "public_key_hex": pk.hex(),
+            "allowed_purposes": ["MODEL_PROMOTION", "RUNTIME_ATTESTATION"], "status": "ACTIVE", "is_production": False
+        }
+        p1 = tmp_path / "pv.json"
+        pv = EvidenceArtifact("PROSPECTIVE_VALIDATION", str(p1), "", "evidence_v1", mid, "c"*64, "",
+                              datetime.now().isoformat(), "2026-07-27", "2026-08-24", 21, "MATURE", "test", key_id, "")
+        pv.sign(sk.hex()).save(p1)
+        p2 = tmp_path / "pt.json"
+        pt = EvidenceArtifact("PAPER_TRADING", str(p2), "", "evidence_v1", mid, "c"*64, "",
+                              datetime.now().isoformat(), "2026-07-27", "2026-08-24", 21, "MATURE", "test", key_id, "")
+        pt.sign(sk.hex()).save(p2)
         reg.promote(mid, ModelState.PRODUCTION, approver="test", evidence={
-            "certification_ref": "c", "prospective_validation": True, "paper_trading": True
+            "certification_ref": "c",
+            "prospective_validation": pv,
+            "paper_trading": pt
         })
 
         with pytest.raises(InferenceError, match="暂不支持推理的模型类型"):

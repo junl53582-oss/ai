@@ -1,4 +1,4 @@
-﻿"""
+"""
 高弹性进取型主升浪 Alpha 决策引擎 (strategy/aggressive_alpha_engine.py)
 涵盖 30 只全市场核心成长科技、算力、芯片、新材料、高端制造与出海主线标的
 支持自由输出 Top 8 / Top 15 / Top 20 / Top 30 完整选股决策池
@@ -20,7 +20,7 @@ OFFENSIVE_SYMBOL_METADATA = {
     '603259.SH': {'name': '药明康德', 'industry': '创新药/CXO',   'concept': '全球小分子CRDMO外包研发服务龙头', 'beta': 1.40},
     '300750.SZ': {'name': '宁德时代', 'industry': '电力设备',     'concept': '全球动力电池与储能绝对霸主', 'beta': 1.40},
     '002594.SZ': {'name': '比亚迪',   'industry': '新能源整车',   'concept': '全球新能源汽车与整车智能化巨头', 'beta': 1.35},
-    '603986.SH': {'name': '兆易创新', 'industry': '半导体芯片',   'concept': '存储芯片与MCU龙头 (实盘基准383.20元)', 'beta': 1.55},
+    '603986.SH': {'name': '兆易创新', 'industry': '半导体芯片',   'concept': '存储芯片与MCU龙头', 'beta': 1.55},
     '688012.SH': {'name': '中微公司', 'industry': '半导体设备',   'concept': '高端等离子体刻蚀机自主可控', 'beta': 1.50},
     '601872.SH': {'name': '招商轮船', 'industry': '交通运输/航运', 'concept': '油散双轮驱动海运景气复苏', 'beta': 1.35},
     '300124.SZ': {'name': '汇川技术', 'industry': '工业机器人',   'concept': '工控自动化与人形机器人核心部件', 'beta': 1.35},
@@ -45,90 +45,83 @@ OFFENSIVE_SYMBOL_METADATA = {
 }
 
 class AggressiveAlphaEngine:
-    """高弹性进取型量化引擎"""
+    """高弹性进取型量化引擎 (零伪造、严格依真实模型打分排序)"""
     
     @staticmethod
-    def generate_aggressive_portfolio(factor_df: pd.DataFrame = None, date: str = '2026-09-03', top_k_buy: int = 8) -> pd.DataFrame:
-        """从截面中筛选高弹性进攻型标的并生成非对称进取仓位，支持全量 30 只股票梯队输出"""
+    def generate_aggressive_portfolio(factor_df: pd.DataFrame = None, date: str = None, top_k_buy: int = 8) -> pd.DataFrame:
+        """从截面中筛选高弹性进攻型标的并生成进取仓位。
+        
+        严格坚持 Fail-Closed：输入数据必须提供真实模型预测分 'pred_score'，
+        严禁使用 np.linspace 伪造胜率或人工 priority_map 强制顶替。
+        """
         sub = None
-        if factor_df is not None and not factor_df.empty and 'date' in factor_df.columns:
-            sub = factor_df[factor_df['date'] == pd.to_datetime(date)].copy()
+        if factor_df is not None and not factor_df.empty:
+            if 'date' in factor_df.columns:
+                target_dt = pd.to_datetime(date) if date is not None else factor_df['date'].max()
+                sub = factor_df[pd.to_datetime(factor_df['date']) == target_dt].copy()
+            else:
+                sub = factor_df.copy()
             
         if sub is None or sub.empty:
             matrix_path = Path('data_storage/research/factor_matrix_300.parquet')
-            if matrix_path.exists():
+            if matrix_path.exists() and date is not None:
                 full_df = pd.read_parquet(matrix_path)
                 full_df['date'] = pd.to_datetime(full_df['date'])
                 sub = full_df[full_df['date'] == pd.to_datetime(date)].copy()
                 
-        # 匹配元数据
+        if sub is None or sub.empty:
+            raise ValueError("Fail-Closed: Input factor_df is empty or date not found. Refusing synthetic portfolio generation.")
+
+        # 严格检查真实预测分
+        if 'pred_score' not in sub.columns:
+            raise ValueError("Fail-Closed: 'pred_score' missing from input data. Artificial/synthetic prediction scores are strictly prohibited.")
+
+        dt_str = str(date) if date is not None else (str(sub['date'].iloc[0])[:10] if 'date' in sub.columns else "")
+
         records = []
         for sym, meta in OFFENSIVE_SYMBOL_METADATA.items():
-            close = 50.0
-            pct = 0.01
-            if sub is not None and not sub.empty:
-                stock_row = sub[sub['symbol'] == sym]
-                if not stock_row.empty:
-                    r = stock_row.iloc[0]
-                    close = float(r['close'])
-                    pct = float(r['pct_change'])
-            if sym == '603986.SH':
-                close = 383.20
-            elif sym == '300308.SZ':
-                close = 813.00
-            elif sym == '600026.SH':
-                close = 20.33
-            elif sym == '000301.SZ':
-                close = 14.73
-            elif sym == '601138.SH':
-                close = 63.20
-            elif sym == '688981.SH':
-                close = 123.87
-            elif sym == '603259.SH':
-                close = 156.63
-            elif sym == '300750.SZ':
-                close = 349.50
-            elif sym == '002594.SZ':
-                close = 87.31
-                
+            stock_rows = sub[sub['symbol'] == sym]
+            if stock_rows.empty:
+                continue
+            r = stock_rows.iloc[0]
+            pred_score = r['pred_score']
+            if pd.isna(pred_score):
+                continue
+            
+            close = float(r['close']) if 'close' in r and pd.notna(r['close']) else np.nan
+            pct = float(r['pct_change']) if 'pct_change' in r and pd.notna(r['pct_change']) else 0.0
+            
             records.append({
-                'date': date,
+                'date': dt_str,
                 'symbol': sym,
                 'name': meta['name'],
                 'industry': meta['industry'],
                 'concept': meta['concept'],
                 'beta': meta['beta'],
                 'close': close,
-                'pct_change': pct
+                'pct_change': pct,
+                'pred_score': float(pred_score)
             })
             
+        if not records:
+            raise ValueError("Fail-Closed: No symbols from offensive universe have valid non-null 'pred_score'.")
+
         res_df = pd.DataFrame(records)
         
-        # 按照 Beta 弹性和动量强度排序
-        res_df['momentum_score'] = res_df['beta'] * 0.7 + (res_df['pct_change'] + 0.05) * 10.0
-        # 显式置顶核心领涨先锋
-        priority_map = {
-            '600026.SH': 100, '000301.SZ': 95, '601138.SH': 90, '688981.SH': 85,
-            '300308.SZ': 80,  '603259.SH': 75, '300750.SZ': 70, '002594.SZ': 65,
-            '603986.SH': 60,  '688012.SH': 58, '601872.SH': 56, '300124.SZ': 54,
-            '002475.SZ': 52,  '300274.SZ': 50, '688256.SH': 48, '000977.SZ': 46
-        }
-        res_df['priority'] = res_df['symbol'].map(priority_map).fillna(30.0)
-        res_df = res_df.sort_values(by=['priority', 'momentum_score'], ascending=[False, False]).reset_index(drop=True)
+        # 严格依据模型预测得分 pred_score 降序排序，零人工 priority_map
+        res_df = res_df.sort_values(by=['pred_score'], ascending=[False]).reset_index(drop=True)
         
         n_total = len(res_df)
-        
-        # 概率梯度: 从 76.8% 平滑递减到 56.5%
-        probs = np.linspace(0.768, 0.565, n_total)
-        res_df['pred_score'] = np.round(probs, 3)
-        
-        # 阶梯配置权重:
-        # 前 8 支分配 95% 满仓核心进攻权重: [18%, 16%, 14%, 12%, 11%, 9%, 8%, 7%]
-        # 第 9 支及以后为第一梯队战略储备候选池 (权重标为 0.0%，方便实盘精准执行)
         core_weights = [0.18, 0.16, 0.14, 0.12, 0.11, 0.09, 0.08, 0.07]
         weights = [0.0] * n_total
-        for i in range(min(top_k_buy, len(core_weights))):
-            weights[i] = core_weights[i]
-        res_df['target_weight'] = weights
         
+        num_alloc = min(top_k_buy, n_total, len(core_weights))
+        allocated_core = core_weights[:num_alloc]
+        total_alloc_weight = sum(allocated_core)
+        # 若标的不足 8 支，按比例缩放使得前部核心标的仓位合计不超过 0.95
+        scale = 0.95 / total_alloc_weight if total_alloc_weight > 0 and num_alloc < len(core_weights) else 1.0
+        for i in range(num_alloc):
+            weights[i] = round(allocated_core[i] * min(scale, 1.0), 4)
+            
+        res_df['target_weight'] = weights
         return res_df

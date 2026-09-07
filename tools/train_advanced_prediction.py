@@ -1,4 +1,4 @@
-﻿"""
+"""
 深度股票预测优化引擎 (tools/train_advanced_prediction.py)
 涵盖:
 1. 7 大异源复合 Alpha 全矩阵注入 (残差动量、质量动量、短期超跌反转、特质波动率、资金流背离)
@@ -47,14 +47,9 @@ def run_advanced_training():
     df['date'] = pd.to_datetime(df['date'])
 
     # 1. 注入全套异源 Alpha 因子群
-    print('\n[1/4] 注入 7 大异源非线性与微观结构 Alpha 因子群...')
-    df['ALPHA_RESIDUAL_MOMENTUM_20'] = NovelAlphaFactory.calc_residual_momentum(df, window=20)
-    df['ALPHA_TURNOVER_SURPRISE_5_20'] = NovelAlphaFactory.calc_turnover_surprise(df, short_w=5, long_w=20)
-    df['ALPHA_QUALITY_X_MOMENTUM'] = NovelAlphaFactory.calc_quality_x_momentum(df)
-    df['ALPHA_LIQUIDITY_X_VOL'] = NovelAlphaFactory.calc_liquidity_x_volatility(df)
-    df['ALPHA_SHORT_REVERSAL_5'] = NovelAlphaFactory.calc_short_term_reversal(df, window=5)
-    df['ALPHA_IDIO_VOL_PENALTY'] = NovelAlphaFactory.calc_idio_vol_penalty(df, window=20)
-    df['ALPHA_MONEY_FLOW_DIV_10'] = NovelAlphaFactory.calc_money_flow_divergence(df, window=10)
+    print('\n[1/4] 注入 7 大异源非线性与微观结构 Alpha 因子群 (通过统一 FactorProcessor)...')
+    from factors.processor import FactorProcessor
+    df = FactorProcessor.compute_advanced_alpha_features(df)
 
     novel_alpha_list = [
         'ALPHA_RESIDUAL_MOMENTUM_20', 'ALPHA_TURNOVER_SURPRISE_5_20',

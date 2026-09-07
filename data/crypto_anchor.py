@@ -33,6 +33,8 @@ DOMAIN_SEPARATOR_RUNTIME = "QUANT_RUNTIME_ATTESTATION_V1"
 DOMAIN_SEPARATOR_ACQUISITION = "QUANT_ACQUISITION_RECEIPT_V1"
 DOMAIN_SEPARATOR_OPERATOR = "QUANT_VENDOR_OPERATOR_ATTESTATION_V1"
 DOMAIN_SEPARATOR_CORPORATE_ACTION = "QUANT_CORPORATE_ACTION_ATTESTATION_V1"
+DOMAIN_SEPARATOR_PROMOTION = "QUANT_MODEL_PROMOTION_EVIDENCE_V1"
+
 
 
 def safe_resolve_path(base_dir: Union[str, Path], subpath: Union[str, Path]) -> Optional[Path]:
@@ -253,6 +255,34 @@ TRUSTED_KEY_REGISTRY: Dict[str, Dict[str, Any]] = {
         "issuer_type": "PROJECT_REGISTERED_VENDOR_OPERATOR",
         "institution": "EASTMONEY_CHOICE_TERMINAL_OPERATOR",
         "env_private_key_var": "CHOICE_OPERATOR_PRIVATE_KEY",
+        "status": "ACTIVE",
+        "not_before": "2025-01-01T00:00:00Z",
+        "not_after": "2030-01-01T00:00:00Z",
+        "is_production": True
+    },
+    # 4b. 模型晋升审计签名公钥 (专用 MODEL_PROMOTION 权限，严禁用于实盘或运行时报告)
+    "PROD_MODEL_PROMOTION_KEY_2026_V1": {
+        "algorithm": "ED25519",
+        "key_id": "PROD_MODEL_PROMOTION_KEY_2026_V1",
+        "public_key_hex": "5caa2f1d51c10c2cc0d813fc32bbbe5fd446052f061c18cf1ec9e4a76217e7fc",
+        "allowed_purposes": ["MODEL_PROMOTION"],
+        "issuer_type": "PROJECT",
+        "institution": "QUANT_MODEL_GOVERNANCE_COMMITTEE",
+        "env_private_key_var": "QUANT_PROD_PROMOTION_PRIVATE_KEY",
+        "status": "ACTIVE",
+        "not_before": "2025-01-01T00:00:00Z",
+        "not_after": "2030-01-01T00:00:00Z",
+        "is_production": True
+    },
+    # 4c. 实盘发单审批授权签名公钥 (专用 LIVE_TRADING_AUTHORIZATION 权限，严禁混用)
+    "PROD_LIVE_AUTH_KEY_2026_V1": {
+        "algorithm": "ED25519",
+        "key_id": "PROD_LIVE_AUTH_KEY_2026_V1",
+        "public_key_hex": "35d0cdd888604b6dd9c597dadb80d190ff2570cf07b2972739839e8f219094f2",
+        "allowed_purposes": ["LIVE_TRADING_AUTHORIZATION"],
+        "issuer_type": "PROJECT",
+        "institution": "QUANT_LIVE_TRADING_AUTHORIZATION_COMMITTEE",
+        "env_private_key_var": "QUANT_PROD_LIVE_AUTH_PRIVATE_KEY",
         "status": "ACTIVE",
         "not_before": "2025-01-01T00:00:00Z",
         "not_after": "2030-01-01T00:00:00Z",

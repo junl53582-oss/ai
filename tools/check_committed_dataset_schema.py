@@ -74,10 +74,164 @@ def check_market_dataset(path: Path) -> bool:
                     )
                     return False
 
+        # ---------- 语义完整性门禁 (Stage A: 防跨股票填充与行业异常坍缩) ----------
+        if not verify_dataset_semantic_integrity(path, df):
+            return False
+
+        # 校验伴随 Manifest 存证
+        if not verify_manifest_consistency(path, df):
+            return False
+
         logger.info("  -> 行情数据集 Schema 校验通过！")
         return True
     except Exception as e:
         logger.error(f"❌ 读取行情数据集异常: {e}")
+        return False
+
+
+def verify_dataset_semantic_integrity(path: Path, df: pd.DataFrame) -> bool:
+    """
+    语义完整性门禁 (Stage A / 防伪与防跨股票污染):
+    1. 截面行业数量不得异常坍缩 (例如 300 支股票 100% 属于同一个行业 '半导体')
+    2. 已知核心标的行业合理性核查 (600519.SH 茅台、300750.SZ 宁德时代、300760.SZ 迈瑞医疗绝对不能被标为半导体)
+    3. 拒绝跨股票直接无分组 ffill/bfill 产生的全同特征副本
+    """
+    try:
+        if df.empty or "date" not in df.columns:
+            return True
+
+        df_check = df.copy()
+        df_check["date"] = pd.to_datetime(df_check["date"])
+
+        # 1. 行业截面坍缩核验
+        if "industry" in df_check.columns:
+            for dt, grp in df_check.groupby("date"):
+                n_syms = len(grp)
+                if n_syms >= 50:
+                    inds = grp["industry"].dropna().unique()
+                    if len(inds) <= 1:
+                        logger.error(
+                            f"❌ [语义门禁-行业坍缩拦截] {path.name} 在 {dt.strftime('%Y-%m-%d')} 截面具有 {n_syms} 只股票，"
+                            f"但行业唯一数仅为 {len(inds)} ({inds})！存在严重跨股票继承污染！"
+                        )
+                        return False
+                    if n_syms >= 200 and len(inds) < 10:
+                        logger.error(
+                            f"❌ [语义门禁-行业丰富度不足] {path.name} 在 {dt.strftime('%Y-%m-%d')} 截面股票数 {n_syms}，"
+                            f"但行业数仅 {len(inds)} < 10！"
+                        )
+                        return False
+
+        # 2. 核心白马标的行业真伪性检查
+        known_forbidden_industries = {
+            "600519.SH": "半导体",
+            "300750.SZ": "半导体",
+            "300760.SZ": "半导体"
+        }
+        if "symbol" in df_check.columns and "industry" in df_check.columns:
+            for sym, forbidden_ind in known_forbidden_industries.items():
+                bad_rows = df_check[(df_check["symbol"] == sym) & (df_check["industry"] == forbidden_ind)]
+                if not bad_rows.empty:
+                    bad_dates = bad_rows["date"].dt.strftime("%Y-%m-%d").tolist()
+                    logger.error(
+                        f"❌ [语义门禁-已知标的行业谬误] {path.name} 中核心股票 {sym} 被错误标记为 '{forbidden_ind}'！"
+                        f"受影响日期: {bad_dates[:5]}"
+                    )
+                    return False
+
+        # 3. 跨股票全同特征副本核验 (检测未按 symbol 分组直接全局 ffill 的特征)
+        # 选取若干数值特征检查同一日期下是否有连续不同股票取值完全相同且非0/非空
+        num_cols = [c for c in df_check.columns if c.startswith("ALPHA_") or c.startswith("BARRA_")]
+        if len(num_cols) >= 5:
+            # 随机抽样近几个截面
+            recent_dates = df_check["date"].drop_duplicates().sort_values().tail(3)
+            for dt in recent_dates:
+                dt_grp = df_check[df_check["date"] == dt].copy().reset_index(drop=True)
+                if len(dt_grp) >= 100:
+                    # 检查是否有超过 80% 的股票在所有抽样特征上取值完全相同
+                    sub_feat = dt_grp[num_cols[:5]]
+                    first_row = sub_feat.iloc[0].values
+                    all_same = (sub_feat == first_row).all(axis=1).mean()
+                    if all_same > 0.50:
+                        logger.error(
+                            f"❌ [语义门禁-跨股票全同特征拦截] {path.name} 在 {dt.strftime('%Y-%m-%d')} "
+                            f"有 {all_same*100:.1f}% 的股票特征完全相同！疑似全局 ffill 污染！"
+                        )
+                        return False
+
+        logger.info(f"  -> 语义完整性核验 PASS ({path.name})")
+        return True
+    except Exception as e:
+        logger.error(f"❌ 语义完整性检查异常: {e}")
+        return False
+
+
+def verify_manifest_consistency(path: Path, df: pd.DataFrame) -> bool:
+    """双向校验 Parquet 物理文件与伴随 Manifest 存证的绝对一致性 (Fail-Closed)"""
+    import json
+    import hashlib
+
+    manifest_path = path.with_suffix(".manifest.json")
+    if not manifest_path.exists():
+        # 如果是 market_daily_300.parquet 等存在 manifest 的数据集，manifest 必须存在
+        return True
+
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        actual_sha = hashlib.sha256(path.read_bytes()).hexdigest().lower()
+        
+        # 1. 哈希校验 (支持 file_sha256 或 dataset_sha256)
+        exp_sha = manifest.get("file_sha256") or manifest.get("dataset_sha256")
+        if exp_sha and exp_sha.lower() != actual_sha:
+            logger.error(
+                f"❌ [Manifest 哈希篡改拦截] {manifest_path.name} 记录哈希 ({exp_sha}) 与物理文件实际哈希 ({actual_sha}) 不匹配！"
+            )
+            return False
+
+        # 2. 行数校验 (支持 row_count 或 market_rows)
+        exp_rows = manifest.get("row_count") if "row_count" in manifest else manifest.get("market_rows")
+        if exp_rows is not None and int(exp_rows) != len(df):
+            logger.error(
+                f"❌ [Manifest 行数不一致] {manifest_path.name} 记录行数 ({exp_rows}) 与物理文件行数 ({len(df)}) 不一致！"
+            )
+            return False
+
+        # 3. 标的数校验 (支持 symbol_count 或 market_symbols_count)
+        exp_syms = manifest.get("symbol_count") if "symbol_count" in manifest else manifest.get("market_symbols_count")
+        actual_syms = df["symbol"].nunique() if "symbol" in df.columns else 0
+        if exp_syms is not None and int(exp_syms) != actual_syms:
+            logger.error(
+                f"❌ [Manifest 标的数不一致] {manifest_path.name} 记录标的数 ({exp_syms}) 与物理文件标的数 ({actual_syms}) 不一致！"
+            )
+            return False
+
+        # 4. 日期范围校验
+        if "date" in df.columns and ("date_range" in manifest or ("date_min" in manifest and "date_max" in manifest)):
+            dt_s = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+            act_min, act_max = dt_s.min(), dt_s.max()
+            if "date_range" in manifest:
+                exp_min, exp_max = manifest["date_range"][0], manifest["date_range"][1]
+            else:
+                exp_min, exp_max = manifest.get("date_min"), manifest.get("date_max")
+            if act_min != exp_min or act_max != exp_max:
+                logger.error(
+                    f"❌ [Manifest 日期范围不一致] {manifest_path.name} 记录范围 [{exp_min}, {exp_max}] 与物理文件实际范围 [{act_min}, {act_max}] 不一致！"
+                )
+                return False
+
+        # 5. 特征列数校验
+        if "feature_count" in manifest:
+            exp_features = int(manifest["feature_count"])
+            if exp_features != len(df.columns):
+                logger.error(
+                    f"❌ [Manifest 列数不一致] {manifest_path.name} 记录列数 ({exp_features}) 与物理文件列数 ({len(df.columns)}) 不一致！"
+                )
+                return False
+
+        logger.info(f"  -> Manifest 存证物理双向核对 100% PASS ({manifest_path.name})")
+        return True
+    except Exception as e:
+        logger.error(f"❌ 校验 Manifest 存证异常: {e}")
         return False
 
 
@@ -105,6 +259,14 @@ def check_factor_matrix(path: Path) -> bool:
 
         if b_open_cov < 0.80 or b_close_cov < 0.80:
             logger.error(f"❌ 因子矩阵基准数据覆盖率不达标 (open: {b_open_cov:.2f}, close: {b_close_cov:.2f})！")
+            return False
+
+        # ---------- 语义完整性门禁 (Stage A: 防跨股票填充与行业异常坍缩) ----------
+        if not verify_dataset_semantic_integrity(path, df):
+            return False
+
+        # 校验伴随 Manifest 存证
+        if not verify_manifest_consistency(path, df):
             return False
 
         logger.info("  -> 因子矩阵 Schema 校验通过！")

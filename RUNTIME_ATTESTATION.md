@@ -1,12 +1,12 @@
-# A股量化系统 · 本次回测真实性认证证书 (RUNTIME_ATTESTATION)
+# A股量化系统 · 本次回测真实性认证证书 (HISTORICAL_ATTESTATION)
 
 > **运行时实例 ID**: `UNTRUSTED_run_b7c7f054`  
-> **认证类型**: `CURRENT_RUNTIME_ATTESTATION`  
+> **认证类型**: `HISTORICAL_ATTESTATION (仅历史签名有效，非当前运行)`  
 > **执行代码 Commit (CODE_COMMIT_SHA)**: `c9e45e1586135fe28fe01876dbbecba031bd3667`  
 > **构建产物归档类型 (ARTIFACT_STORAGE)**: `BUILD_ARTIFACT / REPOSITORY_GENERATED_OUTPUT`  
 > **启动时源码纯净状态 (RUNTIME_START_SOURCE_DIRTY)**: `False`  
 > **外部信任根锚定状态 (TRUST_ROOT_VERIFIED)**: `False`  
-> **认证评估时间**: 2026-08-29 19:48:32  
+> **认证评估时间**: 2026-09-05 02:27:30  
 > **本次回测可信度总评级**: **`HIGH_RISK`**  
 > **认证判定机制**: `backtest.audit.CertificationPolicy` (全要素 Fail-Closed 判定)
 
@@ -16,7 +16,7 @@
 
 | 序号 | 运行时要素 | 实际运行状态 | 认证门禁 | 运行时具体证据与度量 |
 | :--- | :--- | :---: | :---: | :--- |
-| 1 | **外部信任根锚定 (External Trust Root)** | `UNPINNED_OR_TAMPERED` | ⚠️ ATTENTION / FAIL | 来源: UNPINNED_SELF_TRUST, 注册表哈希: c67a05171e4ab5f9..., 外部锚定: none... |
+| 1 | **外部信任根锚定 (External Trust Root)** | `UNPINNED_OR_TAMPERED` | ⚠️ ATTENTION / FAIL | 来源: UNPINNED_SELF_TRUST, 注册表哈希: d9082c0ef98e6868..., 外部锚定: none... |
 | 2 | **股票池时点覆盖 (PIT Universe)** | `COMPLETE` | ⚠️ ATTENTION / FAIL | 模式: PIT_INCOMPLETE, 来源类别: UNKNOWN, 原始证据校验: False, 幸存者风险: True |
 | 3 | **真实数据源 (No Synthetic)** | `NON_SYNTHETIC_UNAUTHENTICATED` | ⚠️ ATTENTION / FAIL | 数据源: unknown, 分布: {}, 来源鉴证: False |
 | 4 | **交易所官方交易日历** | `THIRD_PARTY/FALLBACK` | ⚠️ ATTENTION / FAIL | 日历来源: akshare_sina, 质量评级: third_party |
@@ -60,6 +60,7 @@
 - `market_data_source_unverified`
 - `order_quantity_conservation_failed`
 - `calendar_not_exchange_official`
+- `envelope_keyring_hash_mismatch_c67a05171e4ab5f973b29181a3c3ae73941b850e8a6cf638bbdd9362c1ebdaaa_vs_repo_d9082c0ef98e6868d72e9b7c10836647ccb1cd05001fc7a1c08a1481726830b1`
 - `missing_external_trust_root_pin_QUANT_TRUSTED_KEYRING_SHA256`
 - `unregistered_runtime_signing_key_DEV_UNTRUSTED_KEY`
 - `missing_external_trust_root_pin_QUANT_TRUSTED_KEYRING_SHA256`

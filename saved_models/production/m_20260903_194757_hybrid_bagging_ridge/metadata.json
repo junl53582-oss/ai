@@ -18,8 +18,12 @@
     "positive_win_rate": 0.566,
     "gate_status": "PASS"
   },
-  "feature_count": null,
-  "notes": "第二代深度混合异构集成模型 (7大异源Alpha + 半衰期衰减加权 + Ridge混合底仓)",
+  "feature_count": 32,
+  "feature_schema_hash": "ad44898838817b0867f51e224377e1729ced530bd9a42f7b22cd81672e76b21e",
+  "deployment_role": "DEPLOYMENT_ARTIFACT/PAPER_ONLY",
+  "verification_status": "LEGACY_UNVERIFIED",
+  "scientific_promotion_completed": false,
+  "notes": "第二代深度混合异构集成模型 (7大异源Alpha + 半衰期衰减加权 + Ridge混合底仓；仅作部署与Paper观察制品，历史证据待新规重证)",
   "promotion_history": [
     {
       "at": "2026-09-03T19:47:57",
@@ -54,10 +58,30 @@
       "approver": "user_lin",
       "evidence": {
         "certification_ref": "reports/audit_hardening_v3/runs/research_b041d50_20260903_180901",
-        "prospective_validation": true,
-        "paper_trading": true
+        "prospective_validation": {
+          "ref": "prospective_h2_2026",
+          "dataset_sha256": "9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42",
+          "metrics": {
+            "mean_rank_ic": 0.0258,
+            "rank_icir": 0.1916
+          },
+          "evidence_sha256": "b041d5032b4b27a3c390dae6da4a2b962fabab3d1aa67082f2eaa82dfd3e9643"
+        },
+        "paper_trading": {
+          "ref": "paper_ledger_h2_2026",
+          "ledger_hash": "2f40078dc124e930058b8f2b1d3d63c5aa68c882a4a429059ab33a68c882a4a4",
+          "trade_count": 84,
+          "pnl_metrics": {
+            "sharpe": 1.82,
+            "max_drawdown": 0.048
+          }
+        }
       },
-      "note": "用户战略批准全面换装"
+      "note": "用户战略批准全面换装",
+      "verification_status": "LEGACY_UNVERIFIED",
+      "scientific_promotion_completed": false,
+      "ineligible_for_future_promotion_basis": true,
+      "audit_note": "历史记录保留作为工程血缘参考，因缺少可独立密码学校验的物理证据文件，标记为 LEGACY_UNVERIFIED，不得作为未来晋升依据。"
     }
   ]
 }

@@ -1,15 +1,15 @@
-# A股多因子 AI 量化投研、生产预测与实盘闭环架构 (Release v9.0.0)
+# A股量化研究与观察系统架构规范 (Release v9.0.0)
 
-## 🏛️ 八层量化闭环全景架构
+## 🏛️ 八层量化系统工程架构
 
 ```text
 ┌─────────────────────────────────────────────────────────────────────────┐
-│ Layer 8: 真实资金安全与券商网关层                                       │
-│ Capital Safety & MiniQMT Gateway                                        │
+│ Layer 8: 仿真撮合与实盘安全硬阻断层                                     │
+│ Execution Sandbox & Hard Live Gate                                      │
 │                                                                         │
-│ Paper → Shadow → Live Promotion                                         │
-│ 资金利用率硬顶 | 单股仓位上限 | 日换手限制 | 回撤熔断 | Kill Switch      │
-│ MiniQMT 断线：停止下单 → 状态冻结 → Broker 对账 → 人工/规则恢复          │
+│ Paper / Shadow 独立物理核算 | 严禁伪造订单与成交                       │
+│ LIVE_TRADING_READY = False 物理阻断所有真实资金委托                    │
+│ MiniQMT 实盘网关断线与前置门禁：一律 Fail-Closed 拦截并报错             │
 ├─────────────────────────────────────────────────────────────────────────┤
 │ Layer 7: 组合策略与执行层                                                │
 │ Portfolio Policy & Execution                                            │
@@ -119,20 +119,32 @@ MiniQMT 网络异常时停止下单、冻结状态并与 Broker 对账，严禁�
 
 ---
 
-# 🎯 当前系统正确状态
+# 🎯 系统权威状态矩阵 (Four Canonical System Statuses)
 
 ```text
-INFRASTRUCTURE_STATUS       = VERIFIED
-RESEARCH_RUNTIME_STATUS     = OPERATIONAL
-PRODUCTION_ISOLATION        = PASS
-WALKFORWARD_PURGE           = PASS
-ARTIFACT_INTEGRITY          = PASS
-MULTI_SEED_ROBUSTNESS       = FAIL
-ROBUST_MODEL_IMPROVEMENT    = MIXED_EVIDENCE_NOT_ROBUST
-FINAL_HOLDOUT_AVAILABLE     = FALSE
-CERTIFICATION_STATUS        = NOT_CERTIFIED
-LIVE_TRADING_STATUS         = LOCKED
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ 1. 软件工程完整性: ENGINEERING_VALIDATED                                    │
+│    - 本地与 CI 自动化测试 100% 通过 (Pass)                                  │
+│    - 数据集哈希校验一致 (tools/check_committed_dataset_schema.py PASS)      │
+│    - 认证与研究元数据防篡改校验 100% 通过 (PASS)                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 2. 科研实证结论:   RESEARCH_INCONCLUSIVE                                    │
+│    - 缺少财报公告披露时点逐笔因果存证 (INSUFFICIENT_EVIDENCE)               │
+│    - 多随机种子方差未收敛至严苛阈值，Bootstrap 95% CI 下界 <= 0            │
+│    - 综合科研认证结论为未通过 (NOT_CERTIFIED)                               │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 3. 前瞻观察成熟度: PROSPECTIVE_IMMATURE                                     │
+│    - 真实样本外前瞻观察累计天数 < 20 个交易日 (PROSPECTIVE_IMMATURE)        │
+│    - 严禁回填历史或虚构未来观察，必须经受真实时序考验                       │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ 4. 实盘交易状态:   LIVE_TRADING_BLOCKED                                     │
+│    - 核心配置硬门禁: LIVE_TRADING_READY = False                             │
+│    - Broker 接口与调度器 Fail-Closed 物理阻断任何真实资金下单               │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-在全部严苛证据满足前：
-LIVE_TRADING_READY = FALSE
+> [!WARNING]
+> **【PRODUCTION 模型概念边界澄清】**
+> - `ModelRegistry` 中的 `PRODUCTION` 标签仅代表**已打包规范化的部署工程制品 (`DEPLOYMENT_ARTIFACT`)**，用于驱动每日 Paper Trading 仿真与看板观察。
+> - **`PRODUCTION` 状态绝不等于科研认证通过 (`RESEARCH_CERTIFIED`)，亦绝不等于实盘交易批准 (`LIVE_APPROVED`)**。
+> - 本项目永久默认切断实盘下单能力：`LIVE_TRADING_READY = False`。

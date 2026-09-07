@@ -1,16 +1,32 @@
 {
   "dataset_name": "A_SHARE_PIT_RESEARCH_MARKET_DAILY_300",
-  "dataset_version": "1.6",
+  "dataset_version": "3.0",
   "is_ci_fixture": false,
   "production_ready": true,
+  "recipe": {
+    "recipe_version": "3.0",
+    "universe": "inherited from legacy market_daily_300.parquet symbol set (PIT incomplete, known state)",
+    "log_circ_mv": "raw from new market_daily.parquet log_circ_mv (real circulating MV, fixes legacy standardized pollution)",
+    "settings_snapshot": {
+      "ENABLE_REGISTRY_FACTORS": true,
+      "ENABLE_FUNDAMENTALS": false
+    }
+  },
+  "code_commit": "f757c778e3964f78d901436921c2b98dbbf898d2",
+  "built_at": "2026-09-06T17:39:06+00:00",
+  "parent_dataset": {
+    "path": "data_storage/parquet/market_daily.parquet",
+    "file_sha256": "c18a726d71726ba88c3a972e6c7cbcb1b3d32c3f4fd2fdc9919eb529919450cb",
+    "note": "full-market panel rebuilt 2026-09-07 via DataManager.sync_and_build_dataset (pct_change/turnover fixed)"
+  },
   "symbol_count": 300,
-  "row_count": 349379,
+  "row_count": 465544,
   "date_range": [
-    "2021-09-29",
-    "2026-08-24"
+    "2020-01-02",
+    "2026-09-04"
   ],
-  "daily_cross_section_median": 297.0,
-  "benchmark_open_coverage": 1.0,
-  "benchmark_close_coverage": 1.0,
-  "file_sha256": "47dc1429f20acfbd254c3c23f172c80f5d87852fa04bb4d6f60579af310033be"
+  "pct_change_nonzero_ratio": 0.9735900366023404,
+  "turnover_nonzero_ratio": 1.0,
+  "file_sha256": "3bd13ab741d183ddcf002bd03e853bcfdd599629f3d361bcde2d2e3475d00fd8",
+  "builder_version": "tools/rebuild_dataset_300_from_sync.py"
 }

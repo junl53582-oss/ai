@@ -70,7 +70,11 @@ class PortfolioBuilder:
             in_univ_mask = df["in_universe"].fillna(False).astype(bool)
             df = df[in_univ_mask].copy()
 
-        tradable_df = df[~df.get("is_suspended", False)].copy()
+        if "is_suspended" in df.columns:
+            suspended_mask = df["is_suspended"].fillna(False).astype(bool)
+            tradable_df = df[~suspended_mask].copy()
+        else:
+            tradable_df = df.copy()
         if tradable_df.empty:
             return pd.DataFrame()
 

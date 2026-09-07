@@ -1,0 +1,35 @@
+{
+  "candidate_id": "EXP_09_DYNAMIC_RANK_BLEND",
+  "description": "Dynamic Rank Stacking: Equal Blend of Regressor (0.40) + Ranker (0.25) + Asymmetric Loss (0.35)",
+  "features_count": 109,
+  "features": [
+    "97_base_factors",
+    "ALPHA_MOM_ACCEL_5_20",
+    "INTERACTION_MOM_VOL_COMPRESS"
+  ],
+  "label_id": "label_excess_20d",
+  "component_models": {
+    "EXP_02_LGBM_REG": {
+      "weight": 0.4,
+      "model_type": "LGBMRegressor",
+      "objective": "regression"
+    },
+    "EXP_04_ASYM_LOSS": {
+      "weight": 0.35,
+      "model_type": "LGBMRegressor",
+      "objective": "AsymmetricRegressionObjective(2.5x)"
+    },
+    "EXP_06_PAIRWISE_LAMBDARANK": {
+      "weight": 0.25,
+      "model_type": "LGBMRanker",
+      "objective": "lambdarank (NDCG)"
+    }
+  },
+  "blend_formula": "0.40 * RankPct(LGBM_Reg) + 0.35 * RankPct(Asym) + 0.25 * RankPct(Ranker)",
+  "baseline_model_id": "lightgbm_clf_baseline",
+  "baseline_code_sha": "9f4e0bec69367fb047badd37e3a3decc46835126",
+  "dataset_sha256": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
+  "baseline_mean_rank_ic": 0.03595,
+  "baseline_reported_icir": 1.371457,
+  "baseline_reported_nw20_icir": 0.404077
+}

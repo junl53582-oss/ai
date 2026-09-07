@@ -120,11 +120,14 @@ class TestCrossSourceConsistency:
         import akshare as ak
         import requests
 
+        from data.network_policy import NetworkDisabledForTestError, is_network_disabled
+        if is_network_disabled():
+            pytest.skip("QUANT_DISABLE_NETWORK=1: skipping live network test")
         prov = CorporateActionProvider()
         try:
             ev = prov.fetch_events("600519.SH")
             fac = ak.stock_zh_a_daily(symbol="sh600519", adjust="hfq-factor")
-        except requests.RequestException as exc:
+        except (requests.RequestException, NetworkDisabledForTestError) as exc:
             pytest.skip(f"live cross-source endpoint unavailable: {type(exc).__name__}")
         fac["date"] = pd.to_datetime(fac["date"])
         factor_dates = set(fac["date"].dt.date)

@@ -181,6 +181,7 @@ class ModelEvaluator:
             "legacy_row_weighted_q5_minus_q1": quantile_info.get("legacy_row_weighted_q5_minus_q1", quantile_info["Q5_minus_Q1"]),
             "monotonicity_score": quantile_info["monotonicity_score"],
             "quantile_observation_count": quantile_info["quantile_observation_count"],
+            "total_dates": quantile_info.get("total_dates", 0),
             "invalid_tie_dates": quantile_info.get("invalid_tie_dates", 0),
             "valid_quantile_dates": quantile_info.get("valid_quantile_dates", 0),
             "invalid_quantile_dates": quantile_info.get("invalid_quantile_dates", 0),
@@ -203,9 +204,68 @@ class ModelEvaluator:
             "rank_icir_nw_lag5": round(rank_icir_nw_lag5, 6),
             "rank_icir_nw_lag20": round(rank_icir_nw_lag20, 6),
             "rankicir_hac_v2": round(rankicir_hac_v2, 6),
-            "rank_ic_series": rank_ic_series
+            "rank_ic_series": rank_ic_series,
+            "precision_at_k": self.compute_precision_at_k(df_ranking, label_col=clf_col if task_type == "classification" else cont_col)
         }
         return metrics
+
+    def compute_precision_at_k(self, df: pd.DataFrame, label_col: Optional[str] = None) -> Dict[str, Any]:
+        """计算不同截面置信度分位 (Top 1%, 2%, 5%, 10%, 20%, 50%, 100%) 的实战命中率与超额收益"""
+        if df is None or len(df) == 0:
+            return {}
+        
+        clf_col = label_col if (label_col and label_col in df.columns) else None
+        if clf_col is None:
+            for c in ["label_up_down_20d", "label_up_down_2d", "label_up_down_5d"]:
+                if c in df.columns:
+                    clf_col = c
+                    break
+        if clf_col is None:
+            for c in df.columns:
+                if c.startswith("label_up_down_"):
+                    clf_col = c
+                    break
+
+        if clf_col is None or clf_col not in df.columns or "pred_score" not in df.columns:
+            return {}
+
+        valid = df.dropna(subset=["pred_score", clf_col]).copy()
+        if len(valid) == 0:
+            return {}
+
+        excess_col = None
+        for c in ["label_excess_20d", "label_excess_2d", "label_excess_5d"]:
+            if c in valid.columns:
+                excess_col = c
+                break
+
+        valid["daily_rank_pct"] = valid.groupby("date")["pred_score"].rank(pct=True, ascending=False)
+        thresholds = [0.01, 0.02, 0.05, 0.10, 0.15, 0.20, 0.30, 0.50, 1.00]
+        prec_curve = []
+        for t in thresholds:
+            sub = valid[valid["daily_rank_pct"] <= t]
+            if len(sub) == 0:
+                continue
+            hit = float((sub[clf_col] == 1).mean()) * 100
+            excess = float(sub[excess_col].mean()) * 100 if excess_col else 0.0
+            prec_curve.append({
+                "threshold_pct": int(t * 100),
+                "threshold_label": f"Top {int(t*100)}%",
+                "count": len(sub),
+                "win_rate_pct": round(hit, 2),
+                "avg_excess_pct": round(excess, 3)
+            })
+
+        return {
+            "label_col": clf_col,
+            "excess_col": excess_col,
+            "precision_curve": prec_curve,
+            "top_1_pct_win_rate": prec_curve[0]["win_rate_pct"] if len(prec_curve) > 0 else 0.0,
+            "top_2_pct_win_rate": prec_curve[1]["win_rate_pct"] if len(prec_curve) > 1 else 0.0,
+            "top_5_pct_win_rate": prec_curve[2]["win_rate_pct"] if len(prec_curve) > 2 else 0.0,
+            "top_10_pct_win_rate": prec_curve[3]["win_rate_pct"] if len(prec_curve) > 3 else 0.0,
+            "full_universe_win_rate": prec_curve[-1]["win_rate_pct"] if len(prec_curve) > 0 else 0.0
+        }
 
     def _compute_newey_west_std(self, series: pd.Series, max_lag: int = 5) -> float:
         """计算 Newey-West (Bartlett 权重) 稳健标准差"""

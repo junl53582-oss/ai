@@ -1,0 +1,227 @@
+{
+  "account_id": "PAPER_SIM_01",
+  "initial_cash": 1000000.0,
+  "cash": 152245.11,
+  "realized_pnl": 0.0,
+  "positions": {
+    "600026.SH": {
+      "symbol": "600026.SH",
+      "name": "中远海能",
+      "total_shares": 8400,
+      "available_shares": 8400,
+      "avg_cost": 20.35,
+      "current_price": 20.34,
+      "market_value": 170856.0,
+      "unrealized_pnl": -84.0,
+      "unrealized_pnl_pct": -0.05
+    },
+    "000301.SZ": {
+      "symbol": "000301.SZ",
+      "name": "东方盛虹",
+      "total_shares": 10300,
+      "available_shares": 10300,
+      "avg_cost": 14.62,
+      "current_price": 14.62,
+      "market_value": 150586.0,
+      "unrealized_pnl": 0.0,
+      "unrealized_pnl_pct": 0.0
+    },
+    "601138.SH": {
+      "symbol": "601138.SH",
+      "name": "工业富联",
+      "total_shares": 2000,
+      "available_shares": 2000,
+      "avg_cost": 63.71,
+      "current_price": 63.69,
+      "market_value": 127380.0,
+      "unrealized_pnl": -40.0,
+      "unrealized_pnl_pct": -0.03
+    },
+    "688981.SH": {
+      "symbol": "688981.SH",
+      "name": "中芯国际",
+      "total_shares": 900,
+      "available_shares": 900,
+      "avg_cost": 121.17,
+      "current_price": 121.14,
+      "market_value": 109026.0,
+      "unrealized_pnl": -27.0,
+      "unrealized_pnl_pct": -0.02
+    },
+    "300308.SZ": {
+      "symbol": "300308.SZ",
+      "name": "中际旭创",
+      "total_shares": 100,
+      "available_shares": 100,
+      "avg_cost": 814.2,
+      "current_price": 814.0,
+      "market_value": 81400.0,
+      "unrealized_pnl": -20.0,
+      "unrealized_pnl_pct": -0.02
+    },
+    "603259.SH": {
+      "symbol": "603259.SH",
+      "name": "药明康德",
+      "total_shares": 500,
+      "available_shares": 500,
+      "avg_cost": 153.87,
+      "current_price": 153.83,
+      "market_value": 76915.0,
+      "unrealized_pnl": -20.0,
+      "unrealized_pnl_pct": -0.03
+    },
+    "300750.SZ": {
+      "symbol": "300750.SZ",
+      "name": "宁德时代",
+      "total_shares": 200,
+      "available_shares": 200,
+      "avg_cost": 351.09,
+      "current_price": 351.0,
+      "market_value": 70200.0,
+      "unrealized_pnl": -18.0,
+      "unrealized_pnl_pct": -0.03
+    },
+    "002594.SZ": {
+      "symbol": "002594.SZ",
+      "name": "比亚迪",
+      "total_shares": 700,
+      "available_shares": 700,
+      "avg_cost": 87.42,
+      "current_price": 87.4,
+      "market_value": 61180.0,
+      "unrealized_pnl": -14.0,
+      "unrealized_pnl_pct": -0.02
+    }
+  },
+  "daily_nav_history": [
+    {
+      "date": "2026-09-05",
+      "status": "INVALID_NON_TRADING_DAY",
+      "excluded_from_evidence": true,
+      "invalidation_reason": "Saturday non-trading day snapshot quarantined per independent audit",
+      "total_equity": 999788.11,
+      "cash": 152245.11,
+      "market_value": 847543.0,
+      "nav": 0.9998,
+      "daily_return_pct": 0.0,
+      "cum_return_pct": -0.02,
+      "position_ratio_pct": 84.8
+    },
+    {
+      "date": "2026-09-06",
+      "status": "INVALID_NON_TRADING_DAY",
+      "excluded_from_evidence": true,
+      "invalidation_reason": "Sunday non-trading day snapshot quarantined per independent audit",
+      "total_equity": 999788.11,
+      "cash": 152245.11,
+      "market_value": 847543.0,
+      "nav": 0.9998,
+      "daily_return_pct": 0.0,
+      "cum_return_pct": -0.02,
+      "position_ratio_pct": 84.8
+    }
+  ],
+  "trade_history": [
+    {
+      "trade_id": "6a1dc084",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "600026.SH",
+      "name": "中远海能",
+      "shares": 8400,
+      "price": 20.34,
+      "amount": 170856.0,
+      "fee": 42.71,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "50981108",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "000301.SZ",
+      "name": "东方盛虹",
+      "shares": 10300,
+      "price": 14.62,
+      "amount": 150586.0,
+      "fee": 37.65,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "56b0d338",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "601138.SH",
+      "name": "工业富联",
+      "shares": 2000,
+      "price": 63.69,
+      "amount": 127380.0,
+      "fee": 31.85,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "14b4cc47",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "688981.SH",
+      "name": "中芯国际",
+      "shares": 900,
+      "price": 121.14,
+      "amount": 109026.0,
+      "fee": 27.26,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "162dbff2",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "300308.SZ",
+      "name": "中际旭创",
+      "shares": 100,
+      "price": 814.0,
+      "amount": 81400.0,
+      "fee": 20.35,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "359b3529",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "603259.SH",
+      "name": "药明康德",
+      "shares": 500,
+      "price": 153.83,
+      "amount": 76915.0,
+      "fee": 19.23,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "d2641cec",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "300750.SZ",
+      "name": "宁德时代",
+      "shares": 200,
+      "price": 351.0,
+      "amount": 70200.0,
+      "fee": 17.55,
+      "realized_pnl": 0.0
+    },
+    {
+      "trade_id": "c2a4c23e",
+      "timestamp": "2026-09-05 16:38:17",
+      "action": "BUY",
+      "symbol": "002594.SZ",
+      "name": "比亚迪",
+      "shares": 700,
+      "price": 87.4,
+      "amount": 61180.0,
+      "fee": 15.3,
+      "realized_pnl": 0.0
+    }
+  ],
+  "observed_trading_days": 0,
+  "evidence_maturity": "IMMATURE",
+  "status": "NOT_STARTED",
+  "created_at": "2026-09-05 16:38:17",
+  "updated_at": "2026-09-06 00:00:37"
+}

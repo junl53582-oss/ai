@@ -15,6 +15,8 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 
+from data.network_policy import assert_network_allowed
+
 logger = logging.getLogger(__name__)
 
 class LiveMarketAPI:
@@ -37,6 +39,7 @@ class LiveMarketAPI:
     @classmethod
     def fetch_live_quotes(cls, symbols: List[str], timeout: int = 6) -> pd.DataFrame:
         """批量获取指定标的最新实时行情"""
+        assert_network_allowed("LiveMarketAPI.fetch_live_quotes")
         tc_symbols = [cls._format_symbol_for_tencent(s) for s in symbols]
         url = 'http://qt.gtimg.cn/q=' + ','.join(tc_symbols)
         
@@ -95,6 +98,7 @@ class LiveNewsAPI:
     @staticmethod
     def fetch_7x24_telegraph(num: int = 15, timeout: int = 5) -> List[Dict[str, Any]]:
         """获取 7x24 实时快讯直播流"""
+        assert_network_allowed("LiveNewsAPI.fetch_7x24_telegraph")
         url = f'https://zhibo.sina.com.cn/api/zhibo/feed?page=1&page_size={num}&zhibo_id=152'
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         try:
@@ -119,6 +123,7 @@ class LiveNewsAPI:
     @staticmethod
     def fetch_stock_latest_news(keyword: str, num: int = 3, timeout: int = 5) -> List[str]:
         """抓取指定股票/行业的最新重要财经消息"""
+        assert_network_allowed("LiveNewsAPI.fetch_stock_latest_news")
         url = f'https://feed.mix.sina.com.cn/api/roll/get?pageid=153&lid=2509&k={keyword}&num={num}&page=1'
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
         try:
@@ -159,10 +164,23 @@ class AutoSyncEngine:
                     q = quote_map.loc[sym]
                     df.at[idx, 'close'] = q['close']
                     df.at[idx, 'pct_change'] = q['pct_change']
+                    if 'trade_time' in q and q['trade_time']:
+                        tt = str(q['trade_time'])
+                        if len(tt) >= 8:
+                            df.at[idx, 'date'] = f"{tt[:4]}-{tt[4:6]}-{tt[6:8]}"
                     
-        # 2. 抓取 7x24 实时快讯
+        # 2. 抓取 7x24 实时快讯并自动更新快讯流缓存
         logger.info('[*] 正在拉取 7x24 实时财经电报流...')
-        telegraph = LiveNewsAPI.fetch_7x24_telegraph(num=12)
+        telegraph = LiveNewsAPI.fetch_7x24_telegraph(num=15)
+        if telegraph:
+            try:
+                from config import settings
+                tele_file = settings.ARTIFACTS_DIR / "live_telegraph_stream.json"
+                with open(tele_file, "w", encoding="utf-8") as tf:
+                    json.dump(telegraph, tf, ensure_ascii=False, indent=2)
+                logger.info(f'[+] 7x24 实时财经快讯流已自动持久化落盘至: {tele_file.name}')
+            except Exception as e:
+                logger.warning(f'写入实时快讯缓存异常: {e}')
         
         # 3. 关联每只股票各自专属的真实重大业务与行业催化剂 (绝无雷同与串台)
         from factors.sentiment_engine import NewsCatalystScorer

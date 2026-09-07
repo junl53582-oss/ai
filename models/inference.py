@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pandas as pd
+import numpy as np
 
 from config.settings import settings
 from models.registry import ModelRegistry, ModelState, PromotionError
@@ -64,10 +65,12 @@ class BatchInference:
                 )
         self.model = self._load_model()
         self.model_id = self.record.model_id
-
-    @property
-    def feature_names(self):
-        return self.model.feature_names
+        self.feature_names = list(self.model.feature_names or [])
+        from factors.processor import FactorProcessor
+        self.expected_schema_hash = (
+            getattr(self.record, "feature_schema_hash", None)
+            or FactorProcessor.compute_feature_schema_hash(self.feature_names)
+        )
 
     # ---------------------------------------------------------------- 加载
     def _load_model(self):
@@ -108,15 +111,18 @@ class BatchInference:
         date=None,
         dataset_sha256: Optional[str] = None,
         strict_lineage: bool = False,
+        expected_schema_hash: Optional[str] = None,
     ) -> pd.DataFrame:
         """
-        对截面特征打分。输出列: pred_score (+ pred_rank 若存在 in_universe 列)。
+        对截面特征打分 (严格 Fail-Closed 与 Schema 校验)。
+        输出列: pred_score (+ pred_rank 若存在 in_universe 列) + 生产溯源元数据。
 
         Args:
             features_df: 含模型所需全部特征列的截面 (或面板) 数据
             date: 可选, 指定推理日 (传入面板时按该日过滤)
             dataset_sha256: 当前数据集哈希, 用于血统漂移检查
             strict_lineage: 血统不一致时是否直接失败
+            expected_schema_hash: 期望的特征 Schema 哈希 (不传则采用模型自身元数据哈希)
         """
         df = features_df.copy()
         if date is not None and "date" in df.columns:
@@ -130,24 +136,44 @@ class BatchInference:
         missing = [c for c in required if c not in df.columns]
         if missing:
             raise InferenceError(
-                f"推理输入缺少 {len(missing)} 个模型特征: {missing[:10]}"
+                f"推理输入缺少 {len(missing)} 个模型特征 (Fail-Closed): {missing[:10]}"
                 f"{' ...' if len(missing) > 10 else ''}"
             )
 
-        df["pred_score"] = self.model.predict(df[required])
+        # 校验特征列数据类型与非数值污染 (Fail-Closed)
+        for c in required:
+            if not np.issubdtype(df[c].dtype, np.number):
+                raise InferenceError(f"特征列 {c} 存在非数值类型: {df[c].dtype}")
+
+        # 计算并校验特征 Schema 哈希 (严格 Fail-Closed)
+        from factors.processor import FactorProcessor
+        input_schema_hash = FactorProcessor.compute_feature_schema_hash(required)
+        target_schema_hash = expected_schema_hash or self.expected_schema_hash
+        if target_schema_hash and input_schema_hash != target_schema_hash:
+            raise InferenceError(
+                f"特征 Schema 哈希不匹配 (Fail-Closed): 期望 {target_schema_hash} "
+                f"vs 当前 {input_schema_hash}"
+            )
+
+        # 严格按模型特征列顺序准备设计矩阵
+        X = df[required]
+        df["pred_score"] = self.model.predict(X)
+
         if "in_universe" in df.columns:
             univ = df["in_universe"].fillna(False).astype(bool)
             df["pred_rank"] = df.loc[univ, "pred_score"].rank(ascending=False, pct=True)
         else:
             df["pred_rank"] = df["pred_score"].rank(ascending=False, pct=True)
 
-        # 推理元数据 (可追溯每条信号来自哪个模型版本)
+        # 推理元数据与真实性标记 (可追溯每条信号来自哪个模型版本)
         df["model_id"] = self.record.model_id
         df["model_state"] = self.record.state
+        df["feature_schema_hash"] = input_schema_hash
+        df["is_synthetic_demo"] = False
         df["inference_at"] = datetime.now().isoformat(timespec="seconds")
 
         logger.info(
             f"批量推理完成: model={self.record.model_id} ({self.record.state}) | "
-            f"样本 {len(df)} 行 | 特征 {len(required)} 个"
+            f"样本 {len(df)} 行 | 特征 {len(required)} 个 | schema_hash={input_schema_hash[:12]}..."
         )
         return df

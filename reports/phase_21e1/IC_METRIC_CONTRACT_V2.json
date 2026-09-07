@@ -1,0 +1,38 @@
+{
+  "formal_definitions": {
+    "raw_icir": {
+      "formula": "mean(daily_rank_ic) / std(daily_rank_ic)",
+      "unit": "unannualized dimensionless ratio",
+      "description": "Cross-sectional Spearman rank correlation signal-to-noise ratio per trading day"
+    },
+    "period_annualized_icir": {
+      "formula": "raw_icir * sqrt(242 / label_horizon) = raw_icir * sqrt(242 / 20) = raw_icir * 3.478505",
+      "unit": "period-annualized ratio",
+      "description": "Standard scale used in certified baseline benchmark matrix"
+    },
+    "daily_annualized_icir": {
+      "formula": "raw_icir * sqrt(242) = raw_icir * 15.556349",
+      "unit": "daily-annualized ratio",
+      "description": "Traditional full-year trading days scaling factor"
+    },
+    "newey_west_icir": {
+      "formula": "mean(daily_rank_ic) / HAC_StandardError(daily_rank_ic, lag=20)",
+      "unit": "autocorrelation-adjusted t-ratio",
+      "description": "Newey-West HAC adjusted standard error accounting for 20-day overlapping forecast horizon"
+    }
+  },
+  "reconciled_values": {
+    "baseline": {
+      "mean_daily_rankic": 0.039362,
+      "raw_icir": 0.285107,
+      "period_annualized_icir": 0.991748,
+      "daily_annualized_icir": 4.43523
+    },
+    "candidate_exp09": {
+      "mean_daily_rankic": 0.040794,
+      "raw_icir": 0.275642,
+      "period_annualized_icir": 0.958823,
+      "daily_annualized_icir": 4.287989
+    }
+  }
+}

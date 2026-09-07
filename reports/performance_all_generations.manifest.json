@@ -1,0 +1,16 @@
+{
+  "artifact_name": "performance_all_generations.json",
+  "artifact_path": "reports/performance_all_generations.json",
+  "sha256": "eac4ab845a4410040dded3d0408eba9ac338e3e1a1347cc7a31b0a6de991c157",
+  "data_as_of": "2026-08-24",
+  "created_at": "2026-09-05T00:00:00Z",
+  "verification_status": "LEGACY_UNVERIFIED",
+  "excluded_from_product_display": true,
+  "excluded_from_scientific_evidence": true,
+  "generations": [
+    "gen1_baseline",
+    "gen2_plans_1_to_4",
+    "gen3_plans_5_7_9",
+    "gen4_flagship"
+  ]
+}

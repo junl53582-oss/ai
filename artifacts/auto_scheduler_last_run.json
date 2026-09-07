@@ -1,0 +1,27 @@
+{
+  "date": "2026-09-06",
+  "timestamp": "2026-09-06 00:00:37",
+  "is_trading_day": false,
+  "steps": {
+    "sync_quotes": "SKIPPED",
+    "load_picks": "LOADED 30 (Target Buys: 8)",
+    "rebalance": {
+      "timestamp": "2026-09-06 00:00:37",
+      "total_trades": 0,
+      "trades": [],
+      "cash": 152245.11,
+      "market_value": 847543.0,
+      "total_equity": 999788.11,
+      "nav": 0.9998
+    }
+  },
+  "summary": {
+    "total_equity": 999788.11,
+    "cash": 152245.11,
+    "market_value": 847543.0,
+    "nav": 0.99978811,
+    "cum_return_pct": -0.021188999999999236,
+    "positions_count": 8
+  },
+  "elapsed_seconds": 0.03
+}

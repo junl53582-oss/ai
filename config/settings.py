@@ -39,6 +39,49 @@ class QuantConfig:
     FACTOR_DIR: Path = field(init=False)
     MODELS_DIR: Path = field(init=False)
     REPORTS_DIR: Path = field(init=False)
+    _artifacts_dir: Optional[Path] = field(default=None, init=False)
+
+    @property
+    def TEST_MODE(self) -> bool:
+        """是否处于测试运行模式 (QUANT_TEST_MODE=1)"""
+        return os.environ.get("QUANT_TEST_MODE") == "1"
+
+    @property
+    def DISABLE_NETWORK(self) -> bool:
+        """是否处于测试禁网模式 (QUANT_DISABLE_NETWORK=1)"""
+        return os.environ.get("QUANT_DISABLE_NETWORK") == "1"
+
+    @property
+    def ARTIFACTS_DIR(self) -> Path:
+        """
+        制品产物落盘目录 (显式密闭隔离):
+        - 正常运行: 默认返回 settings.BASE_DIR / 'artifacts'
+        - 测试模式 (QUANT_TEST_MODE=1): 必须显式设置 QUANT_ARTIFACTS_DIR 绝对临时目录；缺少该变量立即报错，绝不能回退！
+        """
+        if os.environ.get("QUANT_TEST_MODE") == "1":
+            test_art = os.environ.get("QUANT_ARTIFACTS_DIR")
+            if not test_art or not test_art.strip():
+                raise RuntimeError(
+                    "🚨 [测试密闭配置错误] QUANT_TEST_MODE=1 时必须指定 QUANT_ARTIFACTS_DIR 绝对临时目录！严禁回退到工作区 artifacts！"
+                )
+            p = Path(test_art).resolve()
+            if not p.is_absolute():
+                raise RuntimeError(
+                    f"🚨 [测试密闭配置错误] QUANT_ARTIFACTS_DIR 必须为绝对路径: {test_art}"
+                )
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+
+        if self._artifacts_dir is not None:
+            return self._artifacts_dir
+
+        p = self.BASE_DIR / "artifacts"
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @ARTIFACTS_DIR.setter
+    def ARTIFACTS_DIR(self, val: Optional[Path]) -> None:
+        self._artifacts_dir = Path(val).resolve() if val is not None else None
 
     # ---------------- 标的与时间范围 ----------------
     BENCHMARK_SYMBOL: str = "000300.SH"  # 沪深300指数作为超额收益基准
@@ -212,6 +255,15 @@ class QuantConfig:
     CIRCUIT_TARGET_EXPOSURE: float = 0.30 # 触发回撤熔断后的目标持仓暴露上限 30%
     MAX_SECTOR_EXPOSURE: float = 0.30  # 单一行业最大持仓上限 30% (硬约束)
 
+    # ---------------- 实盘硬闸门禁 (Live Trading Hard Gate) ----------------
+    # 铁律: 系统定位为量化投研与观察系统，严禁实盘下单！默认永久锁定为 False。
+    LIVE_TRADING_READY: bool = False
+    LIVE_TRADING_STATUS: str = "LOCKED"  # "LOCKED" | "PAPER_ONLY" | "UNLOCKED"
+    LIVE_TRADING_GATE_STATUS: str = "LOCKED"  # "LOCKED" | "UNLOCKED"
+    EMERGENCY_KILL_SWITCH: bool = False  # 紧急熔断开关 (True 则全局阻断实盘)
+    LIVE_ACCOUNT_WHITELIST: List[str] = field(default_factory=lambda: ["5500123456", "REAL_QUANT_ACCOUNT_01"])
+    MAX_QUOTE_STALENESS_SECONDS: float = 300.0  # 行情最大允许新鲜度延迟 (秒)
+
     def __post_init__(self):
         self.DATA_DIR = self.BASE_DIR / "data_storage"
         self.RAW_DATA_DIR = self.DATA_DIR / "raw"
@@ -221,8 +273,9 @@ class QuantConfig:
         self.MODELS_DIR = self.BASE_DIR / "saved_models"
         self.MODEL_DIR = self.MODELS_DIR
         self.REPORTS_DIR = self.BASE_DIR / "reports"
+        self._artifacts_dir = None
 
-        # 自动创建目录
+        # 自动创建基础数据与模型目录
         for path in [self.DATA_DIR, self.RAW_DATA_DIR, self.PARQUET_DIR, 
                      self.FACTOR_DIR, self.MODELS_DIR, self.REPORTS_DIR]:
             path.mkdir(parents=True, exist_ok=True)

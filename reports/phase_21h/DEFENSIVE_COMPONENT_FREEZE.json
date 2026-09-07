@@ -1,0 +1,28 @@
+{
+  "component_id": "DEFENSIVE_RESIDUAL_V1",
+  "status": "RESEARCH_CANDIDATE",
+  "freeze_timestamp": "2026-09-05T13:38:08+08:00",
+  "freeze_commit": "8fa13b66bab3ec27b73c4cd416eee01b5f538e9f",
+  "dataset_sha256": "35e86afd954da6ababbaadaa843f035d4a2085000bb7bf35ced6798aa7390a39",
+  "model_architecture": "Ridge",
+  "model_hyperparameters": {
+    "alpha": 100.0,
+    "fit_intercept": true,
+    "solver": "auto",
+    "random_state": 42
+  },
+  "target_label": "label_v6_exec_net_20d",
+  "label_formula": "(open_t21 / open_t1) - (bm_open_t21 / bm_open_t1) - 0.0020",
+  "style_neutralization": {
+    "method": "Cross_Sectional_OLS",
+    "per_date_only": true,
+    "risk_factors": [
+      "LOG_CIRC_MV",
+      "industry_dummies"
+    ],
+    "leakage_guarantee": "Zero cross-date pooling. Evaluated strictly date-by-date."
+  },
+  "portfolio_accounting": "20-cohort staggered sleeve accounting with daily rebalancing",
+  "cost_model": "Turnover-aware linear deduction at 20 bps",
+  "immutability_assertion": "All parameters, coefficients, weights, and feature definitions are permanently frozen. Any post-freeze parameter tuning is strictly prohibited."
+}

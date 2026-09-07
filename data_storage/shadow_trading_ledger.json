@@ -1,0 +1,14 @@
+{
+  "account_id": "SHADOW_OBS_01",
+  "account_type": "SHADOW",
+  "initial_cash": 1000000.0,
+  "cash": 1000000.0,
+  "positions": {},
+  "daily_observations": [],
+  "daily_nav_history": [],
+  "observed_trading_days": 0,
+  "evidence_maturity": "IMMATURE",
+  "status": "NOT_STARTED",
+  "created_at": "2026-09-06 01:37:42",
+  "updated_at": "2026-09-06 01:37:42"
+}

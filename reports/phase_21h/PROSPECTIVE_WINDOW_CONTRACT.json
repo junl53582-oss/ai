@@ -1,0 +1,9 @@
+{
+  "freeze_timestamp": "2026-09-05T13:38:08+08:00",
+  "freeze_commit": "8fa13b66bab3ec27b73c4cd416eee01b5f538e9f",
+  "last_historical_trade_date": "2026-08-24",
+  "prospective_start_trade_date": "2026-08-25",
+  "historical_data_policy": "All data on or before 2026-08-24 is classified as HISTORICAL_NON_CONFIRMATORY.",
+  "prospective_evidence_policy": "Only trading days with trade_date >= 2026-08-25 sealed ex-ante before outcome settlement qualify as prospective confirmatory evidence.",
+  "final_holdout_disclaimer": "The prospective validation window is NOT Final Holdout. Calling this window Final Holdout is strictly prohibited."
+}

@@ -1,0 +1,12 @@
+{
+  "definitions": {
+    "Bull": "Benchmark 20-day return > +3.0%",
+    "Bear": "Benchmark 20-day return < -3.0%",
+    "Sideways": "-3.0% <= Benchmark 20-day return <= +3.0%",
+    "High_Vol": "Benchmark 20-day rolling vol > median (0.0112)",
+    "Low_Vol": "Benchmark 20-day rolling vol <= median",
+    "Risk_Off": "Benchmark down day OR 20D vol > 75th percentile OR breadth < 40%",
+    "Risk_On": "Benchmark up day AND normal volatility"
+  },
+  "guarantee": "Pre-fixed candidate-blind market variables only. Zero leakage from model PnL."
+}

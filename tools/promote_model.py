@@ -38,6 +38,7 @@ def _parse_evidence(args) -> dict:
         data = json.loads(art_path.read_text(encoding="utf-8"))
         if not isinstance(data, dict):
             raise ValueError(f"审批凭证制品格式错误 (必须为 JSON 对象): {art_path}")
+        ev["approval_artifact"] = str(art_path.resolve())
         # 从外部审批制品中解析认证与实盘证据
         if "certification_ref" in data:
             ev["certification_ref"] = data["certification_ref"]
@@ -50,10 +51,10 @@ def _parse_evidence(args) -> dict:
 
     if getattr(args, "certification_ref", None):
         ev["certification_ref"] = args.certification_ref
-    if getattr(args, "prospective", False):
-        ev["prospective_validation"] = {"ref": getattr(args, "prospective_ref", None) or "manual_claim"}
-    if getattr(args, "paper_trading", False):
-        ev["paper_trading"] = {"ref": getattr(args, "paper_ref", None) or "manual_claim"}
+    if getattr(args, "prospective_artifact", None):
+        ev["prospective_validation"] = str(Path(args.prospective_artifact).resolve())
+    if getattr(args, "paper_artifact", None):
+        ev["paper_trading"] = str(Path(args.paper_artifact).resolve())
     return ev
 
 
@@ -79,10 +80,8 @@ def main():
     p_promote.add_argument("--approver", type=str, default=None, help="审批人 (人工签名)")
     p_promote.add_argument("--approval-artifact", type=str, default=None, help="外部审批凭证 JSON 制品路径 (由投研委员会或负责人签署)")
     p_promote.add_argument("--certification-ref", type=str, default=None)
-    p_promote.add_argument("--prospective", action="store_true", help="提供前瞻验证证据")
-    p_promote.add_argument("--prospective-ref", type=str, default=None)
-    p_promote.add_argument("--paper-trading", action="store_true", help="提供模拟盘证据")
-    p_promote.add_argument("--paper-ref", type=str, default=None)
+    p_promote.add_argument("--prospective-artifact", type=str, default=None, help="物理前瞻验证证据制品路径 (.json)")
+    p_promote.add_argument("--paper-artifact", type=str, default=None, help="物理模拟盘证据制品路径 (.json)")
     p_promote.add_argument("--note", type=str, default="")
 
     p_arch = sub.add_parser("archive", help="归档模型 (PRODUCTION -> ARCHIVED)")
@@ -132,12 +131,21 @@ def main():
             logger.error("晋升失败: 缺少审批人签名 (必须通过 --approver 或 --approval-artifact 指定)")
             sys.exit(1)
 
+        ev = _parse_evidence(args)
+        if to_state == ModelState.PRODUCTION:
+            if not ev.get("prospective_validation"):
+                logger.error("晋升失败: 缺少前瞻验证证据制品 (必须通过 --prospective-artifact 指定)")
+                sys.exit(1)
+            if not ev.get("paper_trading"):
+                logger.error("晋升失败: 缺少模拟盘证据制品 (必须通过 --paper-artifact 指定)")
+                sys.exit(1)
+
         try:
             rec = registry.promote(
                 model_id=args.model_id,
                 to_state=to_state,
                 approver=approver,
-                evidence=_parse_evidence(args),
+                evidence=ev,
                 note=args.note,
             )
             print(f"OK: {rec.model_id} -> {rec.state}")

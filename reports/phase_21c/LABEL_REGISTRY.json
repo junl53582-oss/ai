@@ -1,0 +1,62 @@
+[
+  {
+    "label_id": "LABEL_V1_BASELINE",
+    "column_name": "label_excess_20d",
+    "economic_hypothesis": "Classic close-to-close forward return spread relative to CSI 300.",
+    "signal_time": "T Close",
+    "entry_time": "T Close (Theoretical)",
+    "exit_time": "T+20 Close",
+    "holding_period": "20 Trading Days",
+    "cost_assumption": "0 bps friction",
+    "PIT_safety": "Strictly forward-looking, verified no backward shift.",
+    "execution_alignment": "Low (requires execution at exact closing prices)"
+  },
+  {
+    "label_id": "LABEL_V2_EXEC_ALIGNED",
+    "column_name": "label_v2_exec_excess_20d",
+    "economic_hypothesis": "Realistic execution: Signal at T close, order executed at T+1 Open, exit at T+21 Open.",
+    "signal_time": "T Close",
+    "entry_time": "T+1 Open",
+    "exit_time": "T+21 Open",
+    "holding_period": "20 Trading Days",
+    "cost_assumption": "Zero direct deduction, realistic execution prices",
+    "PIT_safety": "Strictly uses prices at T+1 and T+21.",
+    "execution_alignment": "High (aligns with actual automated A-share trading dispatch)"
+  },
+  {
+    "label_id": "LABEL_V3_COST_ADJUSTED",
+    "column_name": "label_v3_cost_adj_excess_20d",
+    "economic_hypothesis": "Filters out paper-only alpha: penalizes signals whose gross return fails to cover 20bps friction.",
+    "signal_time": "T Close",
+    "entry_time": "T+1 Open",
+    "exit_time": "T+21 Open",
+    "holding_period": "20 Trading Days",
+    "cost_assumption": "Explicit deduction of 20 bps round-trip friction",
+    "PIT_safety": "Strictly forward-looking with deterministic cost subtraction.",
+    "execution_alignment": "Very High (avoids training models on untradeable micro-spreads)"
+  },
+  {
+    "label_id": "LABEL_V4_RANK_PERCENTILE",
+    "column_name": "label_v4_rank_percentile_20d",
+    "economic_hypothesis": "Cross-sectional percentile ranking eliminates non-stationarity in forward returns across bull/bear regimes.",
+    "signal_time": "T Close",
+    "entry_time": "T+1 Open",
+    "exit_time": "T+21 Open",
+    "holding_period": "20 Trading Days",
+    "cost_assumption": "Rank scale [0, 1]",
+    "PIT_safety": "Target rank computed across cross-section at T+21; target not leaked to feature space.",
+    "execution_alignment": "High (directly optimizes Top-K ranking objective)"
+  },
+  {
+    "label_id": "LABEL_V5_RISK_AWARE",
+    "column_name": "label_v5_risk_aware_20d",
+    "economic_hypothesis": "Rewards smooth return paths: penalizes volatile and tail-downside assets during the 20-day holding horizon.",
+    "signal_time": "T Close",
+    "entry_time": "T+1 Open",
+    "exit_time": "T+21 Open",
+    "holding_period": "20 Trading Days",
+    "cost_assumption": "Downside path variance penalty (lambda = 0.5)",
+    "PIT_safety": "Downside variance computed along holding period path.",
+    "execution_alignment": "High (drawdown-averse allocation objective)"
+  }
+]

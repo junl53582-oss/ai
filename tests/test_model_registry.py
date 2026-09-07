@@ -39,6 +39,78 @@ def dummy_artifact(tmp_path) -> Path:
     return path
 
 
+_CURRENT_TEST_SIGNER = {}
+
+@pytest.fixture(autouse=True)
+def setup_test_signer(monkeypatch):
+    from data.crypto_anchor import TRUSTED_KEY_REGISTRY, generate_keypair
+    sk, pk = generate_keypair()
+    key_id = "REGISTRY_TEST_SIGNER_KEY"
+    entry = {
+        "algorithm": "ED25519",
+        "key_id": key_id,
+        "public_key_hex": pk.hex(),
+        "allowed_purposes": ["MODEL_PROMOTION", "RUNTIME_ATTESTATION"],
+        "status": "ACTIVE",
+        "is_production": False,
+    }
+    monkeypatch.setitem(TRUSTED_KEY_REGISTRY, key_id, entry)
+    _CURRENT_TEST_SIGNER["key_id"] = key_id
+    _CURRENT_TEST_SIGNER["private_key_hex"] = sk.hex()
+    return _CURRENT_TEST_SIGNER
+
+
+def _make_valid_evidence(tmp_path, model_id, ds_sha="", schema_hash="", signer_info=None):
+    from models.registry import EvidenceArtifact
+    from datetime import datetime
+    p1 = tmp_path / f"ev_pv_{model_id}.json"
+    p2 = tmp_path / f"ev_pt_{model_id}.json"
+    info = signer_info or _CURRENT_TEST_SIGNER
+    key_id = info.get("key_id", "REGISTRY_TEST_SIGNER_KEY")
+    sk_hex = info.get("private_key_hex")
+
+    art1 = EvidenceArtifact(
+        evidence_type="PROSPECTIVE_VALIDATION",
+        artifact_path=str(p1.resolve()),
+        artifact_sha256="",
+        schema_version="evidence_v1",
+        model_id=model_id,
+        dataset_sha256=ds_sha or "a" * 64,
+        feature_schema_hash=schema_hash or "",
+        created_at=datetime.now().isoformat(),
+        observation_start="2026-07-27",
+        observation_end="2026-08-24",
+        observed_trading_days=21,
+        status="MATURE",
+        approver="linjun",
+        signer_key_id=key_id,
+        signature="",
+    )
+    art1.sign(private_key_hex=sk_hex)
+    art1.save(p1)
+
+    art2 = EvidenceArtifact(
+        evidence_type="PAPER_TRADING",
+        artifact_path=str(p2.resolve()),
+        artifact_sha256="",
+        schema_version="evidence_v1",
+        model_id=model_id,
+        dataset_sha256=ds_sha or "a" * 64,
+        feature_schema_hash=schema_hash or "",
+        created_at=datetime.now().isoformat(),
+        observation_start="2026-07-27",
+        observation_end="2026-08-24",
+        observed_trading_days=21,
+        status="MATURE",
+        approver="linjun",
+        signer_key_id=key_id,
+        signature="",
+    )
+    art2.sign(private_key_hex=sk_hex)
+    art2.save(p2)
+    return {"certification_ref": "c.json", "prospective_validation": art1, "paper_trading": art2}
+
+
 def _register(registry, artifact, **kw):
     return registry.register_research_artifact(
         artifact_path=artifact,
@@ -48,6 +120,7 @@ def _register(registry, artifact, **kw):
         dataset_sha256=kw.pop("dataset_sha256", "a" * 64),
         **kw,
     )
+
 
 
 class TestRegistration:
@@ -92,7 +165,7 @@ class TestPromotionGates:
         assert rec.state == ModelState.APPROVED
         assert rec.registry_artifact and Path(rec.registry_artifact).exists()
 
-    def test_production_requires_approver_prospective_paper(self, registry, dummy_artifact):
+    def test_production_requires_approver_prospective_paper(self, registry, dummy_artifact, tmp_path):
         mid = _register(registry, dummy_artifact)
         registry.promote(mid, ModelState.CANDIDATE, approver="researcher")
         registry.promote(mid, ModelState.APPROVED, approver="linjun",
@@ -104,11 +177,7 @@ class TestPromotionGates:
         with pytest.raises(PromotionError):
             registry.promote(mid, ModelState.PRODUCTION, approver="linjun")
         # 齐全后放行
-        rec = registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence={
-            "certification_ref": "c.json",
-            "prospective_validation": {"ref": "holdout_2026H1"},
-            "paper_trading": {"ref": "paper_60d"},
-        })
+        rec = registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence=_make_valid_evidence(tmp_path, mid))
         assert rec.state == ModelState.PRODUCTION
 
     def test_illegal_transition_rejected(self, registry, dummy_artifact):
@@ -118,26 +187,18 @@ class TestPromotionGates:
 
 
 class TestProductionUniqueness:
-    def test_old_production_auto_archived(self, registry, dummy_artifact):
+    def test_old_production_auto_archived(self, registry, dummy_artifact, tmp_path):
         first = _register(registry, dummy_artifact)
         for mid in (first,):
             registry.promote(mid, ModelState.CANDIDATE, approver="researcher")
             registry.promote(mid, ModelState.APPROVED, approver="linjun",
                              evidence={"certification_ref": "c1.json"})
-            registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence={
-                "certification_ref": "c1.json",
-                "prospective_validation": {"ref": "p1"},
-                "paper_trading": {"ref": "pt1"},
-            })
+            registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence=_make_valid_evidence(tmp_path, mid))
         second = _register(registry, dummy_artifact, dataset_sha256="b" * 64)
         registry.promote(second, ModelState.CANDIDATE, approver="researcher")
         registry.promote(second, ModelState.APPROVED, approver="linjun",
                          evidence={"certification_ref": "c2.json"})
-        registry.promote(second, ModelState.PRODUCTION, approver="linjun", evidence={
-            "certification_ref": "c2.json",
-            "prospective_validation": {"ref": "p2"},
-            "paper_trading": {"ref": "pt2"},
-        })
+        registry.promote(second, ModelState.PRODUCTION, approver="linjun", evidence=_make_valid_evidence(tmp_path, second, ds_sha="b" * 64))
         assert registry.get_production().model_id == second
         assert registry.get(first).state == ModelState.ARCHIVED
 
@@ -149,18 +210,14 @@ class TestInference:
         with pytest.raises(InferenceError, match="PRODUCTION"):
             BatchInference(registry=registry)
 
-    def test_production_inference_scores_and_ranks(self, registry, dummy_artifact):
+    def test_production_inference_scores_and_ranks(self, registry, dummy_artifact, tmp_path):
         """生产模型推理: 输出 pred_score / pred_rank + 模型血统元数据"""
         from models.inference import BatchInference
         mid = _register(registry, dummy_artifact)
         registry.promote(mid, ModelState.CANDIDATE, approver="researcher")
         registry.promote(mid, ModelState.APPROVED, approver="linjun",
                          evidence={"certification_ref": "c.json"})
-        registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence={
-            "certification_ref": "c.json",
-            "prospective_validation": {"ref": "p"},
-            "paper_trading": {"ref": "pt"},
-        })
+        registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence=_make_valid_evidence(tmp_path, mid))
         engine = BatchInference(registry=registry)
         df = pd.DataFrame({
             "date": pd.to_datetime(["2026-01-05"] * 4),
@@ -174,28 +231,24 @@ class TestInference:
         assert out["model_state"].eq(ModelState.PRODUCTION).all()
         assert out["pred_rank"].notna().sum() == 3  # 非成分股不参与排名
 
-    def test_missing_features_fail_closed(self, registry, dummy_artifact):
+    def test_missing_features_fail_closed(self, registry, dummy_artifact, tmp_path):
         from models.inference import BatchInference, InferenceError
         mid = _register(registry, dummy_artifact)
         registry.promote(mid, ModelState.CANDIDATE, approver="researcher")
         registry.promote(mid, ModelState.APPROVED, approver="linjun",
                          evidence={"certification_ref": "c"})
-        registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence={
-            "certification_ref": "c", "prospective_validation": {"ref": "p"},
-            "paper_trading": {"ref": "pt"}})
+        registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence=_make_valid_evidence(tmp_path, mid))
         engine = BatchInference(registry=registry)
         with pytest.raises(InferenceError, match="缺少"):
             engine.predict(pd.DataFrame({"date": ["2026-01-05"], "symbol": ["A"], "f1": [0.1]}))
 
-    def test_lineage_drift_detected(self, registry, dummy_artifact):
+    def test_lineage_drift_detected(self, registry, dummy_artifact, tmp_path):
         from models.inference import BatchInference, InferenceError
         mid = _register(registry, dummy_artifact)
         registry.promote(mid, ModelState.CANDIDATE, approver="researcher")
         registry.promote(mid, ModelState.APPROVED, approver="linjun",
                          evidence={"certification_ref": "c"})
-        registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence={
-            "certification_ref": "c", "prospective_validation": {"ref": "p"},
-            "paper_trading": {"ref": "pt"}})
+        registry.promote(mid, ModelState.PRODUCTION, approver="linjun", evidence=_make_valid_evidence(tmp_path, mid))
         engine = BatchInference(registry=registry)
         report = engine.check_lineage(dataset_sha256="b" * 64)
         assert report["dataset_match"] is False

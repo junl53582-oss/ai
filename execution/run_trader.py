@@ -192,7 +192,7 @@ class PortfolioRebalancer:
         if pending_tranches:
             logger.info(f"📋 检测到 {len(pending_tranches)} 支标的受换手熔断保护触发分批建仓，已自动归档至次日补齐计划队列")
             try:
-                queue_path = settings.BASE_DIR / "artifacts" / "pending_rebalance_queue.json"
+                queue_path = settings.ARTIFACTS_DIR / "pending_rebalance_queue.json"
                 queue_path.parent.mkdir(parents=True, exist_ok=True)
                 with open(queue_path, "w", encoding="utf-8") as f:
                     json.dump(pending_tranches, f, ensure_ascii=False, indent=2)
@@ -225,24 +225,28 @@ def run_trader_cli():
     parser.add_argument("--target-file", type=str, default=None, help="指定目标持仓CSV文件 (如 artifacts/latest_stock_picks.csv)")
     args = parser.parse_args()
 
-    # 防线 4: 实盘双重显式确认拦截
+    # 防线 4: 实盘多因子鉴权与硬闸拦截 (Fail-Closed, 绝不静默降级为 Dry-Run)
     actual_dry_run = args.dry_run
-    if args.broker == "miniqmt" and not args.live_confirm:
-        logger.critical("⚠️ 未检测到 --live-confirm 显式实盘确认开关！")
-        logger.critical("🛡️ [安全防线触发] 自动强制降级为 Dry-Run 演练模式，绝不向真实账户下单！")
-        actual_dry_run = True
-
-    # 初始化 Broker
     if args.broker == "miniqmt":
-        broker = MiniQMTBroker(qmt_path=args.qmt_path, account_id=args.account_id)
+        if not getattr(settings, "LIVE_TRADING_READY", False):
+            raise RuntimeError("🚨 实盘交易硬闸已关闭 (LIVE_TRADING_READY=False)，严禁使用 miniqmt 券商通道！")
+        if not args.live_confirm:
+            raise RuntimeError(
+                "🚨 [实盘硬闸拦截] 缺少运行时显式确认参数 --live-confirm！严禁向真实账户发单，实盘通道拒绝执行 (fail-closed)。"
+            )
+        from execution.live_gate import verify_live_trading_multi_factor_gate
+        verify_live_trading_multi_factor_gate(
+            account_id=args.account_id,
+            live_confirm=args.live_confirm
+        )
+
+        broker = MiniQMTBroker(
+            qmt_path=args.qmt_path,
+            account_id=args.account_id,
+            live_confirm=args.live_confirm
+        )
         if not broker.connect():
-            logger.critical("🛑 [防线7] MiniQMT 连接失败！已降级为 PaperBroker 仿真沙盒——本次会话所有'成交'均为模拟，绝无真实下单。")
-            print("\n" + "!" * 64)
-            print("⚠️  警告: 实盘通道 (MiniQMT) 不可用，本次已显式降级为模拟盘 (PAPER)。")
-            print("⚠️  当前会话不涉及任何真实资金，请勿据本次输出评估实盘表现。")
-            print("!" * 64 + "\n")
-            broker = PaperBroker(initial_cash=args.initial_cash)
-            broker.connect()
+            raise RuntimeError("🛑 [防线7] MiniQMT 连接失败！实盘模式下拒绝静默降级为模拟交易。")
     else:
         broker = PaperBroker(initial_cash=args.initial_cash, persist=True)
         broker.connect()
@@ -257,21 +261,23 @@ def run_trader_cli():
             top_df = top_df[top_df["target_weight"] > 0].copy()
     else:
         from factors.processor import FactorProcessor
-        from models.walk_forward import WalkForwardTrainer
+        from models.inference import BatchInference
         from strategy.portfolio import PortfolioBuilder
         from data.data_manager import DataManager
         from data.universe_provider import create_universe_provider
 
         dm = DataManager(universe_provider=create_universe_provider(settings))
-        market_df = dm.load_dataset() if (settings.PARQUET_DIR / "market_data.parquet").exists() else dm.sync_and_build_dataset()
+        market_df = dm.load_dataset() if (settings.PARQUET_DIR / "market_daily.parquet").exists() else dm.sync_and_build_dataset()
         processor = FactorProcessor()
         factor_df = processor.load_factor_matrix() if (settings.FACTOR_DIR / "factor_matrix.parquet").exists() else processor.build_and_save_factor_matrix(market_df)
 
-        trainer = WalkForwardTrainer()
-        oos_df, _ = trainer.run_walk_forward(factor_df)
+        inferencer = BatchInference()
+        scored_df = inferencer.predict(factor_df)
 
-        latest_date = oos_df["date"].max()
-        daily_df = oos_df[oos_df["date"] == latest_date].copy()
+        latest_date = scored_df["date"].max()
+        daily_df = scored_df[scored_df["date"] == latest_date].copy()
+        if "close" not in daily_df.columns and "adj_close" in daily_df.columns:
+            daily_df["close"] = daily_df["adj_close"]
         builder = PortfolioBuilder(top_k_buy=settings.TOP_K_BUY, top_k_hold=settings.TOP_K_HOLD)
         top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
 

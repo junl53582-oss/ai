@@ -30,10 +30,10 @@ import json
 import logging
 import shutil
 import subprocess
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Union
 
 from config.settings import settings
 
@@ -93,8 +93,199 @@ class ModelRecord:
     config_snapshot: Dict[str, Any] = field(default_factory=dict)
     metrics: Dict[str, Any] = field(default_factory=dict)
     feature_count: Optional[int] = None
+    feature_schema_hash: Optional[str] = None
     notes: str = ""
     promotion_history: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelRecord":
+        """宽容构造: 过滤 dataclass 未声明的历史/扩展键 (如 metadata.json 中的
+        deployment_role / scientific_promotion_completed / verification_status),
+        防止全新 clone 仓库的注册表发现路径 (saved_models/production/*/metadata.json)
+        因多余键 TypeError 脆断。完整性关键字段 (sha/state/schema_hash) 仍在声明内严格校验。"""
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
+
+
+@dataclass
+class EvidenceArtifact:
+    """
+    结构化物理签署晋升证据对象 (RFC 8032 Ed25519 密码学验签)
+    """
+    evidence_type: str
+    artifact_path: str
+    artifact_sha256: str
+    schema_version: str
+    model_id: str
+    dataset_sha256: str
+    feature_schema_hash: str
+    created_at: str
+    observation_start: str
+    observation_end: str
+    observed_trading_days: int
+    status: str
+    approver: str
+    signer_key_id: str
+    signature: str
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    ledger_records: List[Dict[str, Any]] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+    def compute_canonical_bytes(self) -> bytes:
+        payload = {
+            "approver": str(self.approver).strip(),
+            "created_at": str(self.created_at).strip(),
+            "dataset_sha256": str(self.dataset_sha256).strip().lower(),
+            "evidence_type": str(self.evidence_type).strip(),
+            "feature_schema_hash": str(self.feature_schema_hash).strip().lower(),
+            "metrics": self.metrics or {},
+            "model_id": str(self.model_id).strip(),
+            "observation_end": str(self.observation_end).strip(),
+            "observation_start": str(self.observation_start).strip(),
+            "observed_trading_days": int(self.observed_trading_days),
+            "schema_version": str(self.schema_version).strip(),
+            "signer_key_id": str(self.signer_key_id).strip(),
+            "status": str(self.status).strip(),
+        }
+        if self.ledger_records:
+            payload["ledger_records"] = self.ledger_records
+        sorted_json = json.dumps(payload, sort_keys=True, separators=(',', ':'), ensure_ascii=False)
+        return sorted_json.encode("utf-8")
+
+    def sign(self, private_key_hex: Optional[str] = None, domain_separator: Optional[str] = None) -> "EvidenceArtifact":
+        from data.crypto_anchor import (
+            TRUSTED_KEY_REGISTRY,
+            DOMAIN_SEPARATOR_PROMOTION,
+            sign_with_environment_key,
+            _HAS_CRYPTOGRAPHY,
+            ed25519_sign_pure
+        )
+        sep = domain_separator or DOMAIN_SEPARATOR_PROMOTION
+        msg = self.compute_canonical_bytes()
+        msg_to_sign = f"{sep}:".encode("utf-8") + msg if sep else msg
+
+        if self.signer_key_id in TRUSTED_KEY_REGISTRY and private_key_hex:
+            reg_info = TRUSTED_KEY_REGISTRY[self.signer_key_id]
+            sk_bytes = bytes.fromhex(private_key_hex.strip())
+            if _HAS_CRYPTOGRAPHY:
+                from cryptography.hazmat.primitives.asymmetric import ed25519 as crypto_ed25519
+                priv = crypto_ed25519.Ed25519PrivateKey.from_private_bytes(sk_bytes)
+                self.signature = priv.sign(msg_to_sign).hex()
+                return self
+            else:
+                pk_bytes = bytes.fromhex(reg_info["public_key_hex"])
+                self.signature = ed25519_sign_pure(msg_to_sign, sk_bytes, pk_bytes).hex()
+                return self
+
+        sig_hex, errs = sign_with_environment_key(
+            message=msg,
+            key_id=self.signer_key_id,
+            required_purpose="RUNTIME_ATTESTATION" if self.signer_key_id == "PROD_RUNTIME_KEY_2026_V1" else "MODEL_PROMOTION",
+            domain_separator=sep,
+            explicit_private_key_hex=private_key_hex,
+            production_mode=False
+        )
+        if sig_hex:
+            self.signature = sig_hex
+            return self
+
+        raise PromotionError(f"签名生成失败: {errs}")
+
+    def save(self, target_path: Optional[Union[str, Path]] = None) -> Path:
+        import hashlib
+        if target_path:
+            p = Path(target_path).resolve()
+        else:
+            p = Path(self.artifact_path).resolve()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        self.artifact_path = str(p)
+        self.artifact_sha256 = ""
+        d = self.to_dict()
+        p.write_text(json.dumps(d, ensure_ascii=False, indent=2), encoding="utf-8")
+        self.artifact_sha256 = hashlib.sha256(p.read_bytes()).hexdigest()
+        return p
+
+    @classmethod
+    def from_dict(cls, d: Dict[str, Any]) -> "EvidenceArtifact":
+        required = [
+            "evidence_type", "artifact_path", "schema_version",
+            "model_id", "dataset_sha256", "created_at",
+            "observation_start", "observation_end", "observed_trading_days",
+            "status", "approver", "signer_key_id", "signature"
+        ]
+        missing = [f for f in required if f not in d or d[f] is None or d[f] == ""]
+        if "feature_schema_hash" not in d or d["feature_schema_hash"] is None:
+            missing.append("feature_schema_hash")
+        if missing:
+            raise PromotionError(f"EvidenceArtifact 缺少必需字段: {missing}")
+        return cls(
+            evidence_type=str(d["evidence_type"]),
+            artifact_path=str(d["artifact_path"]),
+            artifact_sha256=str(d.get("artifact_sha256") or ""),
+            schema_version=str(d["schema_version"]),
+            model_id=str(d["model_id"]),
+            dataset_sha256=str(d["dataset_sha256"]),
+            feature_schema_hash=str(d.get("feature_schema_hash") or ""),
+            created_at=str(d["created_at"]),
+            observation_start=str(d["observation_start"]),
+            observation_end=str(d["observation_end"]),
+            observed_trading_days=int(d["observed_trading_days"]),
+            status=str(d["status"]),
+            approver=str(d["approver"]),
+            signer_key_id=str(d["signer_key_id"]),
+            signature=str(d["signature"]),
+            metrics=dict(d.get("metrics") or {}),
+            ledger_records=list(d.get("ledger_records") or []),
+        )
+
+    @classmethod
+    def load_from_file(cls, path: Union[str, Path], expected_sha256: Optional[str] = None) -> "EvidenceArtifact":
+        import hashlib
+        p = Path(path).resolve()
+        if not p.is_file():
+            raise PromotionError(f"证据文件不存在或非普通文件: {p}")
+        file_bytes = p.read_bytes()
+        actual_sha = hashlib.sha256(file_bytes).hexdigest()
+        if expected_sha256 and expected_sha256.strip().lower() != actual_sha.lower():
+            raise PromotionError(f"证据文件 SHA-256 不匹配: 实际 {actual_sha} != 预期 {expected_sha256}")
+        try:
+            data = json.loads(file_bytes.decode("utf-8"))
+        except Exception as e:
+            raise PromotionError(f"证据文件解析失败 (非合法 JSON): {p} ({e})")
+        if not isinstance(data, dict):
+            raise PromotionError(f"证据文件根节点必须为 JSON 对象: {p}")
+        if "artifact_path" not in data or not data["artifact_path"]:
+            data["artifact_path"] = str(p)
+        data["artifact_sha256"] = actual_sha
+        return cls.from_dict(data)
+
+
+@dataclass
+class ProspectiveEvidence:
+    """结构化前瞻验证证据对象 (兼容旧接口)"""
+    ref: str
+    dataset_sha256: Optional[str] = None
+    validation_window: Optional[str] = None
+    metrics: Dict[str, Any] = field(default_factory=dict)
+    evidence_sha256: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
+class PaperTradingEvidence:
+    """结构化模拟盘证据对象 (兼容旧接口)"""
+    ref: str
+    ledger_hash: Optional[str] = None
+    trade_count: Optional[int] = None
+    pnl_metrics: Dict[str, Any] = field(default_factory=dict)
+    evidence_sha256: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -103,6 +294,192 @@ class ModelRecord:
 class PromotionError(Exception):
     """晋升校验失败 (fail-closed)"""
     pass
+
+
+def verify_promotion_evidence(
+    raw_ev: Any,
+    model_rec: ModelRecord,
+    expected_type: str,
+    min_trading_days: int = 20,
+    calendar: Optional[Any] = None,
+) -> EvidenceArtifact:
+    """
+    物理签署证据全要素门禁验证 (Fail-Closed)
+    """
+    import hashlib
+    if isinstance(raw_ev, bool):
+        raise PromotionError(f"{expected_type} 禁止使用布尔值 (True/False)")
+    if raw_ev is None:
+        raise PromotionError(f"{expected_type} 证据缺失")
+    if isinstance(raw_ev, EvidenceArtifact):
+        artifact = raw_ev
+    elif isinstance(raw_ev, str):
+        s = raw_ev.strip()
+        if not s:
+            raise PromotionError(f"{expected_type} 禁止传入空字符串")
+        if s == "manual_claim":
+            raise PromotionError(f"{expected_type} 严禁使用 manual_claim 虚假声明")
+        path = Path(s)
+        if not path.is_file():
+            raise PromotionError(f"{expected_type} 证据文件不存在或非文件: {s}")
+        artifact = EvidenceArtifact.load_from_file(path)
+    elif isinstance(raw_ev, dict):
+        if not raw_ev:
+            raise PromotionError(f"{expected_type} 禁止传入空字典")
+        if raw_ev.get("ref") == "manual_claim":
+            raise PromotionError(f"{expected_type} 严禁使用 manual_claim")
+        if "artifact_path" in raw_ev:
+            path = Path(raw_ev["artifact_path"])
+            if not path.is_file():
+                raise PromotionError(f"{expected_type} 物理证据文件不存在: {path}")
+            declared_sha = raw_ev.get("artifact_sha256")
+            artifact = EvidenceArtifact.load_from_file(path, expected_sha256=declared_sha)
+        elif "ref" in raw_ev:
+            ref_str = str(raw_ev["ref"]).strip()
+            if not ref_str:
+                raise PromotionError(f"{expected_type} ref 禁止为空")
+            ref_path = Path(ref_str)
+            if not ref_path.is_file():
+                raise PromotionError(f"{expected_type} ref 字符串无对应物理文件: {ref_str}")
+            artifact = EvidenceArtifact.load_from_file(ref_path)
+        else:
+            if not any(k in raw_ev for k in ["artifact_path", "model_id", "signature", "evidence_type"]):
+                raise PromotionError(f"{expected_type} 缺少有效字段 (需包含 artifact_path / model_id 等)")
+            artifact = EvidenceArtifact.from_dict(raw_ev)
+    elif hasattr(raw_ev, "to_dict"):
+        raw_dict = raw_ev.to_dict()
+        if not any(k in raw_dict for k in ["artifact_path", "model_id", "signature", "evidence_type", "ref"]):
+            raise PromotionError(f"{expected_type} 缺少有效字段")
+        return verify_promotion_evidence(raw_dict, model_rec, expected_type, min_trading_days, calendar)
+    else:
+        raise PromotionError(f"{expected_type} 格式不合法: {type(raw_ev)}")
+
+    # 1. 物理文件存在性与 SHA-256 核验
+    p = Path(artifact.artifact_path)
+    if not p.is_absolute():
+        p = (Path(settings.BASE_DIR) / p).resolve()
+    else:
+        p = p.resolve()
+
+    if not p.is_file():
+        raise PromotionError(f"{expected_type} 物理文件不存在: {p}")
+
+    file_bytes = p.read_bytes()
+    computed_sha = hashlib.sha256(file_bytes).hexdigest().lower()
+    declared_sha = str(artifact.artifact_sha256).strip().lower()
+    if not declared_sha or computed_sha != declared_sha:
+        raise PromotionError(
+            f"{expected_type} 物理证据文件 SHA-256 不匹配: 实际 {computed_sha} != 声明 {declared_sha}"
+        )
+
+    # 2. 验证 Schema
+    if artifact.schema_version not in ("evidence_v1", "v1.0", "1.0"):
+        raise PromotionError(f"{expected_type} 不支持的 schema_version: {artifact.schema_version}")
+
+    # 3. 验证数字签名与 Signer Key ID (必须严格具备 MODEL_PROMOTION 权限，严禁跨用途签名)
+    from data.crypto_anchor import TRUSTED_KEY_REGISTRY, DOMAIN_SEPARATOR_PROMOTION, verify_ed25519_signature, verify_trust_root
+    if not artifact.signer_key_id or artifact.signer_key_id not in TRUSTED_KEY_REGISTRY:
+        raise PromotionError(f"{expected_type} 未知或未注册的 signer_key_id: {artifact.signer_key_id}")
+
+    reg_info = TRUSTED_KEY_REGISTRY[artifact.signer_key_id]
+    if reg_info.get("status") != "ACTIVE":
+        raise PromotionError(f"{expected_type} 签名密钥状态非 ACTIVE: {artifact.signer_key_id} ({reg_info.get('status')})")
+
+    # 强制精确匹配 MODEL_PROMOTION 用途
+    allowed_purposes = reg_info.get("allowed_purposes", [])
+    if "MODEL_PROMOTION" not in allowed_purposes:
+        raise PromotionError(
+            f"{expected_type} 密钥用途权限错配 (Key Purpose Mismatch): 签名密钥 ({artifact.signer_key_id}) "
+            f"缺少 'MODEL_PROMOTION' 权限 (当前权限: {allowed_purposes})！严禁跨用途签名。"
+        )
+
+    # 校验外部密码学信任根
+    tr_ok, tr_actual, tr_pin, tr_errs = verify_trust_root()
+    if tr_pin is not None and not tr_ok:
+        raise PromotionError(f"{expected_type} 密码学信任根校验失败: {tr_errs}")
+
+    if not artifact.signature:
+        raise PromotionError(f"{expected_type} 缺少数字签名 (未签名证据)")
+
+    canonical_msg = artifact.compute_canonical_bytes()
+
+    sig_ok, sig_errs = verify_ed25519_signature(
+        message=canonical_msg,
+        signature_hex=artifact.signature,
+        key_id=artifact.signer_key_id,
+        required_purpose="MODEL_PROMOTION",
+        domain_separator=DOMAIN_SEPARATOR_PROMOTION,
+        production_mode=False
+    )
+    if not sig_ok:
+        raise PromotionError(f"{expected_type} Ed25519 数字签名验证失败: {sig_errs}")
+
+    # 4. 验证 model_id 一致
+    if artifact.model_id != model_rec.model_id:
+        raise PromotionError(
+            f"{expected_type} model_id 不一致: 证据为 {artifact.model_id}, 当前模型为 {model_rec.model_id}"
+        )
+
+    # 5. 验证 dataset_sha256 一致
+    if model_rec.dataset_sha256 and artifact.dataset_sha256.lower() != model_rec.dataset_sha256.lower():
+        raise PromotionError(
+            f"{expected_type} dataset_sha256 不一致: 证据为 {artifact.dataset_sha256}, 模型为 {model_rec.dataset_sha256}"
+        )
+
+    # 6. 验证 feature_schema_hash 一致
+    if model_rec.feature_schema_hash and artifact.feature_schema_hash.lower() != model_rec.feature_schema_hash.lower():
+        raise PromotionError(
+            f"{expected_type} feature_schema_hash 不一致: 证据为 {artifact.feature_schema_hash}, 模型为 {model_rec.feature_schema_hash}"
+        )
+
+    # 7. 验证 status 为 PASS/MATURE
+    if artifact.status not in ("PASS", "MATURE"):
+        raise PromotionError(
+            f"{expected_type} 状态不达标: 当前为 {artifact.status} (必须为 PASS 或 MATURE)"
+        )
+
+    # 8. 验证 observation_start/end 属于合法交易日
+    from data.trading_calendar import CanonicalTradingCalendar
+    if calendar is None:
+        try:
+            calendar = CanonicalTradingCalendar.get_instance()
+        except Exception as e:
+            logger.warning(f"无法初始化 CanonicalTradingCalendar: {e}")
+
+    if calendar is not None:
+        if not calendar.is_trading_day(artifact.observation_start):
+            raise PromotionError(f"{expected_type} observation_start ({artifact.observation_start}) 不是合法交易所交易日")
+        if not calendar.is_trading_day(artifact.observation_end):
+            raise PromotionError(f"{expected_type} observation_end ({artifact.observation_end}) 不是合法交易所交易日")
+
+    if artifact.observation_start > artifact.observation_end:
+        raise PromotionError(f"{expected_type} observation_start 晚于 observation_end")
+
+    # 9. 验证 observed_trading_days 达到配置阈值
+    if artifact.observed_trading_days < min_trading_days:
+        raise PromotionError(
+            f"{expected_type} 观察天数不足: 实际 {artifact.observed_trading_days} 天 < 要求 {min_trading_days} 天"
+        )
+
+    # 10. 验证观察天数可由证据账本重新计算 (虚构账本重算防御: 若附带账本明细，强制物理日历重算)
+    if artifact.ledger_records:
+        valid_dates = set()
+        for r in artifact.ledger_records:
+            d = r.get("date") or r.get("trade_date")
+            if d:
+                d_str = str(d)[:10]
+                if calendar is None or calendar.is_trading_day(d_str):
+                    valid_dates.add(d_str)
+        if min_trading_days > 0 and len(valid_dates) < min_trading_days:
+            raise PromotionError(
+                f"{expected_type} 证据账本重新计算天数不足: 重算 {len(valid_dates)} 天 < 要求 {min_trading_days} 天"
+            )
+        if len(valid_dates) < artifact.observed_trading_days:
+            raise PromotionError(
+                f"{expected_type} 证据账本重新计算天数 ({len(valid_dates)}) 小于声明 observed_trading_days ({artifact.observed_trading_days})"
+            )
+
+    return artifact
 
 
 class ModelRegistry:
@@ -159,6 +536,7 @@ class ModelRegistry:
         dataset_path: Optional[str] = None,
         config_snapshot: Optional[Dict[str, Any]] = None,
         feature_count: Optional[int] = None,
+        feature_schema_hash: Optional[str] = None,
         notes: str = "",
         state: Optional[str] = None,
     ) -> str:
@@ -193,6 +571,7 @@ class ModelRegistry:
             config_snapshot=config_snapshot or {},
             metrics=dict(metrics or {}),
             feature_count=feature_count,
+            feature_schema_hash=feature_schema_hash,
             notes=notes,
             promotion_history=[{
                 "at": ts.isoformat(timespec="seconds"),
@@ -225,7 +604,7 @@ class ModelRegistry:
         if model_id not in index:
             raise PromotionError(f"模型不存在于注册表: {model_id}")
 
-        rec = ModelRecord(**index[model_id])
+        rec = ModelRecord.from_dict(index[model_id])
         from_state = rec.state
         key = (from_state, to_state)
         if key not in TRANSITIONS:
@@ -238,14 +617,38 @@ class ModelRegistry:
             raise PromotionError(f"{key} 需要 OOS 指标 (metrics), 当前为空")
         if rules.get("requires_dataset") and not rec.dataset_sha256:
             raise PromotionError(f"{key} 需要数据集哈希 (dataset_sha256), 当前缺失")
-        if rules.get("requires_certification") and not ev.get("certification_ref"):
-            raise PromotionError(f"{key} 需要认证证据引用 (evidence.certification_ref)")
+        if rules.get("requires_certification"):
+            cert = ev.get("certification_ref")
+            if isinstance(cert, bool) or not cert:
+                raise PromotionError(f"{key} 认证证据 certification_ref 禁止使用简单布尔值或为空，必须为有效证据引用 (evidence.certification_ref)")
         if rules.get("requires_approver") and not (approver and approver.strip()):
             raise PromotionError(f"{key} 需要人工审批人 (approver)")
-        if rules.get("requires_prospective") and not ev.get("prospective_validation"):
-            raise PromotionError(f"{key} 需要前瞻验证证据 (evidence.prospective_validation)")
-        if rules.get("requires_paper_trading") and not ev.get("paper_trading"):
-            raise PromotionError(f"{key} 需要模拟盘证据 (evidence.paper_trading)")
+        if rules.get("requires_prospective") or rules.get("requires_paper_trading"):
+            pv = ev.get("prospective_validation")
+            pt = ev.get("paper_trading")
+            if isinstance(pv, bool):
+                raise PromotionError(f"{key} 前瞻验证证据禁止使用简单布尔值 (必须为物理签署的 EvidenceArtifact 制品)")
+            if isinstance(pt, bool):
+                raise PromotionError(f"{key} 模拟盘证据禁止使用简单布尔值 (必须为物理签署的 EvidenceArtifact 制品)")
+            if not pv:
+                raise PromotionError(f"{key} 需要结构化前瞻验证证据 (evidence.prospective_validation)")
+            if not pt:
+                raise PromotionError(f"{key} 需要结构化模拟盘证据 (evidence.paper_trading)")
+            # 预校验字段完整性，防止某一侧严重格式错误被另一侧文件未就绪掩盖
+            for ev_name, obj in [("前瞻验证证据", pv), ("模拟盘证据", pt)]:
+                d = obj.to_dict() if hasattr(obj, "to_dict") else obj
+                if isinstance(d, dict) and not any(k in d for k in ["artifact_path", "model_id", "signature", "evidence_type", "ref"]):
+                    raise PromotionError(f"{key} {ev_name}缺少有效字段 (需包含 artifact_path/model_id/ref 等)")
+
+        if rules.get("requires_prospective"):
+            pv = ev.get("prospective_validation")
+            art = verify_promotion_evidence(pv, rec, expected_type="prospective_validation", min_trading_days=20)
+            ev["prospective_validation"] = art.to_dict()
+
+        if rules.get("requires_paper_trading"):
+            pt = ev.get("paper_trading")
+            art = verify_promotion_evidence(pt, rec, expected_type="paper_trading", min_trading_days=20)
+            ev["paper_trading"] = art.to_dict()
 
         # 晋升到 APPROVED/PRODUCTION: 制品复制进注册表 (唯一授权的生产写入路径)
         if to_state in (ModelState.APPROVED, ModelState.PRODUCTION):
@@ -288,7 +691,7 @@ class ModelRegistry:
         if to_state == ModelState.PRODUCTION:
             for mid, raw in index.items():
                 if mid != model_id and raw.get("state") == ModelState.PRODUCTION:
-                    old = ModelRecord(**raw)
+                    old = ModelRecord.from_dict(raw)
                     old.state = ModelState.ARCHIVED
                     old.promotion_history.append({
                         "at": datetime.now().isoformat(timespec="seconds"),
@@ -318,19 +721,19 @@ class ModelRegistry:
     def get(self, model_id: str) -> Optional[ModelRecord]:
         index = self._load_index()
         raw = index.get(model_id)
-        return ModelRecord(**raw) if raw else None
+        return ModelRecord.from_dict(raw) if raw else None
 
     def get_production(self) -> Optional[ModelRecord]:
         """当前唯一 PRODUCTION 模型 (推理路径必须用此)"""
         index = self._load_index()
         for raw in index.values():
             if raw.get("state") == ModelState.PRODUCTION:
-                return ModelRecord(**raw)
+                return ModelRecord.from_dict(raw)
         return None
 
     def list_records(self, state: Optional[str] = None) -> List[ModelRecord]:
         index = self._load_index()
-        recs = [ModelRecord(**raw) for raw in index.values()]
+        recs = [ModelRecord.from_dict(raw) for raw in index.values()]
         if state:
             recs = [r for r in recs if r.state == state]
         return sorted(recs, key=lambda r: r.created_at, reverse=True)

@@ -1,0 +1,32 @@
+{
+  "Trend_Quality": {
+    "feature_count": 3,
+    "sum_abs_coefficient": 0.100434,
+    "share_of_weights": 14.02
+  },
+  "PIT_Fundamental": {
+    "feature_count": 6,
+    "sum_abs_coefficient": 0.001336,
+    "share_of_weights": 0.19
+  },
+  "Persistent_Momentum": {
+    "feature_count": 5,
+    "sum_abs_coefficient": 0.291046,
+    "share_of_weights": 40.63
+  },
+  "Volatility_Quality": {
+    "feature_count": 2,
+    "sum_abs_coefficient": 0.032349,
+    "share_of_weights": 4.52
+  },
+  "Liquidity_Regime": {
+    "feature_count": 2,
+    "sum_abs_coefficient": 0.021798,
+    "share_of_weights": 3.04
+  },
+  "Baseline_Technical": {
+    "feature_count": 106,
+    "sum_abs_coefficient": 0.201626,
+    "share_of_weights": 28.15
+  }
+}

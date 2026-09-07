@@ -1,22 +1,30 @@
-# A股工业级 AI 量化投研、未来价格前瞻推演与自动化交易中台
+# A股量化研究与观察系统
 
-> **A-Share Institutional AI Quantitative Research, Forward Price Forecasting & Trading Platform**
+> **A-Share Quantitative Research & Observation System**
 
 <p align="center">
   <img src="https://img.shields.io/badge/Python-3.11-3776AB.svg?style=flat-square&logo=python&logoColor=white" alt="Python 3.11">
   <img src="https://img.shields.io/badge/License-GPL--3.0-blue.svg?style=flat-square" alt="License GPL-3.0">
-  <img src="https://img.shields.io/badge/CI%20Status-Passing%20(Fast%20%2B%20Audit)-10B981.svg?style=flat-square&logo=github-actions&logoColor=white" alt="CI Status">
-  <img src="https://img.shields.io/badge/Research%20Certification-FAILED%20(Insufficient%20Evidence)-crimson.svg?style=flat-square" alt="Research Certification FAILED">
-  <img src="https://img.shields.io/badge/Live%20Trading-FALSE%20(Paper%20Only)-orange.svg?style=flat-square" alt="Live Trading False">
+  <img src="https://img.shields.io/badge/Engineering%20Integrity-ENGINEERING__VALIDATED-10B981.svg?style=flat-square" alt="Engineering Validated">
+  <img src="https://img.shields.io/badge/Research%20Evidence-RESEARCH__INCONCLUSIVE-amber.svg?style=flat-square" alt="Research Inconclusive">
+  <img src="https://img.shields.io/badge/Prospective%20Maturity-PROSPECTIVE__IMMATURE-blue.svg?style=flat-square" alt="Prospective Immature">
+  <img src="https://img.shields.io/badge/Live%20Trading-LIVE__TRADING__BLOCKED-crimson.svg?style=flat-square" alt="Live Trading Blocked">
   <img src="https://img.shields.io/badge/Dashboard-Port%208501-8B5CF6.svg?style=flat-square&logo=streamlit&logoColor=white" alt="Dashboard Port 8501">
 </p>
 
 ---
 
-> [!IMPORTANT]
-> **【零伪造科学诚信准则 (Zero-Mock Provenance)】**
-> 本项目所有量化指标、超额收益、RankIC 与回测曲线均来自真实物理计算与不可篡改密码学凭证（SHA-256 Manifest）。杜绝任何常量伪造与过度拟合欺骗。
-> 严禁实盘直接使用，当前实盘就绪门禁严格保持：`LIVE_TRADING_READY = FALSE`（仅支持模拟与 Paper Trading 验证）。
+> [!CAUTION]
+> **【系统性质与零伪造科学诚信声明 (System Classification & Scientific Integrity)】**
+> 1. **系统性质与定位**: 本项目为 **A股量化研究与观察系统 (Quantitative Research & Observation System)**，所有算法、打分与图表仅用于学术量化研究与模拟观察。
+> 2. **免责声明**: **绝非投资建议，绝无收益承诺，当前系统绝对禁止实盘交易**。
+> 3. **四重权威状态矩阵 (Four Canonical Statuses)**:
+>    - 🛠️ **软件工程完整性**: **`ENGINEERING_VALIDATED`** (全量自动化测试、密码学哈希存证、Schema 门禁 100% 通过)
+>    - 🔬 **模型科研结论**: **`RESEARCH_INCONCLUSIVE`** (因缺少逐笔财报时点存证与多随机种子方差达标证明，科研证据尚未稳健通过)
+>    - ⏳ **前瞻验证成熟度**: **`PROSPECTIVE_IMMATURE`** (当前真实前瞻观察天数 < 20 天，样本不成熟，严禁回填历史或伪造未来观察)
+>    - 🚨 **实盘硬闸状态**: **`LIVE_TRADING_BLOCKED`** (`LIVE_TRADING_READY = False`，Fail-Closed 物理切断真实资金委托下单)
+> 4. **“PRODUCTION”术语边界**: `ModelRegistry` 中的 `PRODUCTION` 仅指代**已打包规范化的部署工程制品 (`DEPLOYMENT_ARTIFACT`)**，用于驱动每日模拟盘沙盒与看板推演，**绝不代表模型科学有效，亦绝对禁止用于实盘交易**。
+> 5. **零伪造铁律**: 严禁人工填充概率、目标价、胜率或虚构置信区间，所有预测分值由真实因子矩阵与注册模型端到端实时生成。
 
 ---
 
@@ -27,7 +35,7 @@
 3. [🏛️ 八层量化系统工程架构 (Architecture)](#3-🏛️-八层量化系统工程架构-architecture)
 4. [🔬 生产模型与研究候选模型体系 (Model Registry)](#4-🔬-生产模型与研究候选模型体系-model-registry)
 5. [🛡️ 七重实盘资金安全风控守卫 (Safety Guards)](#5-🛡️-七重实盘资金安全风控守卫-safety-guards)
-6. [📈 交互看板与未来 5 日价格前瞻 (Dashboard & Forecast)](#6-📈-交互看板与未来-5-日价格前瞻-dashboard--forecast)
+6. [📈 交互看板与模拟观察中枢 (Dashboard & Observation)](#6-📈-交互看板与模拟观察中枢-dashboard--observation)
 7. [💻 快速克隆、安装与运行全流程 (Quickstart)](#7-💻-快速克隆安装与运行全流程-quickstart)
 8. [📦 数据集获取与防篡改哈希核验 (Data & Artifacts)](#8-📦-数据集获取与防篡改哈希核验-data--artifacts)
 9. [📁 项目完整工程目录结构 (Directory Layout)](#9-📁-项目完整工程目录结构-directory-layout)
@@ -81,13 +89,13 @@
 
 ## 2. 💡 项目定位与核心技术亮点 (Project Overview)
 
-本项目是一套专为 A 股市场研发的**工业级多模态 AI 量化投研与生产交易闭环中台**，解决传统开源量化“未来函数泛滥、简单分类无法反映真实排序、风控形同虚设、实盘无法闭环”的根本痛点：
-
+本项目为专为 A 股市场研发的**A股量化研究与观察系统 (Quantitative Research & Observation System)**。本系统聚焦于量化学术研究、严格无未来函数因子挖掘、模型时序验证与前瞻模拟观察：
 * 🛡️ **严格零幸存者偏差 (Point-In-Time Universe)**：接入 2021~2026 年沪深 300 真实时点调仓事件流，历史回测严格对齐当时成分股。
 * 🔒 **因果隔离与防视前泄漏**：财报按公告日延后 110 天披露窗口对齐，时序走步训练严格设置 25 天 Purge 隔离期。
 * 🧩 **统一模型适配器层 (Model Adapter Pattern)**：解耦推理引擎与底层模型结构，无缝兼容 LightGBM、浅树袋装集成、DRL 及 PyTorch 深度模型。
-* ⚖️ **A 股实盘交易硬约束**：内置 T+1 卖出限制、100 股整手向下取整、一字涨跌停禁买禁卖、ST 标的 5% 限价与双边滑点摩擦。
-* 🤖 **盘后全自动巡航闭环**：每日收盘后自动同步全市场行情、批量推理截面得分、触发风控组合优化并多通道推送决策卡片。
+* ⚖️ **A 股实盘级硬约束模拟**：内置 T+1 卖出限制、100 股整手向下取整、一字涨跌停禁买禁卖、ST 标的 5% 限价与双边滑点摩擦仿真。
+* 🤖 **盘后全自动巡航闭环**：每日收盘后自动同步全市场行情、批量推理截面得分、触发风控组合优化并记录模拟与影子账本。
+* 🚨 **实盘永久硬阻断门禁**：系统默认且物理锁定 `LIVE_TRADING_READY = False`，绝不向券商接口发送真实委托指令。
 
 ---
 
@@ -105,11 +113,11 @@
 ├──────────────────────────────────────────────────────────────────────────┤
 │  Layer 5: 模型仓库 (ModelRegistry 状态机 + Model Adapter 统一推理适配层) │
 ├──────────────────────────────────────────────────────────────────────────┤
-│  Layer 6: 前瞻推演 (未来 5 日价格预期走势 + 90% 置信区间 + 建议挂单卡)   │
+│  Layer 6: 模拟推演 (截面模型推理打分 + Top-K 选股模拟 + 前瞻观察留痕)       │
 ├──────────────────────────────────────────────────────────────────────────┤
-│  Layer 7: 执行风控 (7重实盘资金熔断守卫 + PaperBroker 仿真撮合账本)      │
+│  Layer 7: 执行风控 (七重资金安全风控守卫 + Paper/Shadow 仿真撮合账本)       │
 ├──────────────────────────────────────────────────────────────────────────┤
-│  Layer 8: 交互看板 (Streamlit 7大主题大屏 + 每日 15:05 自动推送中枢)     │
+│  Layer 8: 交互看板 (Streamlit 决策看板 + 每日 15:05 自动推送中枢)           │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -147,12 +155,12 @@
 
 ---
 
-## 6. 📈 交互看板与未来 5 日价格前瞻 (Dashboard & Forecast)
+## 6. 📈 交互看板与模拟观察中枢 (Dashboard & Observation)
 
-系统在 Streamlit 看板中提供全功能量化投研视图：
+系统在 Streamlit 看板中提供全功能量化投研与模拟观察视图：
 * **3 栏金融 K 线穿透**: 日 K 蜡烛图 + MA5/MA20/MA60 均线 + 🔴 量化 B 点金叉 / 🟢 S 点止盈 + 成交量 + 主力大单净流入趋势。
-* **未来 5 日价格走势前瞻**: K 线前瞻预测虚线 + 90% 置信区间光晕 + 明日建议挂单区间与止盈止损决策卡。
-* **短线情绪温度计**: 基于 300 标的涨跌分布计算全市场短线投机情绪。
+* **真实截面打分与 Top-K 模拟观察**: 基于在役部署模型与真实特征矩阵实时批量推理截面预测得分 (`pred_score`)，严格遵守零伪造铁律，杜绝合成未来价格走势、人工胜率或虚构置信区间。
+* **短线情绪温度计与宏观环境**: 基于 300 标的涨跌分布与宏观环境实时监控市场风险偏好与防守姿态。
 
 ---
 
@@ -338,7 +346,13 @@ QUANT_NOTIFIER_CHANNEL="feishu"
 
 本项目基于 **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)** 协议开源。
 
-### ⚠️ 金融投资风险免责声明 (Financial Disclaimer)
-1. 本项目所包含的代码、算法、模型、预测分值及相关文档**仅供量化投研学习、学术交流与算法验证**使用，不构成任何实质性投资建议或证券买卖推荐。
-2. 证券市场存在极高风险，量化策略历史回测表现不预示其未来收益，模型前瞻推演结论具有不确定性。投资者据此操作所产生的任何盈利或亏损均由个人独立承担，本项目研发者及贡献者不承担任何直接或间接法律责任。
-3. **严禁在未经过充分模拟盘检验（Paper Trading）与专业合规审查的前提下，将本系统直接用于真实资金交易**。
+### ⚠️ 金融投资风险与学术研究免责声明 (Financial Disclaimer & Risk Disclosure)
+1. **学术研究与模拟观察定位**：本项目所有代码、因子算法、机器学习模型、预测分值、排序指标及可视化看板**仅供学术研究、量化算法验证与模拟盘沙盒观察**使用，绝不构成任何投资建议、理财规划、买卖推介或收益承诺。
+2. **严禁实盘真实资金交易**：系统在工程层面默认且硬阻断实盘交易接口（`LIVE_TRADING_READY = False`）。严禁任何组织或个人在未获得金融监管牌照或未通过完整风险审查的情况下，擅自将本系统对接实盘账户进行真金白银交易。
+3. **权威四重状态声明 (Four Canonical Statuses)**：
+   - 🛠️ **`ENGINEERING_VALIDATED`**: 软件工程与自动化测试 100% 健全，严禁逻辑退化；
+   - 🔬 **`RESEARCH_INCONCLUSIVE`**: 严守统计实证规范，因缺少逐笔公告披露时点存证及多随机种子方差未达严苛阈值，科研有效性判定尚未稳健通过；
+   - ⏳ **`PROSPECTIVE_IMMATURE`**: 真实样本外前瞻观察累计天数 < 20 个交易日，样本极度不成熟，拒绝回填历史或虚构收益；
+   - 🚨 **`LIVE_TRADING_BLOCKED`**: 生产网关 Fail-Closed 硬闭环阻断真实委托。
+4. **模型命名边界**：`ModelRegistry` 中的 `PRODUCTION` 仅指代已标准化的部署工程制品 (`DEPLOYMENT_ARTIFACT`)，绝不代表该模型已获得统计学 Alpha 稳健认证。
+5. **投资自负原则**：证券市场受宏观政策、流动性、不可抗力等多种非线性极端因素影响，量化策略历史回测及前瞻模拟指标均具有极高时变性与衰减风险。任何人据此决策所产生的资产损失，均由决策者独立承担，本项目作者及贡献者概不承担任何直接或连带法律责任。

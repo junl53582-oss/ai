@@ -14,9 +14,11 @@ env/
 # Data storage & large datasets
 data_storage/raw/
 data_storage/oos_predictions.parquet
-# Phase A: 基本面原始证据 (yjbb 季度报表, ~29MB) 入库以支撑 PIT 溯源与 CI 确定性重建
+# Phase A: 基本面原始证据 (yjbb 季度报表, ~29MB) 与 PIT 时间轴入库以支撑 PIT 溯源与 CI 确定性重建
 data_storage/fundamentals/*
 !data_storage/fundamentals/yjbb_*.parquet
+!data_storage/fundamentals/fundamental_announcements_pit.parquet
+!data_storage/fundamentals/fundamental_pit_manifest.json
 # Phase A: 行情主数据集 (19.9MB) 入库; 311MB 因子矩阵不入库, 由 tools/build_factor_matrix_300.py 确定性重建
 data_storage/research/*.parquet
 !data_storage/research/market_daily_300.parquet
