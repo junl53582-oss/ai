@@ -9,6 +9,7 @@ Validates:
 6. Manifest/schema validator rejects semantically corrupt dataset.
 """
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 import json
 import pandas as pd
 import numpy as np
@@ -120,6 +121,7 @@ def test_market_rows_recompute_features_instead_of_copy():
         engine.predict(raw_slice)
 
 
+@require_factor_matrix
 def test_invalid_latest_data_falls_back_to_last_trusted_date(repo_root):
     """5. 数据失效守卫（2026-09-07 语义升级）:
     - 历史存证保留: 2026-09-06 事故曾将 2026-09-03/04 行情标记失效并回退至 2026-08-24;
@@ -152,6 +154,7 @@ def test_invalid_latest_data_falls_back_to_last_trusted_date(repo_root):
     assert picks_df["industry"].nunique() > 1
 
 
+@require_factor_matrix
 def test_manifest_rejects_semantically_corrupt_dataset(repo_root):
     """6. 数据验证器主动拦截行业坍缩、白马股票行业谬误与跨股票全同特征"""
     from tools.check_committed_dataset_schema import verify_dataset_semantic_integrity

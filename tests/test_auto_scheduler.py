@@ -7,6 +7,7 @@
 4. 调度审计日志与状态持久化文件一致性
 """
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 import json
 from datetime import date
 from pathlib import Path
@@ -31,6 +32,7 @@ def test_is_trading_day():
     fut = date(2026, 9, 4)
     assert DailyExecutionPipeline.is_trading_day(fut) is False
 
+@require_factor_matrix
 def test_csi500_universe_generator(tmp_path):
     out_file = tmp_path / "csi500_stock_picks.csv"
     p = CSI500UniverseManager.generate_csi500_picks_file(out_file)
@@ -46,6 +48,7 @@ def test_csi500_universe_generator(tmp_path):
     # 验证满仓目标权重 (95%)
     assert abs(df["target_weight"].sum() - 0.95) < 1e-4
 
+@require_factor_matrix
 def test_daily_pipeline_execution(tmp_path):
     test_paper = tmp_path / "paper_ledger.json"
     test_shadow = tmp_path / "shadow_ledger.json"

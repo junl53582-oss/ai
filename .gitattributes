@@ -1,0 +1,7 @@
+# sha256 固定的证据/存证文件: 禁止任何 EOL 转换
+# 背景: core.autocrlf=true 会把 Windows 工作区 CRLF 在入库时规范化为 LF,
+# 导致 CI Linux 检出字节与 manifest 记录的本地 hash 不一致 (Fail-Closed 假阳性)。
+# 这些文件是密码学 hash 封存的审计证据, 必须字节级原样存取。
+reports/accounting_quarantine/paper_ledger_invalid_weekend_20260905.json -text
+reports/performance_all_generations.json -text
+reports/legacy_unverified/performance_all_generations.json -text

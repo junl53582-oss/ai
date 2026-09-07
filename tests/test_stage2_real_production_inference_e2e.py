@@ -1,4 +1,5 @@
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -72,6 +73,7 @@ def test_canonical_feature_schema_hash():
     assert metadata.get('feature_count') == 32
 
 
+@require_factor_matrix
 def test_real_production_inference_e2e():
     dataset_path = Path('data_storage/research/factor_matrix_300.parquet')
     assert dataset_path.exists()
@@ -114,6 +116,7 @@ def test_real_production_inference_e2e():
     assert np.isclose(portfolio['target_weight'].sum(), 0.95, atol=0.05) or portfolio['target_weight'].sum() <= 1.0
 
 
+@require_factor_matrix
 def test_fail_closed_on_missing_advanced_alpha():
     dataset_path = Path('data_storage/research/factor_matrix_300.parquet')
     df = pd.read_parquet(dataset_path)
@@ -134,6 +137,7 @@ def test_fail_closed_on_missing_advanced_alpha():
             engine.predict(corrupt_df, date=latest_date)
 
 
+@require_factor_matrix
 def test_fail_closed_on_mismatched_schema_hash():
     dataset_path = Path('data_storage/research/factor_matrix_300.parquet')
     df = pd.read_parquet(dataset_path)
@@ -147,6 +151,7 @@ def test_fail_closed_on_mismatched_schema_hash():
         engine.predict(sub_df, date=latest_date, expected_schema_hash='corrupted_hash_value_12345')
 
 
+@require_factor_matrix
 def test_fail_closed_on_non_numeric_feature():
     dataset_path = Path('data_storage/research/factor_matrix_300.parquet')
     df = pd.read_parquet(dataset_path)

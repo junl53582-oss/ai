@@ -30,7 +30,7 @@ import json
 import logging
 import shutil
 import subprocess
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass, field, fields, asdict
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Union
@@ -99,6 +99,15 @@ class ModelRecord:
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> "ModelRecord":
+        """宽容构造: 过滤 dataclass 未声明的历史/扩展键 (如 metadata.json 中的
+        deployment_role / scientific_promotion_completed / verification_status),
+        防止全新 clone 仓库的注册表发现路径 (saved_models/production/*/metadata.json)
+        因多余键 TypeError 脆断。完整性关键字段 (sha/state/schema_hash) 仍在声明内严格校验。"""
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in data.items() if k in known})
 
 
 @dataclass
@@ -595,7 +604,7 @@ class ModelRegistry:
         if model_id not in index:
             raise PromotionError(f"模型不存在于注册表: {model_id}")
 
-        rec = ModelRecord(**index[model_id])
+        rec = ModelRecord.from_dict(index[model_id])
         from_state = rec.state
         key = (from_state, to_state)
         if key not in TRANSITIONS:
@@ -682,7 +691,7 @@ class ModelRegistry:
         if to_state == ModelState.PRODUCTION:
             for mid, raw in index.items():
                 if mid != model_id and raw.get("state") == ModelState.PRODUCTION:
-                    old = ModelRecord(**raw)
+                    old = ModelRecord.from_dict(raw)
                     old.state = ModelState.ARCHIVED
                     old.promotion_history.append({
                         "at": datetime.now().isoformat(timespec="seconds"),
@@ -712,19 +721,19 @@ class ModelRegistry:
     def get(self, model_id: str) -> Optional[ModelRecord]:
         index = self._load_index()
         raw = index.get(model_id)
-        return ModelRecord(**raw) if raw else None
+        return ModelRecord.from_dict(raw) if raw else None
 
     def get_production(self) -> Optional[ModelRecord]:
         """当前唯一 PRODUCTION 模型 (推理路径必须用此)"""
         index = self._load_index()
         for raw in index.values():
             if raw.get("state") == ModelState.PRODUCTION:
-                return ModelRecord(**raw)
+                return ModelRecord.from_dict(raw)
         return None
 
     def list_records(self, state: Optional[str] = None) -> List[ModelRecord]:
         index = self._load_index()
-        recs = [ModelRecord(**raw) for raw in index.values()]
+        recs = [ModelRecord.from_dict(raw) for raw in index.values()]
         if state:
             recs = [r for r in recs if r.state == state]
         return sorted(recs, key=lambda r: r.created_at, reverse=True)

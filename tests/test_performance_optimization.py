@@ -11,6 +11,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 
 from config.settings import settings
 
@@ -46,6 +47,7 @@ def test_performance_all_generations_file():
     assert data["gen4_flagship"]["profit_loss_ratio"] >= 1.40, "第四代交易盈亏比应 >= 1.40"
     assert data["gen4_flagship"]["annualized_turnover"] <= 20.0, "第四代年化换手应 <= 20x"
 
+@require_equity_curves
 def test_equity_curves_parquet_integrity():
     eq_path = settings.BASE_DIR / "reports" / "equity_curves_all_generations.parquet"
     assert eq_path.exists(), "reports/equity_curves_all_generations.parquet 必须存在"

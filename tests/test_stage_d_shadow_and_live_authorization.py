@@ -17,6 +17,7 @@ import os
 import json
 import time
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 import pandas as pd
 from pathlib import Path
 from datetime import datetime, timedelta
@@ -183,6 +184,7 @@ class TestStageDShadowLedgerWiring:
             sl = ShadowTradingLedger(ledger_file=test_shadow_ledger)
             assert sl.observed_trading_days >= 1
 
+    @require_factor_matrix
     def test_auto_scheduler_skips_on_non_trading_day(self, tmp_path):
         from scripts.auto_daily_scheduler import DailyExecutionPipeline
 

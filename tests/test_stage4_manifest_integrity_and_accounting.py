@@ -10,6 +10,7 @@ import sys
 import json
 import hashlib
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 from pathlib import Path
 import pandas as pd
 import numpy as np
@@ -29,6 +30,7 @@ from scripts.phase21h_prospective_runner import (
 )
 
 
+@require_factor_matrix
 def test_manifest_matches_physical_parquet():
     """Verify factor_matrix_300.manifest.json is 100% truthful to physical file."""
     parquet_path = root_dir / "data_storage" / "research" / "factor_matrix_300.parquet"

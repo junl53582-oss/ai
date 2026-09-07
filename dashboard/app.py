@@ -985,6 +985,27 @@ else:
         else:
             st.warning("⚠️ **暂无可验证指标**：四代策略历史回测处于未实测/未经验证状态 (LEGACY_UNVERIFIED)，已依规对前端产品展示执行 Fail-Closed 屏蔽。")
 
+        # -------------------------------------------------------------
+        # 1.5 最新走步模型质量审计 (样本外 RankIC / 分类区分度, Fail-Closed 展示)
+        # -------------------------------------------------------------
+        st.markdown("#### 🧪 最新走步模型质量审计 (样本外 RankIC 与分类区分度)")
+        em = st.session_state.eval_metrics or {}
+        if em:
+            if em.get("rank_ic_mean") is not None:
+                ic_m1, ic_m2, ic_m3, ic_m4 = st.columns(4)
+                ic_m1.metric("Mean RankIC", f"{em.get('rank_ic_mean', 0):+.4f}")
+                ic_m2.metric("RankICIR", f"{em.get('rank_icir', 0):.4f}")
+                ic_m3.metric("RankIC > 0 胜率", f"{em.get('rank_ic_win_rate', 0):.1f}%")
+                ic_m4.metric("20D 滚动 RankIC", f"{em.get('rolling_rank_ic_20d', 0):+.4f}")
+            else:
+                cl_m1, cl_m2, cl_m3, cl_m4 = st.columns(4)
+                cl_m1.metric("AUC-ROC 区分度", f"{em.get('auc', 0):.4f}")
+                cl_m2.metric("基准预测准确率", f"{em.get('accuracy', 0) * 100:.2f}%")
+                cl_m3.metric("F1 综合平衡得分", f"{em.get('f1', 0):.4f}")
+                cl_m4.metric("概率标定误差 (Brier)", f"{em.get('brier_score', 0):.4f}")
+        else:
+            st.caption("尚未执行走步训练 (eval_metrics 为空): 模型质量指标将在 4/4 训练回测完成后自动展示。")
+
         st.markdown("---")
 
         # -------------------------------------------------------------

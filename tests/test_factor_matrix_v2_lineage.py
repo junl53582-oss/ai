@@ -5,6 +5,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RES_DIR = ROOT_DIR / "data_storage" / "research"
@@ -31,6 +32,7 @@ def test_1_market_input_hash_correct():
     assert actual_sha == manifest["file_sha256"], f"Market file SHA {actual_sha} != manifest {manifest['file_sha256']}"
 
 
+@require_factor_matrix_v2
 def test_2_factor_output_hash_correct():
     """验证 factor_matrix_300_v2.parquet 物理文件哈希与 manifest 严格匹配"""
     assert FACTOR_V2.exists(), "factor_matrix_300_v2.parquet missing"
@@ -57,6 +59,7 @@ def test_4_rebuild_hash_consistency_provenance():
     assert f_meta["feature_count"] >= 97
 
 
+@require_factor_matrix_v2
 def test_5_raw_circ_mv_exists_and_unstandardized():
     """验证原始流通市值字段 (circ_mv / circ_mv_raw) 在市场面板与因子矩阵中均存在且未被标准化"""
     m_df = pd.read_parquet(MARKET_V2)

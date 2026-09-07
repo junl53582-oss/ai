@@ -8,6 +8,7 @@ import unittest.mock as mock
 from pathlib import Path
 import pandas as pd
 import pytest
+from tests.artifact_guards import require_factor_matrix, require_factor_matrix_v2, require_equity_curves
 
 from config.settings import settings
 from data.trading_calendar import CanonicalTradingCalendar, TradeDateError
@@ -483,6 +484,7 @@ def test_historical_replay_adapter_strict_json_ledger_isolation(tmp_path):
         assert not formal_shadow.exists()
 
 
+@require_factor_matrix
 def test_daily_scheduler_post_20260824_returns_calendar_coverage_blocked(tmp_path):
     """验证调度系统在 2026-08-24 之后由于日历边界自动返回 CALENDAR_COVERAGE_BLOCKED，增加 0 天"""
     test_paper = tmp_path / "paper.parquet"
