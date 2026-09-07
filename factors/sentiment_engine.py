@@ -231,16 +231,18 @@ class MarketSentimentDetector:
                 sub = full_df[full_df['date'] == pd.to_datetime(date_str)].copy()
                 
         if sub is None or sub.empty:
+            # 零虚构纪律: 无该日期行情截面时如实报告数据不足, 禁止编造涨跌统计
             return {
-                'temperature': 53.1,
-                'stage': '⚖️ 结构性温和多头期 (指数震荡分化，高弹性龙头活跃)',
-                'up_count': 159,
-                'down_count': 127,
-                'flat_count': 14,
-                'up_ratio_pct': 53.0,
-                'avg_return_pct': +0.27,
-                'median_return_pct': +0.17,
-                'profit_effect': '结构性良好 (涨多跌少，科技与出海领涨)'
+                'temperature': None,
+                'stage': '⚠️ 数据不足 (该日期无可用行情截面)',
+                'up_count': None,
+                'down_count': None,
+                'flat_count': None,
+                'up_ratio_pct': None,
+                'avg_return_pct': None,
+                'median_return_pct': None,
+                'profit_effect': '该日期无可用行情截面',
+                'status': 'INSUFFICIENT_DATA'
             }
             
         total = len(sub)

@@ -609,11 +609,12 @@ with tab1:
             sent_info = MarketSentimentDetector.evaluate_market_temperature(None, latest_date.strftime("%Y-%m-%d"))
         except Exception:
             sent_info = {
-                'temperature': 53.1,
-                'stage': '⚖️ 结构性温和多头期 (指数震荡分化，高弹性龙头活跃)',
-                'up_count': 159, 'down_count': 127, 'flat_count': 14,
-                'up_ratio_pct': 53.0, 'avg_return_pct': +0.27, 'median_return_pct': +0.17,
-                'profit_effect': '结构性良好 (上涨标的高于下跌，赛道主线活跃)'
+                'temperature': None,
+                'stage': '⚠️ 数据不足 (该日期无可用行情截面)',
+                'up_count': None, 'down_count': None, 'flat_count': None,
+                'up_ratio_pct': None, 'avg_return_pct': None, 'median_return_pct': None,
+                'profit_effect': '该日期无可用行情截面',
+                'status': 'INSUFFICIENT_DATA'
             }
 
     st.markdown(f"""
@@ -624,10 +625,10 @@ with tab1:
                 <span style="background-color: #EF4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; font-weight: bold;">真实温度: {sent_info['temperature']}°C</span>
             </div>
             <div style="font-size: 13px; color: #78350F; display: flex; align-items: center; gap: 12px;">
-                <span>上涨: <strong style="color: #DC2626;">{sent_info['up_count']} 支 ({sent_info['up_ratio_pct']}%)</strong></span>
-                <span>下跌: <strong style="color: #16A34A;">{sent_info['down_count']} 支</strong></span>
-                <span>平盘: <strong>{sent_info['flat_count']} 支</strong></span>
-                <span>平均涨幅: <strong style="color: #DC2626;">{sent_info['avg_return_pct']:+.2f}%</strong></span>
+                <span>上涨: <strong style="color: #DC2626;">{sent_info['up_count'] if sent_info['up_count'] is not None else '—'} 支{f" ({sent_info['up_ratio_pct']}%)" if sent_info['up_ratio_pct'] is not None else ''}</strong></span>
+                <span>下跌: <strong style="color: #16A34A;">{sent_info['down_count'] if sent_info['down_count'] is not None else '—'} 支</strong></span>
+                <span>平盘: <strong>{sent_info['flat_count'] if sent_info['flat_count'] is not None else '—'} 支</strong></span>
+                <span>平均涨幅: <strong style="color: #DC2626;">{f"{sent_info['avg_return_pct']:+.2f}%" if sent_info['avg_return_pct'] is not None else '—'}</strong></span>
                 <span>赚钱效应: <strong>{sent_info['profit_effect']}</strong></span>
             </div>
         </div>
