@@ -12,8 +12,11 @@ pred_score 仍在官方清单中展示, 但其科学性已被今日研究推翻�
 - Fail-Closed: 任何一步失败即返回空影子分与原因, 绝不编造分数
 """
 import io
+import json
 import logging
 import sys
+import warnings
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -37,6 +40,7 @@ logger = logging.getLogger(__name__)
 LABEL_COL = 'label_up_down_20d'
 MATRIX_PATH = PROJECT_ROOT / 'data_storage' / 'research' / 'factor_matrix_300.parquet'
 POOL_FILE = PROJECT_ROOT / 'reports' / 'model_research' / 'candidate_pool_top40.txt'
+CACHE_FILE = PROJECT_ROOT / 'data_storage' / 'cache' / 'shadow_scores_latest.json'
 NON_FEATURE_COLS = {
     'date', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'amount',
     'outstanding_share', 'pct_change', 'adj_open', 'adj_high', 'adj_low',
@@ -79,10 +83,12 @@ def _train_shadow_model(matrix: pd.DataFrame, top_k: int) -> Dict[str, Any]:
 
     pool = _load_pool(matrix)
     selector = FoldFeatureSelector(top_n=top_k)
-    fold_feats, _ = selector.select_features(
-        train_df=train_df, candidate_features=pool, label_col=LABEL_COL,
-        method='rank_ic_pruned', strict_selection=False
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore')  # 静音常数列 spearman 警告 (选择器已自动跳过无效 IC)
+        fold_feats, _ = selector.select_features(
+            train_df=train_df, candidate_features=pool, label_col=LABEL_COL,
+            method='rank_ic_pruned', strict_selection=False
+        )
     if not fold_feats:
         raise RuntimeError('影子因子选择无结果')
 
@@ -112,21 +118,55 @@ def _train_shadow_model(matrix: pd.DataFrame, top_k: int) -> Dict[str, Any]:
     }
 
 
+def _load_disk_cache(cache_path: Path, as_of: str) -> Optional[Dict[str, Any]]:
+    try:
+        if cache_path.exists():
+            d = json.loads(cache_path.read_text(encoding='utf-8'))
+            if d.get('as_of') == as_of and d.get('scores'):
+                return d
+    except Exception as e:
+        logger.warning(f'[ShadowScorer] 读取影子缓存失败: {e}')
+    return None
+
+
+def _save_disk_cache(cache_path: Path, info: Dict[str, Any]) -> None:
+    try:
+        cache_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            'as_of': info['as_of'],
+            'train_end': info['train_end'],
+            'factors': info['factors'],
+            'train_rows': info['train_rows'],
+            'scores': {k: float(v) for k, v in info['shadow_map'].items()},
+            'generated_at': datetime.now().isoformat(timespec='seconds'),
+        }
+        tmp = cache_path.with_suffix('.tmp')
+        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1), encoding='utf-8')
+        tmp.replace(cache_path)
+        logger.info(f'[ShadowScorer] 当日影子分已落盘缓存: {cache_path}')
+    except Exception as e:
+        logger.warning(f'[ShadowScorer] 写影子缓存失败 (不影响本次结果): {e}')
+
+
 def compute_shadow_scores(
     top_df: pd.DataFrame,
     matrix_path: Optional[Path] = None,
     top_k: int = 10,
     force_refresh: bool = False,
+    cache_path: Optional[Path] = None,
 ) -> Tuple[pd.DataFrame, Dict[str, Any]]:
     """对官方清单标的计算影子模型分 (0-1 截面百分位)。
 
+    缓存策略: 同一数据日只训练一次 — 进程内缓存 + 磁盘缓存 (data_storage/cache/)。
+    每天首次打开约 1-3 分钟, 之后全天秒读 (含进程重启)。
     Fail-Closed: 任何异常不抛出, 返回原表 + meta['error'], 影子列留空。
     """
-    meta: Dict[str, Any] = {'factors': [], 'as_of': None, 'train_end': None}
+    meta: Dict[str, Any] = {'factors': [], 'as_of': None, 'from_cache': None}
     out = top_df.copy()
     out['shadow_score'] = np.nan
 
     path = Path(matrix_path) if matrix_path else MATRIX_PATH
+    cpath = Path(cache_path) if cache_path else CACHE_FILE
     if not path.exists():
         meta['error'] = f'因子矩阵不存在: {path}'
         logger.warning(f'[ShadowScorer] {meta["error"]}')
@@ -136,18 +176,36 @@ def compute_shadow_scores(
         matrix = pd.read_parquet(path)
         matrix['date'] = pd.to_datetime(matrix['date'])
         cache_key = str(matrix['date'].max())[:10]
-        if not force_refresh and cache_key in _CACHE:
-            info = _CACHE[cache_key]
-        else:
+        info = None
+        if not force_refresh:
+            if cache_key in _CACHE:
+                info = _CACHE[cache_key]
+                meta['from_cache'] = 'memory'
+            else:
+                disk = _load_disk_cache(cpath, cache_key)
+                if disk:
+                    info = {
+                        'shadow_map': {k: float(v) for k, v in disk['scores'].items()},
+                        'factors': disk.get('factors', []),
+                        'train_rows': disk.get('train_rows'),
+                        'train_end': disk.get('train_end'),
+                        'as_of': disk.get('as_of'),
+                    }
+                    _CACHE[cache_key] = info
+                    meta['from_cache'] = 'disk'
+        if info is None:
             info = _train_shadow_model(matrix, top_k)
+            info['from_cache'] = False
+            meta['from_cache'] = False
             _CACHE.clear()
             _CACHE[cache_key] = info
+            _save_disk_cache(cpath, info)
 
         out['shadow_score'] = out['symbol'].map(info['shadow_map'])
-        meta.update({'factors': info['factors'], 'train_rows': info['train_rows'],
+        meta.update({'factors': info['factors'], 'train_rows': info.get('train_rows'),
                      'train_end': info['train_end'], 'as_of': info['as_of']})
-        logger.info(f"[ShadowScorer] 影子打分完成: {int(out['shadow_score'].notna().sum())}/{len(out)} 标的 "
-                    f"| 因子={info['factors']}")
+        logger.info(f"[ShadowScorer] 影子打分完成 ({'缓存' if meta['from_cache'] else '新训练'}): "
+                    f"{int(out['shadow_score'].notna().sum())}/{len(out)} 标的 | 因子={info['factors']}")
     except Exception as e:
         meta['error'] = f'{type(e).__name__}: {e}'
         logger.warning(f'[ShadowScorer] 影子打分 Fail-Closed: {meta["error"]}')
