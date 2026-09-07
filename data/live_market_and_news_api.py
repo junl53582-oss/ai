@@ -191,6 +191,11 @@ class AutoSyncEngine:
             df.at[idx, 'catalyst_score'] = cat['sentiment_score']
             df.at[idx, 'sentiment_stage'] = cat['sentiment_stage']
                 
+        # TODO(新闻源): 个股级真实新闻源待接线。已实测: 新浪 roll 接口忽略 k=关键词
+        # (不同股票返回相同宏观头条); 东财 stock_news_em 接口当前损坏 (JSONDecodeError)。
+        # 候选: 修复/升级 akshare 东财新闻、新浪个股频道 lid=1686、同花顺。
+        # 在此之前 news_catalyst 无验证事件时保持留空 (数据不足), 宁缺毋假。
+
         # 4. 重新落盘
         df.to_csv(picks_file, index=False, encoding='utf-8-sig')
         logger.info(f'[+] 最新行情与消息已成功自动同步落盘至: {picks_file.name}')
