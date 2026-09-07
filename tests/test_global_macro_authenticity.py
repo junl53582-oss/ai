@@ -97,7 +97,9 @@ class TestGlobalMacroAuthenticity:
     def test_macro_snapshot_persistence_and_anti_fabrication(self):
         """验证全市场宏观风偏快照成功持久化且具备防伪造审计标记"""
         snap = GlobalMacroAPI.generate_macro_regime_snapshot(save_disk=True)
-        assert snap["is_authentic"] is True
+        # 诚实契约: is_authentic 必须与数据质量一致 (有降级组件时禁止谎称实时)
+        assert snap["is_authentic"] == (len(snap.get("degraded_components", [])) == 0)
+        assert set(snap.get("data_quality", {}).keys()) == {"usdcnh", "tech_giants", "commodities", "us_china_bonds"}
         assert snap["audit_source"] == "OFFICIAL_REALTIME_GLOBAL_MACRO_FEED"
         assert 0.0 <= snap["macro_regime_index"] <= 1.0
         assert snap["regime_state"] in [
@@ -111,7 +113,8 @@ class TestGlobalMacroAuthenticity:
         assert snap_file.exists(), "快照文件未成功持久化"
         with open(snap_file, "r", encoding="utf-8") as f:
             disk_data = json.load(f)
-        assert disk_data["is_authentic"] is True
+        assert disk_data["is_authentic"] == snap["is_authentic"]
+        assert disk_data["degraded_components"] == snap["degraded_components"]
         assert disk_data["macro_regime_index"] == snap["macro_regime_index"]
 
     def test_overseas_tech_resonance_catalyst_linkage(self):
