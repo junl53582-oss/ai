@@ -1,0 +1,16 @@
+{
+  "run_timestamp": "20260907_142229",
+  "dataset": "data_storage/research/factor_matrix_300.parquet (v3)",
+  "dataset_sha256_prefix": "bb1593ed91bec4a8",
+  "label": "label_up_down_20d",
+  "label_horizon_trading_days": 20,
+  "purge_gap_days": 25,
+  "protocol": "walk-forward strict, train 1.5y / val 3m / test 2m, purged gap 25d",
+  "verdict_rule": "mean OOS RankIC 显著为正且分年度大体为正才允许进入晋升流程; 否则 FAIL 不晋升",
+  "results": [
+    {
+      "config": "bagging_ensemble",
+      "error": "training_failed"
+    }
+  ]
+}

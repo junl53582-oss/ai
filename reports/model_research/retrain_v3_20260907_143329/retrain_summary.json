@@ -1,0 +1,36 @@
+{
+  "run_timestamp": "20260907_143329",
+  "dataset": "data_storage/research/factor_matrix_300.parquet (v3)",
+  "dataset_sha256_prefix": "bb1593ed91bec4a8",
+  "label": "label_up_down_20d",
+  "label_horizon_trading_days": 20,
+  "purge_gap_days": 25,
+  "protocol": "walk-forward strict, train 1.5y / val 3m / test 2m, purged gap 25d",
+  "verdict_rule": "mean OOS RankIC 显著为正且分年度大体为正才允许进入晋升流程; 否则 FAIL 不晋升",
+  "results": [
+    {
+      "config": "lgbm_ranker",
+      "n_oos_rows": 352079,
+      "n_ic_days": 1111,
+      "ic_first_date": "2021-09-30",
+      "ic_last_date": "2026-08-06",
+      "mean_rank_ic": 0.028242769582482483,
+      "ic_std": 0.10861706127327964,
+      "icir_annualized": 4.044984981294776,
+      "ic_positive_win_rate": 0.585058505850585,
+      "per_year_mean_ic": {
+        "2021": 0.008508519951239834,
+        "2022": 0.03177363386741397,
+        "2023": 0.05626279449555508,
+        "2024": 0.05427922268167079,
+        "2025": 0.0015045376425489936,
+        "2026": -0.014239606357532335
+      },
+      "long_short_daily_spread_20pct": 0.0347993165282748,
+      "elapsed_seconds": 123.1,
+      "n_folds": 30,
+      "warmup_rows_excluded": 548,
+      "purge_gap_days": 25
+    }
+  ]
+}
