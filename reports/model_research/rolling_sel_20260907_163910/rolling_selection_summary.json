@@ -1,0 +1,68 @@
+{
+  "generated_at": "2026-09-07T16:48:33",
+  "config": "lightgbm_ranker + Train-Only fold selection (rank_ic_pruned, top_k=20, strict=False)",
+  "dataset": "v3 factor_matrix_300.parquet (sha=bb1593ed)",
+  "label": "label_up_down_20d",
+  "n_folds": 30,
+  "n_oos_rows": 352079,
+  "purge_gap_days": 25,
+  "elapsed_seconds": 553.1,
+  "baseline_comparison": {
+    "full_factor_pool_ranker": {
+      "full": 0.0282,
+      "y2026": -0.0142
+    },
+    "alive_factor_pool_ranker": {
+      "full": 0.0349,
+      "y2026": -0.0181
+    }
+  },
+  "windows": [
+    {
+      "window": "full_oos",
+      "n_days": 1174,
+      "mean_rank_ic": 0.03327,
+      "icir_annualized": 4.3342,
+      "positive_ratio": 0.5818,
+      "per_year": {
+        "2021": 0.07309,
+        "2022": 0.02729,
+        "2023": 0.06802,
+        "2024": 0.04764,
+        "2025": -0.00549,
+        "2026": 0.00869
+      }
+    },
+    {
+      "window": "recent_2025_2026",
+      "n_days": 386,
+      "mean_rank_ic": -0.00024,
+      "icir_annualized": -0.0289,
+      "positive_ratio": 0.3782,
+      "per_year": {
+        "2025": -0.00549,
+        "2026": 0.00869
+      }
+    },
+    {
+      "window": "y2026",
+      "n_days": 143,
+      "mean_rank_ic": 0.00869,
+      "icir_annualized": 0.9775,
+      "positive_ratio": 0.3846,
+      "per_year": {
+        "2026": 0.00869
+      }
+    },
+    {
+      "window": "q3_2026",
+      "n_days": 27,
+      "mean_rank_ic": 0.23733,
+      "icir_annualized": 46.1019,
+      "positive_ratio": 1.0,
+      "per_year": {
+        "2026": 0.23733
+      }
+    }
+  ]
+}
