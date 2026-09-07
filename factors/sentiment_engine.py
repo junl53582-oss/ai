@@ -292,11 +292,14 @@ class NewsCatalystScorer:
         if symbol in STOCK_AUTHENTIC_CATALYSTS:
             base_cat = dict(STOCK_AUTHENTIC_CATALYSTS[symbol])
         else:
+            # 零虚构纪律: 无已验证催化剂事实时必须如实留空,
+            # 禁止用万能模板文本冒充新闻 (2026-09-08 修复满屏重复"利好"问题)
             base_cat = {
-                'headline': '行业景气度稳健修复，核心业务基本面边际向好',
-                'event_type': '稳健发展',
-                'sentiment_score': 85,
-                'sentiment_stage': '温和多头'
+                'headline': '',
+                'event_type': '无已验证催化剂',
+                'sentiment_score': None,
+                'sentiment_stage': '数据不足',
+                'verified': False
             }
             
         # 动态联动海外科技映射 (NVDA / TSLA / AAPL)
