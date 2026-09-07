@@ -42,13 +42,14 @@ def patched_label(monkeypatch):
 
 def test_shadow_scores_success_train_only(synthetic_matrix, patched_label, tmp_path):
     matrix_path = tmp_path / 'matrix.parquet'
+    cache_path = tmp_path / 'cache.json'
     synthetic_matrix.to_parquet(matrix_path)
 
     latest_date = synthetic_matrix['date'].max()
     latest_syms = synthetic_matrix[synthetic_matrix['date'] == latest_date]['symbol'].tolist()
     top_df = pd.DataFrame({'symbol': latest_syms[:10], 'name': 'x', 'close': 20.0, 'pred_score': 0.5})
 
-    out, meta = compute_shadow_scores(top_df, matrix_path=matrix_path, top_k=3)
+    out, meta = compute_shadow_scores(top_df, matrix_path=matrix_path, top_k=3, cache_path=cache_path)
 
     assert meta.get('error') is None, f'Fail-Closed 被误触发: {meta}'
     assert meta.get('as_of') == str(latest_date)[:10]
@@ -58,9 +59,22 @@ def test_shadow_scores_success_train_only(synthetic_matrix, patched_label, tmp_p
     assert out['shadow_score'].between(0, 1).all()
     assert len(meta.get('factors', [])) > 0
 
+    # 磁盘缓存: 模拟进程重启 (清空内存缓存) 后, 第二次调用从磁盘读, 不重训, 结果一致
+    assert meta.get('from_cache') is False
+    assert cache_path.exists()
+    from strategy import shadow_scorer as ss
+    ss._CACHE.clear()
+    out2, meta2 = compute_shadow_scores(top_df, matrix_path=matrix_path, top_k=3, cache_path=cache_path)
+    assert meta2.get('from_cache') == 'disk'
+    assert meta2.get('error') is None
+    pd.testing.assert_series_equal(
+        out['shadow_score'].sort_index(), out2['shadow_score'].sort_index()
+    )
+
 
 def test_shadow_scores_fail_closed_on_missing_matrix(tmp_path):
     top_df = pd.DataFrame({'symbol': ['600000.SH'], 'pred_score': [0.5]})
-    out, meta = compute_shadow_scores(top_df, matrix_path=tmp_path / 'nope.parquet')
+    out, meta = compute_shadow_scores(top_df, matrix_path=tmp_path / 'nope.parquet',
+                                      cache_path=tmp_path / 'cache.json')
     assert meta.get('error'), '缺失矩阵必须给出 Fail-Closed 原因'
     assert out['shadow_score'].isna().all()
