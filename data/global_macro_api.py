@@ -148,28 +148,44 @@ class GlobalMacroAPI:
             import akshare as ak
             df = ak.bond_zh_us_rate(start_date="20260820")
             if df is not None and not df.empty:
+                # NaN 安全取值: 取该列最近一个非空值 (美国收益率通常滞后中国一天发布,
+                # 若取末行 raw 值, float(NaN) 不抛异常, 会用 NaN 顶掉兜底默认值 -> 前端 nan%)
+                def _latest_valid(col_name: str) -> Optional[float]:
+                    if col_name not in df.columns:
+                        return None
+                    s = pd.to_numeric(df[col_name], errors="coerce").dropna()
+                    return float(s.iloc[-1]) if len(s) else None
+
                 last_r = df.iloc[-1]
                 cn_10y = 1.6804
                 us_10y = 4.7800
                 us_spread = 0.4100
+                us_10y_as_of = str(last_r.iloc[0])[:10]
                 for c in df.columns:
                     c_str = str(c)
                     if "10" in c_str and "2" not in c_str and ("中" in c_str or "cn" in c_str.lower()):
-                        try: cn_10y = float(last_r[c])
-                        except: pass
+                        v = _latest_valid(c)
+                        if v is not None:
+                            cn_10y = v
                     elif "10" in c_str and "2" not in c_str and ("美" in c_str or "us" in c_str.lower()):
-                        try: us_10y = float(last_r[c])
-                        except: pass
+                        v = _latest_valid(c)
+                        if v is not None:
+                            us_10y = v
+                            valid_dates = df.loc[pd.to_numeric(df[c], errors="coerce").notna(), df.columns[0]]
+                            if len(valid_dates):
+                                us_10y_as_of = str(valid_dates.iloc[-1])[:10]
                     elif "10" in c_str and "2" in c_str:
-                        try: us_spread = float(last_r[c])
-                        except: pass
-                
+                        v = _latest_valid(c)
+                        if v is not None:
+                            us_spread = v
+
                 return {
                     "cn_10y": round(cn_10y, 4),
                     "us_10y": round(us_10y, 4),
                     "spread_us_cn": round(us_10y - cn_10y, 4),
                     "us_10y_2y_term_spread": round(us_spread, 4),
-                    "date": str(last_r.iloc[0])[:10]
+                    "date": str(last_r.iloc[0])[:10],
+                    "us_10y_as_of": us_10y_as_of
                 }
         except Exception as e:
             logger.warning(f"获取中美利差数据异常: {e}")
