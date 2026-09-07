@@ -1,0 +1,22 @@
+{
+  "config": "bagging_ensemble",
+  "source": "reports/model_research/retrain_v3_20260907_142229/oos_predictions_bagging_ensemble.parquet",
+  "n_oos_rows": 352079,
+  "n_ic_days": 1111,
+  "ic_first_date": "2021-09-30",
+  "ic_last_date": "2026-08-06",
+  "mean_rank_ic": 0.02229,
+  "ic_std": 0.1199,
+  "icir_annualized": 2.8917,
+  "ic_positive_win_rate": 0.5644,
+  "per_year_mean_ic": {
+    "2021": 0.0482,
+    "2022": 0.0225,
+    "2023": 0.0475,
+    "2024": 0.019,
+    "2025": 0.0132,
+    "2026": -0.0101
+  },
+  "long_short_daily_spread_20pct": 0.03079,
+  "evaluated_at": "2026-09-07T14:32:32"
+}
