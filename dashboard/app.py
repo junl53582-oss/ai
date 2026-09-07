@@ -475,6 +475,14 @@ else:
         macro_snap = _get_live_macro_snapshot_cached()
         if has_valid_pred and not top_df.empty:
             top_df = MacroRegimeGate.apply_macro_regime_adjustment(top_df, macro_snap)
+            # P1 影子打分: 新架构 (Train-Only 滚动筛选 ranker) 独立评分, 与旧模型分并排观察
+            try:
+                from strategy.shadow_scorer import compute_shadow_scores
+                top_df, _shadow_meta = compute_shadow_scores(top_df)
+                st.session_state.shadow_meta = _shadow_meta
+            except Exception as _shadow_err:
+                top_df['shadow_score'] = np.nan
+                st.session_state.shadow_meta = {'error': str(_shadow_err)}
             st.session_state.top_df = top_df
 
         manager = st.session_state.data_manager or DataManager()
@@ -609,6 +617,8 @@ else:
             if "industry" in top_df.columns:
                 cols_to_show.append("industry")
             cols_to_show.extend(["close", "pred_score"])
+            if "shadow_score" in top_df.columns:
+                cols_to_show.append("shadow_score")
             if "adjusted_weight" in top_df.columns:
                 cols_to_show.append("adjusted_weight")
             else:
@@ -628,13 +638,23 @@ else:
 
             display_df = top_df.head(display_depth)[[c for c in cols_to_show if c in top_df.columns]].copy()
 
-            _score_col = "模型排序分数"
+            # P0 诚实化标注: 信号口径与模型状态透明化
+            st.info(
+                "🕐 **信号口径**: 本清单为 **T 日收盘信号 (T+1 开盘执行)**，非实时报价。"
+                "「旧模型分」来自旧生产模型 (训练于已证伪数据集, 退役倒计时中)；"
+                "「影子模型分」为新架构 (Train-Only 滚动筛选 ranker) 观察期独立评分。"
+                "两列仅供对照研究，均不构成投资建议，禁止用于实盘下单。"
+            )
+
+            _score_col = "旧模型分 (待退役)"
+            _shadow_col = "影子模型分 (观察期)"
             rename_map = {
                 "symbol": "股票代码",
                 "name": "股票简称",
                 "industry": "所属行业",
                 "close": "T日基准收盘价 (元)",
                 "pred_score": _score_col,
+                "shadow_score": _shadow_col,
                 "adjusted_weight": "宏观自适应仓位",
                 "target_weight": "目标分配权重",
                 "dynamic_tp1": "第一止盈位 (TP1)",
@@ -658,7 +678,8 @@ else:
                 "股票简称": st.column_config.TextColumn("简称", width="small"),
                 "所属行业": st.column_config.TextColumn("主线赛道", width="small"),
                 "T日基准收盘价 (元)": st.column_config.NumberColumn("基准收盘价", format="¥%.2f"),
-                _score_col: st.column_config.NumberColumn("模型排序分数", format="%.4f"),
+                _score_col: st.column_config.NumberColumn("旧模型分 (待退役)", format="%.4f"),
+                _shadow_col: st.column_config.ProgressColumn("影子模型分 (观察期)", format="%.2f", min_value=0.0, max_value=1.0),
                 "宏观自适应仓位": st.column_config.ProgressColumn("自适应建议仓位", format="%.1f%%", min_value=0.0, max_value=30.0),
                 "第一止盈位 (TP1)": st.column_config.NumberColumn("第一止盈 (元)", format="¥%.2f"),
                 "动态防守止损位 (SL)": st.column_config.NumberColumn("防守止损 (元)", format="¥%.2f"),

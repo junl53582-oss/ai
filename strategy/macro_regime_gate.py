@@ -104,17 +104,17 @@ class MacroRegimeGate:
                 tp_ratio = 1.14 if is_tech and nvda_chg > 0 else 1.10
                 sl_ratio = 0.95
                 posture = "🚀 顺风主升进攻"
-                rationale = f"全球流动性顺风，海外巨头映射良好(NVDA {nvda_chg:+.2f}%)，放宽第一止盈位至 {round(close_p*tp_ratio, 2)} 元让利润奔跑！"
+                rationale = f"宏观顺风期(启发式规则, 未经验证仅供参考): 总仓位 {int(target_total_pos*100)}%, NVDA 映射 {nvda_chg:+.2f}% 仅为观察值, TP1 {round(close_p*tp_ratio, 2)} 元 / SL {round(close_p*sl_ratio, 2)} 元。"
             elif "Risk-Off" in regime_state:
                 tp_ratio = 1.06
                 sl_ratio = 0.972  # 紧缩止损至 -2.8%
                 posture = "🛡️ 逆风防守收敛"
-                rationale = f"全球汇率或避险压力升温，启动风偏闸门防守，下调总仓位至 {int(target_total_pos*100)}%，紧缩止损位至 {round(close_p*sl_ratio, 2)} 元坚决防守！"
+                rationale = f"宏观逆风期(启发式规则, 未经验证仅供参考): 总仓位下调至 {int(target_total_pos*100)}%, 紧缩 SL {round(close_p*sl_ratio, 2)} 元 / TP1 {round(close_p*tp_ratio, 2)} 元。"
             else:
                 tp_ratio = 1.085
                 sl_ratio = 0.955
                 posture = "⚖️ 结构均衡稳健"
-                rationale = f"宏观处于平衡分化期，维持 {int(target_total_pos*100)}% 稳健仓位，严格按目标价 {round(close_p*tp_ratio, 2)} 元执行波段止盈。"
+                rationale = f"宏观平衡期(启发式规则, 未经验证仅供参考): 总仓位 {int(target_total_pos*100)}%, TP1 {round(close_p*tp_ratio, 2)} 元 / SL {round(close_p*sl_ratio, 2)} 元。"
 
             df.at[idx, "dynamic_tp1"] = round(close_p * tp_ratio, 2)
             df.at[idx, "dynamic_sl"] = round(close_p * sl_ratio, 2)
