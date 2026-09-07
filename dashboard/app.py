@@ -361,15 +361,27 @@ st.title("🔬 A股多因子量化研究与观察系统 (Quantitative Research &
 st.caption("学术研究与实盘仿真观察平台 | 严格遵循 PIT 因果约束与防视前偏误 | 默认禁止实盘下单 (LIVE_TRADING_READY = False)")
 
 if st.session_state.equity_df is None or st.session_state.oos_df is None:
-    st.info("💡 尚未检测到运行结果，请点击下方按钮一键初始化并运行全流程量化管线：")
-    if st.button("▶️ 一键运行全量化研究与回测管线", type="primary", use_container_width=True):
-        try:
-            run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ 运行异常: {e}")
-            if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
-                st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
+    # 自动初始化 (每次浏览器会话仅一次, 缓存加速后约 1-3 分钟; 失败可点按钮重试)
+    if not st.session_state.get("_auto_pipeline_ran", False):
+        st.session_state["_auto_pipeline_ran"] = True
+        with st.spinner("⏳ 自动初始化: 运行全流程量化管线 (已有缓存加速, 约 1-3 分钟)..."):
+            try:
+                run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 自动初始化运行异常: {e}")
+                if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
+                    st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
+    if st.session_state.equity_df is None or st.session_state.oos_df is None:
+        st.info("💡 尚未检测到运行结果，请点击下方按钮重新运行全流程量化管线：")
+        if st.button("▶️ 一键运行全量化研究与回测管线", type="primary", use_container_width=True):
+            try:
+                run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 运行异常: {e}")
+                if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
+                    st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
 else:
     # ---------------- 导航选项卡 (聚焦两大核心：模型推理观察与全景指标) ----------------
     tab1, tab2 = st.tabs([
@@ -383,21 +395,33 @@ else:
             st.subheader("🔬 最新截面模型推理与模拟调仓观察")
             st.caption("🌐 数据状态: 经时间戳因果对齐行情与宏观流动性观察 | 严禁人工虚构价格与概率")
         with col_sync2:
-            if st.button("🔄 自动获取最新行情与消息", type="primary", use_container_width=True):
+            def _run_news_sync() -> None:
                 from data.live_market_and_news_api import AutoSyncEngine
                 from data.global_macro_api import GlobalMacroAPI
+                GlobalMacroAPI.generate_macro_regime_snapshot()
+                picks_f = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
+                AutoSyncEngine.sync_picks_and_news(picks_f)
+                csi500_f = settings.ARTIFACTS_DIR / "csi500_stock_picks.csv"
+                AutoSyncEngine.sync_picks_and_news(csi500_f)
+                agg_f = settings.ARTIFACTS_DIR / "aggressive_stock_picks.csv"
+                AutoSyncEngine.sync_picks_and_news(agg_f)
+
+            # 自动新闻/行情同步 (每次浏览器会话仅一次; 按钮保留用于手动刷新)
+            if not st.session_state.get("_news_sync_done", False):
+                st.session_state["_news_sync_done"] = True
+                with st.spinner("正在自动获取最新行情、宏观与快讯..."):
+                    try:
+                        _run_news_sync()
+                        st.toast("✅ 已自动获取最新行情与快讯")
+                    except Exception:
+                        pass  # 失败静默, 用户可点按钮手动重试
+            if st.button("🔄 自动获取最新行情与消息", type="primary", use_container_width=True):
                 with st.spinner("正在直连官方 API 获取最新行情、宏观与快讯..."):
                     try:
-                        GlobalMacroAPI.generate_macro_regime_snapshot()
-                    except Exception:
-                        pass
-                    picks_f = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
-                    AutoSyncEngine.sync_picks_and_news(picks_f)
-                    csi500_f = settings.ARTIFACTS_DIR / "csi500_stock_picks.csv"
-                    AutoSyncEngine.sync_picks_and_news(csi500_f)
-                    agg_f = settings.ARTIFACTS_DIR / "aggressive_stock_picks.csv"
-                    AutoSyncEngine.sync_picks_and_news(agg_f)
-                    st.success("✅ 已自动获取全市场最新行情、宏观汇率与全球快讯！")
+                        _run_news_sync()
+                        st.success("✅ 已自动获取全市场最新行情、宏观汇率与全球快讯！")
+                    except Exception as e:
+                        st.warning(f"⚠️ 同步失败: {e} (可稍后重试)")
                     st.rerun()
 
         # ---------------- 双股票池生态选择器 (Direction 4) ----------------
