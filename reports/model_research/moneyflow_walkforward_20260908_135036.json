@@ -1,0 +1,47 @@
+{
+  "generated_at": "2026-09-08T13:50:36",
+  "variant": "Top40_pool + moneyflow_candidates",
+  "baseline_same_data": {
+    "full": 0.02724,
+    "y2025": 0.01047,
+    "y2026": -0.00197
+  },
+  "results": [
+    {
+      "window": "full_oos",
+      "n_days": 1175,
+      "mean_rank_ic": 0.0227,
+      "icir_annualized": 3.1779,
+      "positive_ratio": 0.5847,
+      "per_year": {
+        "2021": -0.01322,
+        "2022": 0.02629,
+        "2023": 0.06627,
+        "2024": 0.0309,
+        "2025": -0.00859,
+        "2026": -0.00179
+      }
+    },
+    {
+      "window": "recent_2025_2026",
+      "n_days": 387,
+      "mean_rank_ic": -0.00606,
+      "icir_annualized": -0.7768,
+      "positive_ratio": 0.4238,
+      "per_year": {
+        "2025": -0.00859,
+        "2026": -0.00179
+      }
+    },
+    {
+      "window": "y2026",
+      "n_days": 144,
+      "mean_rank_ic": -0.00179,
+      "icir_annualized": -0.2985,
+      "positive_ratio": 0.4722,
+      "per_year": {
+        "2026": -0.00179
+      }
+    }
+  ]
+}
