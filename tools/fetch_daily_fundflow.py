@@ -55,6 +55,13 @@ def main() -> int:
             ok_count += 1
         if i % 50 == 0:
             print(f"  [{i}/{len(todo)}] 本轮成功 {ok_count} | {time.time()-t0:.0f}s", flush=True)
+            # 检查点落盘 (防长任务中断丢失进度): 覆盖写当前进度
+            try:
+                _cur = pd.concat(frames, ignore_index=True).drop_duplicates(subset=["symbol", "date"])
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                _cur.to_parquet(out_path, index=False)
+            except Exception as e:
+                print(f"  [!] 检查点落盘失败: {e}", flush=True)
         time.sleep(0.2)
 
     if not frames:
