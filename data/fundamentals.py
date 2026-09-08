@@ -141,7 +141,7 @@ class FundamentalsProvider:
                 if page * 500 >= total:
                     break
                 page += 1
-                time.sleep(1.2)  # 限速纪律 (东财 IP 级封禁教训)
+                time.sleep(2.5)  # 限速纪律 (东财 IP 级封禁教训, 页间加严)
             except Exception as e:
                 logger.warning(f"[EM] 业绩报表 {date_str} 第 {page} 页失败: {e}")
                 return None
