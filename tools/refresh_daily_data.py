@@ -47,8 +47,12 @@ def _setup_tee() -> Path:
 def run_step(name: str, args, timeout: int = 3600) -> bool:
     print(f"\n===== [STEP] {name} | {time.strftime('%H:%M:%S')} =====", flush=True)
     t0 = time.time()
-    r = subprocess.run([PY, "-u", *args], cwd=str(ROOT), timeout=timeout)
-    ok = (r.returncode == 0)
+    ok = False
+    try:
+        r = subprocess.run([PY, "-u", *args], cwd=str(ROOT), timeout=timeout)
+        ok = (r.returncode == 0)
+    except subprocess.TimeoutExpired:
+        print(f"  [!] 步骤超时 ({timeout}s), 终止子进程", flush=True)
     print(f"===== [{'DONE' if ok else 'FAIL'}] {name} | {time.time()-t0:.0f}s =====", flush=True)
     return ok
 
