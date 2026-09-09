@@ -72,7 +72,11 @@ def _load_pool(matrix: pd.DataFrame) -> list:
 
 
 def _merge_fundamental_factors(matrix: pd.DataFrame):
-    """候选 B 的增量信息: 合并 PIT 基本面日频因子 (公告日/延迟 -> effective_date 展开)"""
+    """候选 B 的增量信息: 合并 PIT 基本面日频因子 (公告日/延迟 -> effective_date 展开)。
+
+    并按 2026 修复实验 (V2 胜出配置) 对 F 因子做正交化: 逐日对 Top40 量价因子
+    回归取残差, 剥离与量价的拥挤重叠 (2026 失效根因)。
+    """
     from data.fundamentals import FundamentalsProvider, FUNDAMENTAL_FACTOR_NAMES
     market_df = pd.read_parquet(MARKET_PARQUET,
                                 columns=['date', 'symbol', 'high', 'low', 'close',
@@ -88,15 +92,35 @@ def _merge_fundamental_factors(matrix: pd.DataFrame):
     if not facs:
         raise RuntimeError('基本面因子列缺失')
     merged = matrix.merge(fund_daily[['symbol', 'date'] + facs], on=['symbol', 'date'], how='left')
+
+    # V2 正交化: 逐日对 Top40 量价因子残差化
+    regs = [f for f in _load_pool(merged) if f in merged.columns and f not in facs]
+    for dt, grp in merged.groupby('date'):
+        if len(grp) < 40:
+            continue
+        X = grp[regs].apply(pd.to_numeric, errors='coerce')
+        X = (X - X.mean()) / (X.std() + 1e-12)
+        X = X.fillna(0.0).values
+        X = np.column_stack([np.ones(len(X)), X])
+        for f in facs:
+            y = pd.to_numeric(merged.loc[grp.index, f], errors='coerce')
+            valid = y.notna().values
+            if valid.sum() < 40:
+                continue
+            beta, *_ = np.linalg.lstsq(X[valid], y.values[valid], rcond=None)
+            resid = y.values - X @ beta
+            merged.loc[grp.index, f] = np.where(valid, resid, np.nan)
     return merged, facs
 
 
 def _train_shadow_model(matrix: pd.DataFrame, top_k: int, variant: str = 'A') -> Dict[str, Any]:
     extra_pool: list = []
+    label_horizon = int(settings.LABEL_HORIZON)
     if variant == 'B':
         matrix, facs = _merge_fundamental_factors(matrix)
         extra_pool = facs
-    raw = LabelRegistry.compute_label_v2(matrix, horizon=settings.LABEL_HORIZON)
+        label_horizon = 40  # B 赛道 40 日视野 (IC 衰减实验: 信号在长持有期更强, 2026 唯一转正变体)
+    raw = LabelRegistry.compute_label_v2(matrix, horizon=label_horizon)
     matrix = matrix.copy()
     matrix[LABEL_COL] = (raw > 0).astype(float).mask(raw.isna(), np.nan)
 
