@@ -659,6 +659,8 @@ with tab1:
         cols_to_show.extend(["close", "pred_score"])
         if "shadow_score" in top_df.columns:
             cols_to_show.append("shadow_score")
+        if "shadow_score_b" in top_df.columns:
+            cols_to_show.append("shadow_score_b")
         if "adjusted_weight" in top_df.columns:
             cols_to_show.append("adjusted_weight")
         else:
@@ -682,12 +684,15 @@ with tab1:
         st.info(
             "🕐 **信号口径**: 本清单为 **T 日收盘信号 (T+1 开盘执行)**，非实时报价。"
             "「旧模型分」来自旧生产模型 (训练于已证伪数据集, 退役倒计时中)；"
-            "「影子模型分」为新架构 (Train-Only 滚动筛选 ranker) 观察期独立评分。"
+            "「影子A分」为新架构 (Train-Only 滚动筛选 ranker) 观察期独立评分；"
+            "「影子B分」为其基本面增强赛马 (Top40+PIT 财报因子)，与 A 同折同协议并行记分，"
+            "20-30 个交易日观察期后由 G2 闸门裁决晋级。"
             "两列仅供对照研究，均不构成投资建议，禁止用于实盘下单。"
         )
 
         _score_col = "旧模型分 (待退役)"
-        _shadow_col = "影子模型分 (观察期)"
+        _shadow_col = "影子A分 (纯量价)"
+        _shadow_b_col = "影子B分 (量价+基本面)"
         rename_map = {
             "symbol": "股票代码",
             "name": "股票简称",
@@ -695,6 +700,7 @@ with tab1:
             "close": "T日基准收盘价 (元)",
             "pred_score": _score_col,
             "shadow_score": _shadow_col,
+            "shadow_score_b": _shadow_b_col,
             "adjusted_weight": "宏观自适应仓位",
             "target_weight": "目标分配权重",
             "dynamic_tp1": "第一止盈位 (TP1)",
