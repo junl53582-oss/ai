@@ -111,6 +111,20 @@ class MacroRegimeGate:
         # 0. 波动率输入 (ATR14, Fail-Open: 拿不到则回退旧静态比例)
         atr_map = _load_atr14_map()
 
+        # 0.5 模型失效检测器 (Alphalens 式分位价差监控): Q5-Q1 滚动价差转负 → 风控自动降档
+        health_tag = ""
+        try:
+            from strategy.signal_monitor import get_signal_health
+            _health = get_signal_health()
+            _mult = float(_health.get('position_multiplier', 1.0))
+            if _mult < 1.0:
+                target_total_pos = max(0.30, round(float(target_total_pos) * _mult, 2))
+                health_tag = (f" | 模型健康度[{_health.get('state')}] "
+                              f"(60日分位价差 {_health.get('spread')}%), 仓位已按系数 {_mult} 降档")
+                logger.warning(f"[MacroGate] 模型失效检测器触发: {_health}")
+        except Exception as _he:
+            logger.warning(f"[MacroGate] 模型失效检测器 Fail-Open: {_he}")
+
         # 1. 逆波动率权重: w_i ∝ 1/ATR_i, 归一到宏观目标总仓位, 单票上限 30%
         #    (低波动标的承担更大仓位, 高波动标的自动降权; 无 ATR 的标的用中位数替代)
         inv = df["symbol"].map(lambda s: (1.0 / atr_map[s]) if atr_map.get(s) else np.nan)
@@ -169,15 +183,15 @@ class MacroRegimeGate:
             if "Risk-On" in regime_state:
                 posture = "🚀 顺风主升进攻"
                 rationale = (f"宏观顺风期(启发式规则, 未经验证仅供参考): 总仓位 {int(target_total_pos*100)}%, "
-                             f"NVDA 映射 {nvda_chg:+.2f}% 仅为观察值; {mode_tag} TP1 {round(tp_p, 2)} 元 / SL {round(sl_p, 2)} 元。")
+                             f"NVDA 映射 {nvda_chg:+.2f}% 仅为观察值; {mode_tag} TP1 {round(tp_p, 2)} 元 / SL {round(sl_p, 2)} 元。{health_tag}")
             elif "Risk-Off" in regime_state:
                 posture = "🛡️ 逆风防守收敛"
                 rationale = (f"宏观逆风期(启发式规则, 未经验证仅供参考): 总仓位下调至 {int(target_total_pos*100)}%, "
-                             f"{mode_tag} SL {round(sl_p, 2)} 元 / TP1 {round(tp_p, 2)} 元。")
+                             f"{mode_tag} SL {round(sl_p, 2)} 元 / TP1 {round(tp_p, 2)} 元。{health_tag}")
             else:
                 posture = "⚖️ 结构均衡稳健"
                 rationale = (f"宏观平衡期(启发式规则, 未经验证仅供参考): 总仓位 {int(target_total_pos*100)}%, "
-                             f"{mode_tag} TP1 {round(tp_p, 2)} 元 / SL {round(sl_p, 2)} 元。")
+                             f"{mode_tag} TP1 {round(tp_p, 2)} 元 / SL {round(sl_p, 2)} 元。{health_tag}")
 
             df.at[idx, "dynamic_tp1"] = round(tp_p, 2)
             df.at[idx, "dynamic_sl"] = round(sl_p, 2)

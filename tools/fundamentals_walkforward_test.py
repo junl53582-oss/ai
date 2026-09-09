@@ -87,7 +87,7 @@ def main() -> int:
         f"非空行 {int(fund_daily[facs[0]].notna().sum()):,}")
 
     df = df.merge(fund_daily[['symbol', 'date'] + facs], on=['symbol', 'date'], how='left')
-    raw = LabelRegistry.compute_label_v2(df, horizon=20)
+    raw = LabelRegistry.compute_label_v2(df, horizon=40)
     df[LABEL_COL] = (raw > 0).astype(float).mask(raw.isna(), np.nan)
 
     pool = [x.strip() for x in POOL_FILE.read_text(encoding='utf-8').splitlines() if x.strip()]
