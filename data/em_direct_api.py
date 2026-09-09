@@ -117,6 +117,7 @@ def fetch_em_fundflow_history(symbol: str, timeout: int = 10) -> List[Dict[str, 
                                     "big_net_inflow": float(p[4]),
                                     "super_net_inflow": float(p[5]),
                                     "main_net_ratio": float(p[6]),
+                                    "super_net_ratio": float(p[10]),
                                     "close": float(p[11]),
                                     "pct_change": float(p[12])})
                 return out

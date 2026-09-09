@@ -96,8 +96,13 @@ def main() -> int:
     log(">>> 真实资金流因子走步实验开始")
     df = pd.read_parquet(ROOT / 'data_storage' / 'research' / 'factor_matrix_300.parquet')
     df['date'] = pd.to_datetime(df['date'])
-    ff = pd.read_parquet(ROOT / 'data_storage' / 'fundflow' / 'fundflow_20260908.parquet')
+    ff_files = sorted((ROOT / 'data_storage' / 'fundflow').glob('fundflow_*.parquet'))
+    if not ff_files:
+        log("[-] 无资金流数据文件, 实验终止")
+        return 1
+    ff = pd.read_parquet(ff_files[-1])
     ff['date'] = pd.to_datetime(ff['date'])
+    log(f"资金流文件: {ff_files[-1].name}")
     log(f"资金流底座: {ff['symbol'].nunique()} 标的 | {ff['date'].min().date()} ~ {ff['date'].max().date()}")
 
     # 市场成交额用于强度归一
