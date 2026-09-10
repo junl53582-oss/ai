@@ -1,0 +1,48 @@
+{
+  "generated_at": "2026-09-10T19:44:01",
+  "purge_days": 41,
+  "verdict": "PASSED - 40d label + orthogonalized fundamentals advantage survives purification",
+  "contaminated_numbers": {
+    "40d_pure": {
+      "full": 0.0452,
+      "y2026": 0.0126
+    },
+    "40d_orthoF": {
+      "full": 0.0557,
+      "y2026": 0.0446
+    }
+  },
+  "baseline_clean_20d": {
+    "full": 0.0272,
+    "y2026": -0.002
+  },
+  "purified_40d_pure": [
+    {
+      "window": "full_oos",
+      "n_days": 1158,
+      "mean_rank_ic": 0.04436,
+      "positive_ratio": 0.686
+    },
+    {
+      "window": "y2026",
+      "n_days": 126,
+      "mean_rank_ic": 0.00822,
+      "positive_ratio": 0.452
+    }
+  ],
+  "purified_40d_orthoF": [
+    {
+      "window": "full_oos",
+      "n_days": 1159,
+      "mean_rank_ic": 0.04773,
+      "positive_ratio": 0.689
+    },
+    {
+      "window": "y2026",
+      "n_days": 127,
+      "mean_rank_ic": 0.04331,
+      "positive_ratio": 0.614
+    }
+  ],
+  "note": "IC values directly comparable across runs; ICIR annualization differs (sqrt6 vs sqrt242) - compare IC only"
+}
