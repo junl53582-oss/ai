@@ -20,6 +20,15 @@ import pandas as pd
 
 from config import settings
 from data.em_direct_api import fetch_em_fundflow_history
+from data.sina_fundflow_api import fetch_sina_fundflow_history
+
+
+def fetch_any_source(symbol: str):
+    """资金流双源获取: 新浪为主 (家宽稳定可用), 东财兜底 (解封后自动恢复)"""
+    hist = fetch_sina_fundflow_history(symbol, min_days=120)
+    if hist:
+        return hist
+    return fetch_em_fundflow_history(symbol)
 
 
 def main() -> int:
@@ -47,7 +56,7 @@ def main() -> int:
     ok_count = 0
     t0 = time.time()
     for i, sym in enumerate(todo, 1):
-        hist = fetch_em_fundflow_history(sym)
+        hist = fetch_any_source(sym)
         if hist:
             d = pd.DataFrame(hist)
             d["symbol"] = sym
