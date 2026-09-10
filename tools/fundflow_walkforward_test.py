@@ -46,7 +46,8 @@ def build_ff_factors(ff: pd.DataFrame, mkt: pd.DataFrame) -> pd.DataFrame:
     ratio = ff['main_net_ratio']
     ff['FF_MAIN_RATIO_MA5'] = g['main_net_ratio'].rolling(5).mean().reset_index(level=0, drop=True)
     ff['FF_MAIN_RATIO_MA20'] = g['main_net_ratio'].rolling(20).mean().reset_index(level=0, drop=True)
-    ff['FF_SUPER_RATIO_MA5'] = g['super_net_ratio'].rolling(5).mean().reset_index(level=0, drop=True)
+    # 超大单占比改由净额/成交额现算 (新浪源无占比字段, 与 amount 合并后可得)
+    pass
 
     # 连续净流入天数 (带符号: 连续为正计数+, 连续为负计数-)
     sign = np.sign(ff['main_net_ratio'])
@@ -59,6 +60,9 @@ def build_ff_factors(ff: pd.DataFrame, mkt: pd.DataFrame) -> pd.DataFrame:
     sum5 = g['main_net_inflow'].rolling(5).sum().reset_index(level=0, drop=True)
     ff = ff.merge(amt[['symbol', 'date', 'AMT_MA20']], on=['symbol', 'date'], how='left')
     ff['FF_MAIN_SUM5_RATIO'] = sum5 / ff['AMT_MA20'].replace(0, np.nan)
+    # 超大单占比: 近5日超大单净流入合计 / 20日均成交额 × 100 (新浪源现算)
+    sup5 = g['super_net_inflow'].rolling(5).sum().reset_index(level=0, drop=True)
+    ff['FF_SUPER_RATIO_MA5'] = sup5 / ff['AMT_MA20'].replace(0, np.nan) * 100
     return ff[['symbol', 'date'] + FF_FACTORS]
 
 
@@ -144,4 +148,12 @@ def main() -> int:
 
 
 if __name__ == '__main__':
-    sys.exit(main())
+    import traceback
+    try:
+        sys.exit(main())
+    except Exception:
+        _log = ROOT / 'artifacts' / 'fundflow_walkforward.log'
+        with open(_log, 'a', encoding='utf-8') as _f:
+            import time as _t
+            _f.write(f"[{_t.strftime('%H:%M:%S')}] CRASH://n{traceback.format_exc()}//n")
+        raise
