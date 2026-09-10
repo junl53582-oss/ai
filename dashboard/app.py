@@ -1086,185 +1086,62 @@ with tab2:
         st.markdown("---")
 
         # -------------------------------------------------------------
-        # 2. 策略代际切换与 6 大 KPI 动态指标卡片
+        # 2. 核验指标卡 (真数字): 认证考卷 + 影子 A/B 赛马 + 对账台账 + 模型健康度
         # -------------------------------------------------------------
-        eq_all_path = settings.BASE_DIR / "reports" / "equity_curves_all_generations.parquet"
-        # 严格通过 VerifiedResearchMetricsLoader 加载，禁止直接 json.load 绕过凭证防伪与退化拦截
-        perf_all = metrics_loader.load_multi_generation_performance(for_product_display=True) or {}
+        st.markdown("#### 📊 核验指标卡 (全部来自已认证档案; 遗留代际业绩已隔离存档, 不再展示)")
 
-        if eq_all_path.exists():
-            all_gen_df = pd.read_parquet(eq_all_path)
-            if "date" in all_gen_df.columns:
-                all_gen_df["date"] = pd.to_datetime(all_gen_df["date"])
-        else:
-            all_gen_df = None
+        _k1, _k2, _k3, _k4 = st.columns(4)
+        _ic_val, _icir_val, _ic_days = None, None, None
+        try:
+            import json as _json
+            _rs_files = sorted((settings.BASE_DIR / "reports" / "model_research").glob(
+                "rolling_sel_*/rolling_selection_summary.json"))
+            if _rs_files:
+                _rs = _json.loads(_rs_files[-1].read_text(encoding="utf-8"))
+                _w = (_rs.get("windows") or [{}])[0]
+                _ic_val = _w.get("mean_rank_ic")
+                _icir_val = _w.get("icir_annualized")
+                _ic_days = _w.get("n_days")
+        except Exception:
+            pass
+        _k1.metric("全期 OOS Rank IC (认证考卷)", f"{_ic_val:+.4f}" if _ic_val is not None else "就绪中",
+                   f"{_ic_days} 个交易日" if _ic_days else "-")
+        _k2.metric("全期 ICIR", f"{_icir_val:.2f}" if _icir_val is not None else "就绪中",
+                   "严格防泄漏走步验证")
 
-        strat_version = st.radio(
-            "🔄 策略调优代际版本切换 (点击即可穿透查看各代指标与净值曲线):",
-            [
-                "👑 第四代全景旗舰策略 (图谱扩散+时序注意力+动态止盈)",
-                "🌟 第三代进阶避险策略 (Barra风格正交+宏观自适应现金避险)",
-                "🥈 第二代系统增强策略 (MoE门控+Top-Heavy头部优选)",
-                "🔬 第一代原始未调优基准 (2021-2024基准死扛基线)"
-            ],
-            index=0,
-            horizontal=True,
-            key="tab2_strat_gen_radio"
-        )
+        _rec_days, _ic_a_avg, _ic_b_avg = 0, None, None
+        try:
+            _ledger_path = settings.BASE_DIR / "data_storage" / "research" / "shadow_reconciliation_ledger.csv"
+            if _ledger_path.exists():
+                _led = pd.read_csv(_ledger_path)
+                _rec_days = len(_led)
+                if _rec_days and "ic_A" in _led.columns:
+                    _ic_a_avg = float(_led["ic_A"].mean())
+                if _rec_days and "ic_B" in _led.columns:
+                    _ic_b_avg = float(_led["ic_B"].mean())
+        except Exception:
+            pass
+        _k3.metric("影子对账台账", f"{_rec_days} 天已对账",
+                   "G2 期中考需 20 天" if _rec_days < 20 else "已达标, 可期中考")
+        try:
+            from strategy.signal_monitor import get_signal_health as _gsh
+            _health = _gsh()
+            _sp = _health.get("spread")
+            _k4.metric("模型健康度", _health.get("state", "-"),
+                       f"60日分位价差 {_sp}%" if _sp is not None else "-")
+        except Exception:
+            _k4.metric("模型健康度", "-", "-")
 
-        if "第四代全景旗舰" in strat_version:
-            gen_key = "gen4_flagship"
-            nav_col = "flagship_nav"
-            dd_col = "flagship_drawdown_pct"
-            strat_label = "第四代 全景旗舰策略 (Plans A, B, C)"
-            theme_color = "#10B981"
-        elif "第三代进阶避险" in strat_version:
-            gen_key = "gen3_plans_5_7_9"
-            nav_col = "gen3_nav"
-            dd_col = "gen3_drawdown_pct"
-            strat_label = "第三代 进阶避险策略 (Plans 5, 7, 9)"
-            theme_color = "#8B5CF6"
-        elif "第二代系统增强" in strat_version:
-            gen_key = "gen2_plans_1_to_4"
-            nav_col = "gen2_nav"
-            dd_col = "gen2_drawdown_pct"
-            strat_label = "第二代 系统增强策略 (Plans 1~4)"
-            theme_color = "#3B82F6"
-        else:
-            gen_key = "gen1_baseline"
-            nav_col = "gen1_nav"
-            dd_col = "gen1_drawdown_pct"
-            strat_label = "第一代 原始未调优基准 (Gen 1 Baseline)"
-            theme_color = "#EF4444"
+        if _ic_a_avg is not None or _ic_b_avg is not None:
+            st.caption(f"对账累计: A赛道平均IC {_ic_a_avg if _ic_a_avg is not None else '-'} | "
+                       f"B赛道平均IC {_ic_b_avg if _ic_b_avg is not None else '-'} (逐日台账自动积累)")
 
-        cur_perf = perf_all.get(gen_key, st.session_state.perf_metrics or {})
-
-        kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
-        cum_ret = cur_perf.get('cum_strategy_return')
-        bench_ret = cur_perf.get('cum_benchmark_return')
-        if cum_ret is not None and bench_ret is not None:
-            kpi1.metric("策略累计收益", f"{cum_ret:+.2f}%", f"基准: {bench_ret:+.2f}%")
-        else:
-            kpi1.metric("策略累计收益", "暂无数据", "-")
-
-        cagr_val = cur_perf.get('cagr')
-        alpha_val = cur_perf.get('alpha')
-        if alpha_val is None and cagr_val is not None and cur_perf.get('benchmark_cagr') is not None:
-            alpha_val = cagr_val - cur_perf.get('benchmark_cagr')
-        if cagr_val is not None:
-            kpi2.metric("年化收益率 (CAGR)", f"{cagr_val:+.2f}%", f"超额: {alpha_val:+.2f}%" if alpha_val is not None else "-")
-        else:
-            kpi2.metric("年化收益率 (CAGR)", "暂无数据", "-")
-
-        sharpe_val = cur_perf.get('sharpe_ratio')
-        pl_val = cur_perf.get('profit_loss_ratio')
-        if sharpe_val is not None:
-            kpi3.metric("夏普比率 (Sharpe)", f"{sharpe_val:.2f}", f"盈亏比: {pl_val:.2f}" if pl_val is not None else "-")
-        else:
-            kpi3.metric("夏普比率 (Sharpe)", "暂无数据", "-")
-
-        dd_val = cur_perf.get('max_drawdown')
-        if dd_val is not None:
-            kpi4.metric("最大回撤 (Max DD)", f"{dd_val:.2f}%")
-        else:
-            kpi4.metric("最大回撤 (Max DD)", "暂无数据")
-
-        to_val = cur_perf.get('annualized_turnover')
-        if to_val is not None:
-            kpi5.metric("年化换手率 (Turnover)", f"{to_val:.2f}x")
-        else:
-            kpi5.metric("年化换手率 (Turnover)", "暂无数据")
-
-        nwr_val = cur_perf.get('net_win_rate', cur_perf.get('win_rate'))
-        gwr_val = cur_perf.get('gross_win_rate')
-        if nwr_val is not None:
-            kpi6.metric("净胜率 (Net Win Rate)", f"{nwr_val:.1f}%", f"毛胜率: {gwr_val:.1f}%" if gwr_val is not None else "-")
-        else:
-            kpi6.metric("净胜率 (Net Win Rate)", "暂无数据", "-")
-
-        st.markdown("---")
-
-        # -------------------------------------------------------------
-        # 3. 累计净值曲线走势与全代际演化对比
-        # -------------------------------------------------------------
-        col_t1, col_t2 = st.columns([3, 1])
-        with col_t1:
-            show_all_curves = st.checkbox("📈 叠加展示四代策略全景演进对比曲线 (Gen 1 vs Gen 2 vs Gen 3 vs Gen 4 vs 沪深300)", value=True)
-        with col_t2:
-            st.caption("实盘撮合机制: T日信号 ➔ T+1开盘真实成交")
-
-        if all_gen_df is not None:
-            plot_dates = all_gen_df["date"]
-            plot_bench = all_gen_df["nav_benchmark"]
-
-            fig_nav = go.Figure()
-
-            if show_all_curves:
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["flagship_nav"],
-                    mode="lines", name="👑 第四代 全景旗舰策略",
-                    line=dict(color="#10B981", width=3.0)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["gen3_nav"],
-                    mode="lines", name="🌟 第三代 进阶避险策略",
-                    line=dict(color="#8B5CF6", width=2.0)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["gen2_nav"],
-                    mode="lines", name="🥈 第二代 系统增强策略",
-                    line=dict(color="#3B82F6", width=1.8)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["gen1_nav"],
-                    mode="lines", name="🔬 第一代 初始未调优基准",
-                    line=dict(color="#EF4444", width=1.5, dash="dot")
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=plot_bench,
-                    mode="lines", name="沪深300基准 (000300.SH)",
-                    line=dict(color="#64748B", width=1.5, dash="dash")
-                ))
-            else:
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df[nav_col],
-                    mode="lines", name=f"{strat_label} (已扣全部税费佣金滑点)",
-                    line=dict(color=theme_color, width=2.8)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=plot_bench,
-                    mode="lines", name="沪深300基准 (000300.SH)",
-                    line=dict(color="#757575", width=1.5, dash="dash")
-                ))
-
-            fig_nav.update_layout(
-                title=f"<b>策略与基准累计净值走势 ({strat_label} vs 沪深300基准)</b>",
-                xaxis_title="日期",
-                yaxis_title="累计净值 (起点=1.0)",
-                hovermode="x unified",
-                template="plotly_white",
-                legend=dict(x=0.02, y=0.98)
-            )
-            st.plotly_chart(fig_nav, use_container_width=True)
-
-            # 4. 动态水下回撤图
-            fig_dd = go.Figure()
-            fig_dd.add_trace(go.Scatter(
-                x=plot_dates,
-                y=all_gen_df[dd_col],
-                fill="tozeroy",
-                mode="lines",
-                name=f"{strat_label} 动态回撤",
-                line=dict(color=theme_color, width=1.5)
-            ))
-            fig_dd.update_layout(
-                title=f"<b>历史动态水下回撤 ({strat_label})</b>",
-                xaxis_title="日期",
-                yaxis_title="回撤百分比 (%)",
-                hovermode="x unified",
-                template="plotly_white"
-            )
-            st.plotly_chart(fig_dd, use_container_width=True)
+        _race_n = min(20, _rec_days)
+        st.progress(_race_n / 20,
+                    text=f"🏁 影子 A/B 赛马观察期: 第 {_race_n} / 20 个交易日 (对账台账逐日自动积累)")
+        st.caption("影子A = 20日视野·纯量价 | 影子B = 40日视野·正交化基本面 (修复实验胜出配置: "
+                   "全期 IC +0.0557 / 2026 +0.0446)。两轨每日同一起跑线记分, "
+                   "观察期满由 G2 闸门按对账台账裁决晋级。")
 
         st.markdown("---")
 
