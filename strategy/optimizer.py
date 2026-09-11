@@ -58,13 +58,43 @@ class InverseVolOptimizer(BasePortfolioOptimizer):
         n = len(df)
         if n == 0:
             return pd.Series(dtype=float)
-        vol_col = "STD20" if "STD20" in df.columns else "std"
-        if vol_col in df.columns:
-            vols = df[vol_col].replace(0, np.nan).fillna(0.02)
-            inv_v = 1.0 / (vols + 1e-6)
-            w = inv_v / inv_v.sum()
-            return pd.Series(w.values, index=df.index)
-        return pd.Series(1.0 / n, index=df.index)
+        # 波动率列优先序: 真实波动率估计优先 (数据管线中均为标准化 z-score,
+        # 含负值是正常的 — 见下方单调正变换)
+        vol_col = None
+        for cand in ("YANG_ZHANG_VOL_20", "ATR_RATIO_14", "STD20", "std"):
+            if cand in df.columns:
+                vol_col = cand
+                break
+        if vol_col is None:
+            return pd.Series(1.0 / n, index=df.index)
+
+        vols = pd.to_numeric(df[vol_col], errors="coerce")
+        vols = vols.replace([np.inf, -np.inf], np.nan)
+
+        if vols.notna().sum() == 0:
+            logger.warning(f"inv_vol: 波动率列 {vol_col} 全为空, 回退等权")
+            return pd.Series(1.0 / n, index=df.index)
+
+        # BUGFIX (2026-09-11): 数据管线中的波动率列是标准化 z-score (约半数取负),
+        # 直接取倒数会产生负权重 (隐式做空, 对多头清单非法)。
+        # 修复: 存在非正值时改用单调正变换 exp(z) 作为波动率代理 —
+        # 保持"低波动 → 高权重"语义, 且恒为正、有界、可复现。
+        if (vols.dropna() <= 0).any():
+            logger.warning(f"inv_vol: {vol_col} 含非正值 (标准化因子), "
+                           f"改用 exp(z) 单调正变换 (原实现会产生负权重)")
+            vols = np.exp(vols)
+        vols = vols.fillna(vols.median() if vols.notna().any() else 1.0)
+
+        inv_v = 1.0 / (vols + 1e-9)
+        w = inv_v / inv_v.sum()
+        # 防御性: 强制非负 + 归一 (多头清单不变量)
+        w = np.clip(w.values.astype(float), 0.0, None)
+        total = w.sum()
+        if not np.isfinite(total) or total <= 0:
+            return pd.Series(1.0 / n, index=df.index)
+        w = w / total
+        assert (w >= 0).all(), "inv_vol 权重出现负值 (不变量被破坏)"
+        return pd.Series(w, index=df.index)
 
 
 class ScoreWeightedOptimizer(BasePortfolioOptimizer):
