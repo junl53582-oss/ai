@@ -1140,8 +1140,48 @@ with tab2:
         st.progress(_race_n / 20,
                     text=f"🏁 影子 A/B 赛马观察期: 第 {_race_n} / 20 个交易日 (对账台账逐日自动积累)")
         st.caption("影子A = 20日视野·纯量价 | 影子B = 40日视野·正交化基本面 (修复实验胜出配置: "
-                   "全期 IC +0.0557 / 2026 +0.0446)。两轨每日同一起跑线记分, "
+                   "净化 IC +0.0477 / 2026 +0.0433)。两轨每日同一起跑线记分, "
                    "观察期满由 G2 闸门按对账台账裁决晋级。")
+
+        # -------------------------------------------------------------
+        # 2.5 影子推荐榜 (观察期): 新模型会怎么选 — 全市场按影子分排名
+        # -------------------------------------------------------------
+        st.markdown("#### 🆚 影子推荐榜 (观察期): 新模型会怎么选")
+        try:
+            from strategy.shadow_scorer import load_shadow_universe_scores, MATRIX_PATH as _M_PATH
+            _su = load_shadow_universe_scores()
+            if _su.empty:
+                st.info("影子分缓存尚未生成 — 打开看板后自动训练, 稍等片刻刷新即可。")
+            else:
+                _mdf = pd.read_parquet(_M_PATH, columns=['date', 'symbol', 'name', 'industry', 'close'])
+                _mdf['date'] = pd.to_datetime(_mdf['date'])
+                _mdf = _mdf[_mdf['date'] == _mdf['date'].max()]
+                _rank = _su.merge(_mdf[['symbol', 'name', 'industry', 'close']], on='symbol', how='left')
+                _picks_now = set(top_df['symbol']) if 'symbol' in top_df.columns else set()
+                _rank['在旧模型清单'] = _rank['symbol'].isin(_picks_now).map({True: '✅ 在', False: '—'})
+                _rank = _rank.sort_values('shadow_score_b', ascending=False).reset_index(drop=True)
+                _rank.insert(0, '影子排名', _rank.index + 1)
+
+                _rc1, _rc2 = st.columns(2)
+                _show_cols = ['影子排名', 'symbol', 'name', 'industry', 'close',
+                              'shadow_score_b', 'shadow_score', '在旧模型清单']
+                _rename = {'symbol': '代码', 'name': '简称', 'industry': '行业', 'close': '收盘价',
+                           'shadow_score_b': '影子B分 (40日+正交F)', 'shadow_score': '影子A分 (20日量价)'}
+                with _rc1:
+                    st.caption("🥇 **影子B 视角 Top 12** (量价+正交化基本面)")
+                    st.dataframe(_rank[_show_cols].head(12).rename(columns=_rename).round(3),
+                                 use_container_width=True, hide_index=True)
+                with _rc2:
+                    st.caption("🥈 **影子A 视角 Top 12** (纯量价)")
+                    _rank_a = _rank.sort_values('shadow_score', ascending=False).reset_index(drop=True)
+                    st.dataframe(_rank_a[_show_cols].head(12).rename(columns=_rename).round(3),
+                                 use_container_width=True, hide_index=True)
+                _overlap = len(set(_rank.head(12)['symbol']) & set(_rank_a.head(12)['symbol']))
+                st.caption(f"两榜 Top12 重合 {_overlap} 只 — 重合度越低说明两个模型看到的机会越不同。"
+                           "「在旧模型清单」= 该标的也在现行生产清单中 (旧模型 = 待退役模型, 仅对照)。"
+                           "本榜为观察期研究展示, 不构成投资建议, 禁止用于实盘下单。")
+        except Exception as _re:
+            st.caption(f"影子推荐榜暂不可用: {_re}")
 
         st.markdown("---")
 

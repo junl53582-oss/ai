@@ -198,6 +198,32 @@ def _save_disk_cache(cache_path: Path, info: Dict[str, Any]) -> None:
         logger.warning(f'[ShadowScorer] 写影子缓存失败 (不影响本次结果): {e}')
 
 
+def load_shadow_universe_scores() -> pd.DataFrame:
+    """读取全市场 (最新数据日的全部标的) 影子 A/B 分 — 供影子推荐榜展示。
+
+    数据源: 磁盘缓存 (模型训练时已对最新截面全部标的打分, 此处仅暴露)。
+    返回列: symbol, shadow_score(影子A), shadow_score_b; 无缓存返回空表 (Fail-Closed)。
+    """
+    frames = []
+    for col, path in [('shadow_score', CACHE_FILE), ('shadow_score_b', CACHE_FILE_B)]:
+        try:
+            if not path.exists():
+                continue
+            d = json.loads(path.read_text(encoding='utf-8'))
+            scores = d.get('scores') or {}
+            if not scores:
+                continue
+            s = pd.Series({str(k): float(v) for k, v in scores.items()}, name=col)
+            s.index.name = 'symbol'
+            frames.append(s.to_frame())
+        except Exception as e:
+            logger.warning(f'[ShadowScorer] 推荐榜读取 {path.name} 失败: {e}')
+    if not frames:
+        return pd.DataFrame(columns=['symbol', 'shadow_score', 'shadow_score_b'])
+    out = pd.concat(frames, axis=1).reset_index()
+    return out
+
+
 def compute_shadow_scores(
     top_df: pd.DataFrame,
     matrix_path: Optional[Path] = None,
