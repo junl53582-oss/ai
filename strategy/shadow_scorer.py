@@ -125,7 +125,12 @@ def _train_shadow_model(matrix: pd.DataFrame, top_k: int, variant: str = 'A') ->
     matrix[LABEL_COL] = (raw > 0).astype(float).mask(raw.isna(), np.nan)
 
     all_dates = pd.Series(matrix['date'].unique()).sort_values().reset_index(drop=True)
-    cutoff = all_dates.iloc[max(0, len(all_dates) - 1 - int(settings.PURGE_GAP_DAYS))]
+    # 隔离带必须 >= 标签前瞻窗口+1 (防实盘信号标签偷看未来):
+    # A 赛道标签 20 日 → max(25, 21)=25; B 赛道标签 40 日 → max(25, 41)=41
+    purge_days = max(int(settings.PURGE_GAP_DAYS), label_horizon + 1)
+    if purge_days != int(settings.PURGE_GAP_DAYS):
+        logger.info(f'[ShadowScorer] 隔离带按标签窗口加严: {purge_days} 天 (label_horizon={label_horizon})')
+    cutoff = all_dates.iloc[max(0, len(all_dates) - 1 - purge_days)]
     train_df = matrix[(matrix['date'] < cutoff) & matrix.get('in_universe', True)]
     train_df = train_df[train_df[LABEL_COL].notna()]
     if len(train_df) < 10000:
