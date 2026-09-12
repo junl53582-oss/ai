@@ -220,7 +220,11 @@ def test_dashboard_and_pipeline_no_bypass():
     # 1. dashboard/app.py 校验
     app_code = (settings.BASE_DIR / "dashboard" / "app.py").read_text(encoding="utf-8")
     assert 'with open(perf_all_path, "r", encoding="utf-8") as f:' not in app_code
-    assert "metrics_loader.load_multi_generation_performance(for_product_display=True)" in app_code
+    # 2026-09-10 架构演进: 遗留代际业绩展示区已整体移除 (被核验指标卡取代),
+    # 原断言"必须调用 load_multi_generation_performance"不再适用 —
+    # 新的不变量: 面板不得直接 json.load 未核验的遗留业绩文件, 且核验指标卡在位。
+    assert "performance_all_generations.json" not in app_code or "json.load" not in app_code.split("performance_all_generations.json")[0][-200:]
+    assert "核验指标卡" in app_code
 
     # 2. run_pipeline.py 校验
     pipeline_code = (settings.BASE_DIR / "run_pipeline.py").read_text(encoding="utf-8")

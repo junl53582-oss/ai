@@ -137,19 +137,22 @@ def test_invalid_latest_data_falls_back_to_last_trusted_date(repo_root):
     assert "2026-09-04" in q_record["invalidated_dates"]
     assert q_record["trusted_data_as_of"] == "2026-08-24"
 
-    # 生产因子矩阵已重建至最新可信日期 (2026-09-07 干净全量同步)
+    # 生产因子矩阵已重建至最新可信日期 (v3 基线 2026-09-04; 每日管线滚动前进)
     matrix_path = repo_root / "data_storage" / "research" / "factor_matrix_300.parquet"
     df = pd.read_parquet(matrix_path)
     df["date"] = pd.to_datetime(df["date"])
     matrix_max = df["date"].max()
-    assert matrix_max == pd.to_datetime("2026-09-04"), "生产矩阵最新日期必须为 v3 干净重建的 2026-09-04"
+    assert matrix_max >= pd.to_datetime("2026-09-04"), \
+        "生产矩阵最新日期不得早于 v3 干净重建基线 2026-09-04"
 
     # 选股产物必须与生产矩阵同源对齐 (列名 data_as_of, 由 predict_stocks.py 落盘)
+    # 不变量: 清单日期 == 矩阵最新日期 (每日滚动前进, 不写死单日快照)
     picks_path = repo_root / "artifacts" / "latest_stock_picks.csv"
     assert picks_path.exists()
     picks_df = pd.read_csv(picks_path)
     date_col = "date" if "date" in picks_df.columns else "data_as_of"
-    assert picks_df[date_col].iloc[0] == "2026-09-04"
+    assert pd.to_datetime(picks_df[date_col].iloc[0]) == matrix_max, \
+        "选股清单日期必须与生产矩阵最新日期同源对齐"
     # 选股行业不得全部坍缩
     assert picks_df["industry"].nunique() > 1
 
