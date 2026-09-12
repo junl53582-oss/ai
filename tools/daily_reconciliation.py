@@ -27,6 +27,7 @@ from scipy import stats as st
 
 CACHE_A = ROOT / 'data_storage' / 'cache' / 'shadow_scores_latest.json'
 CACHE_B = ROOT / 'data_storage' / 'cache' / 'shadow_scores_b_latest.json'
+CACHE_C = ROOT / 'data_storage' / 'cache' / 'shadow_scores_c_latest.json'
 SNAP_DIR = ROOT / 'data_storage' / 'research' / 'shadow_score_snapshots'
 LEDGER = ROOT / 'data_storage' / 'research' / 'shadow_reconciliation_ledger.csv'
 MARKET = ROOT / 'data_storage' / 'parquet' / 'market_daily.parquet'
@@ -37,7 +38,7 @@ def main() -> int:
 
     # 1. 快照当日缓存
     snap_paths = {}
-    for label, src in [('A', CACHE_A), ('B', CACHE_B)]:
+    for label, src in [('A', CACHE_A), ('B', CACHE_B), ('C', CACHE_C)]:
         if src.exists():
             dst = SNAP_DIR / f"scores_{label}_{datetime.now():%Y%m%d}.json"
             if not dst.exists():
@@ -77,7 +78,7 @@ def main() -> int:
             continue
 
         row = {'snap_date': d, 'reconcile_date': next_d, 'n_symbols': 0}
-        for label in ['A', 'B']:
+        for label in ['A', 'B', 'C']:
             f = SNAP_DIR / f"scores_{label}_{d}.json"
             if not f.exists():
                 continue
@@ -92,10 +93,11 @@ def main() -> int:
             row[f'ic_{label}'] = round(ic, 4)
             row[f'hi_lo_spread_{label}'] = round(float(hi - lo), 4)
             row['n_symbols'] = len(cmp)
-        if f'ic_A' in row or f'ic_B' in row:
+        if f'ic_A' in row or f'ic_B' in row or f'ic_C' in row:
             records.append(row)
             print(f"[对账] {d} -> {next_d}: IC_A={row.get('ic_A')} IC_B={row.get('ic_B')} "
-                  f"价差A={row.get('hi_lo_spread_A')} 价差B={row.get('hi_lo_spread_B')}", flush=True)
+                  f"IC_C={row.get('ic_C')} | 价差A={row.get('hi_lo_spread_A')} "
+                  f"价差B={row.get('hi_lo_spread_B')} 价差C={row.get('hi_lo_spread_C')}", flush=True)
 
     if not records:
         print("[skip] 无新增可对账日期", flush=True)
@@ -116,6 +118,9 @@ def main() -> int:
         if 'ic_B' in ledger.columns:
             print(f"  B赛道 平均IC: {ledger['ic_B'].mean():+.4f} | 正向天数占比: "
                   f"{(ledger['ic_B'] > 0).mean()*100:.0f}%", flush=True)
+        if 'ic_C' in ledger.columns and ledger['ic_C'].notna().any():
+            print(f"  C赛道 平均IC: {ledger['ic_C'].mean():+.4f} | 正向天数占比: "
+                  f"{(ledger['ic_C'] > 0).mean()*100:.0f}%", flush=True)
     print(f"\n[+] 台账已更新: {LEDGER}", flush=True)
     return 0
 

@@ -42,6 +42,7 @@ MATRIX_PATH = PROJECT_ROOT / 'data_storage' / 'research' / 'factor_matrix_300.pa
 POOL_FILE = PROJECT_ROOT / 'reports' / 'model_research' / 'candidate_pool_top40.txt'
 CACHE_FILE = PROJECT_ROOT / 'data_storage' / 'cache' / 'shadow_scores_latest.json'
 CACHE_FILE_B = PROJECT_ROOT / 'data_storage' / 'cache' / 'shadow_scores_b_latest.json'
+CACHE_FILE_C = PROJECT_ROOT / 'data_storage' / 'cache' / 'shadow_scores_c_latest.json'
 MARKET_PARQUET = PROJECT_ROOT / 'data_storage' / 'parquet' / 'market_daily.parquet'
 NON_FEATURE_COLS = {
     'date', 'symbol', 'open', 'high', 'low', 'close', 'volume', 'amount',
@@ -113,6 +114,24 @@ def _merge_fundamental_factors(matrix: pd.DataFrame):
     return merged, facs
 
 
+def _merge_forecast_factors(matrix: pd.DataFrame):
+    """候选 C 增量: 业绩预告因子 (公告日+1 生效的真实 PIT, 比正式财报早 1-2 月)"""
+    from data.fundamentals_forecast import build_forecast_daily_matrix
+    market_df = pd.read_parquet(MARKET_PARQUET,
+                                columns=['date', 'symbol', 'high', 'low', 'close',
+                                         'volume', 'amount', 'pct_change'])
+    market_df['date'] = pd.to_datetime(market_df['date'])
+    fc = build_forecast_daily_matrix(market_df, start_year='2021')
+    if fc is None or fc.empty:
+        raise RuntimeError('业绩预告日频矩阵为空 (缓存缺失)')
+    fc['date'] = pd.to_datetime(fc['date'])
+    fcs = [c for c in ('FF_TYPE_SCORE', 'FF_AMP_MID', 'FF_DAYS_SINCE') if c in fc.columns]
+    if not fcs:
+        raise RuntimeError('预告因子列缺失')
+    merged = matrix.merge(fc[['symbol', 'date'] + fcs], on=['symbol', 'date'], how='left')
+    return merged, fcs
+
+
 def _train_shadow_model(matrix: pd.DataFrame, top_k: int, variant: str = 'A') -> Dict[str, Any]:
     extra_pool: list = []
     label_horizon = int(settings.LABEL_HORIZON)
@@ -120,6 +139,12 @@ def _train_shadow_model(matrix: pd.DataFrame, top_k: int, variant: str = 'A') ->
         matrix, facs = _merge_fundamental_factors(matrix)
         extra_pool = facs
         label_horizon = 40  # B 赛道 40 日视野 (IC 衰减实验: 信号在长持有期更强, 2026 唯一转正变体)
+    elif variant == 'C':
+        # C 赛道 = B 配置 + 业绩预告因子 (预告走步实验: full +0.0491 / 2026 +0.0464, 双窗口提升)
+        matrix, facs = _merge_fundamental_factors(matrix)
+        matrix, fcs = _merge_forecast_factors(matrix)
+        extra_pool = facs + fcs
+        label_horizon = 40
     raw = LabelRegistry.compute_label_v2(matrix, horizon=label_horizon)
     matrix = matrix.copy()
     matrix[LABEL_COL] = (raw > 0).astype(float).mask(raw.isna(), np.nan)
@@ -210,7 +235,8 @@ def load_shadow_universe_scores() -> pd.DataFrame:
     返回列: symbol, shadow_score(影子A), shadow_score_b; 无缓存返回空表 (Fail-Closed)。
     """
     frames = []
-    for col, path in [('shadow_score', CACHE_FILE), ('shadow_score_b', CACHE_FILE_B)]:
+    for col, path in [('shadow_score', CACHE_FILE), ('shadow_score_b', CACHE_FILE_B),
+                      ('shadow_score_c', CACHE_FILE_C)]:
         try:
             if not path.exists():
                 continue
@@ -224,7 +250,7 @@ def load_shadow_universe_scores() -> pd.DataFrame:
         except Exception as e:
             logger.warning(f'[ShadowScorer] 推荐榜读取 {path.name} 失败: {e}')
     if not frames:
-        return pd.DataFrame(columns=['symbol', 'shadow_score', 'shadow_score_b'])
+        return pd.DataFrame(columns=['symbol', 'shadow_score', 'shadow_score_b', 'shadow_score_c'])
     out = pd.concat(frames, axis=1).reset_index()
     return out
 
@@ -323,5 +349,38 @@ def compute_shadow_scores(
         b_meta['error'] = f'{type(e).__name__}: {e}'
         logger.warning(f'[ShadowScorer] 影子B打分 Fail-Closed: {b_meta["error"]}')
     meta['variant_b'] = b_meta
+
+    # ---- 赛道 C: 40日视野 + 正交化基本面 + 业绩预告因子 (预告实验胜出配置) ----
+    out['shadow_score_c'] = np.nan
+    c_meta: Dict[str, Any] = {}
+    try:
+        cpath = cpath.parent / CACHE_FILE_C.name
+        c_info = None
+        if not force_refresh:
+            if f'{cache_key}_C' in _CACHE:
+                c_info = _CACHE[f'{cache_key}_C']
+                c_meta['from_cache'] = 'memory'
+            else:
+                disk_c = _load_disk_cache(cpath, cache_key)
+                if disk_c:
+                    c_info = {'shadow_map': {k: float(v) for k, v in disk_c['scores'].items()},
+                              'factors': disk_c.get('factors', []),
+                              'train_end': disk_c.get('train_end'), 'as_of': disk_c.get('as_of')}
+                    _CACHE[f'{cache_key}_C'] = c_info
+                    c_meta['from_cache'] = 'disk'
+        if c_info is None:
+            c_info = _train_shadow_model(matrix, top_k, variant='C')
+            _CACHE[f'{cache_key}_C'] = c_info
+            c_meta['from_cache'] = False
+            _save_disk_cache(cpath, c_info)
+        out['shadow_score_c'] = out['symbol'].map(c_info['shadow_map'])
+        c_meta.update({'factors': c_info['factors'], 'train_end': c_info.get('train_end'),
+                       'as_of': c_info.get('as_of')})
+        logger.info(f"[ShadowScorer] 影子C打分完成 ({c_meta.get('from_cache')}): "
+                    f"{int(out['shadow_score_c'].notna().sum())}/{len(out)} 标的")
+    except Exception as e:
+        c_meta['error'] = f'{type(e).__name__}: {e}'
+        logger.warning(f'[ShadowScorer] 影子C打分 Fail-Closed: {c_meta["error"]}')
+    meta['variant_c'] = c_meta
 
     return out, meta

@@ -661,6 +661,8 @@ with tab1:
             cols_to_show.append("shadow_score")
         if "shadow_score_b" in top_df.columns:
             cols_to_show.append("shadow_score_b")
+        if "shadow_score_c" in top_df.columns:
+            cols_to_show.append("shadow_score_c")
         if "adjusted_weight" in top_df.columns:
             cols_to_show.append("adjusted_weight")
         else:
@@ -693,6 +695,7 @@ with tab1:
         _score_col = "旧模型分 (待退役)"
         _shadow_col = "影子A分 (纯量价)"
         _shadow_b_col = "影子B分 (量价+基本面)"
+        _shadow_c_col = "影子C分 (量价+基本面+预告)"
         rename_map = {
             "symbol": "股票代码",
             "name": "股票简称",
@@ -701,6 +704,7 @@ with tab1:
             "pred_score": _score_col,
             "shadow_score": _shadow_col,
             "shadow_score_b": _shadow_b_col,
+            "shadow_score_c": _shadow_c_col,
             "adjusted_weight": "宏观自适应仓位",
             "target_weight": "目标分配权重",
             "dynamic_tp1": "第一止盈位 (TP1)",
@@ -1159,26 +1163,29 @@ with tab2:
                 _rank = _su.merge(_mdf[['symbol', 'name', 'industry', 'close']], on='symbol', how='left')
                 _picks_now = set(top_df['symbol']) if 'symbol' in top_df.columns else set()
                 _rank['在旧模型清单'] = _rank['symbol'].isin(_picks_now).map({True: '✅ 在', False: '—'})
-                _rank = _rank.sort_values('shadow_score_b', ascending=False).reset_index(drop=True)
+                _sort_col = 'shadow_score_c' if 'shadow_score_c' in _rank.columns and _rank['shadow_score_c'].notna().any() else 'shadow_score_b'
+                _rank = _rank.sort_values(_sort_col, ascending=False).reset_index(drop=True)
                 _rank.insert(0, '影子排名', _rank.index + 1)
 
                 _rc1, _rc2 = st.columns(2)
                 _show_cols = ['影子排名', 'symbol', 'name', 'industry', 'close',
-                              'shadow_score_b', 'shadow_score', '在旧模型清单']
+                              'shadow_score_c', 'shadow_score_b', 'shadow_score', '在旧模型清单']
                 _rename = {'symbol': '代码', 'name': '简称', 'industry': '行业', 'close': '收盘价',
-                           'shadow_score_b': '影子B分 (40日+正交F)', 'shadow_score': '影子A分 (20日量价)'}
+                           'shadow_score_c': '影子C分 (40日+正交F+预告)',
+                           'shadow_score_b': '影子B分 (40日+正交F)',
+                           'shadow_score': '影子A分 (20日量价)'}
                 with _rc1:
-                    st.caption("🥇 **影子B 视角 Top 12** (量价+正交化基本面)")
+                    st.caption("🥇 **影子C 视角 Top 12** (量价+正交化基本面+业绩预告 — 当前最佳配置)")
                     st.dataframe(_rank[_show_cols].head(12).rename(columns=_rename).round(3),
                                  use_container_width=True, hide_index=True)
                 with _rc2:
-                    st.caption("🥈 **影子A 视角 Top 12** (纯量价)")
-                    _rank_a = _rank.sort_values('shadow_score', ascending=False).reset_index(drop=True)
-                    st.dataframe(_rank_a[_show_cols].head(12).rename(columns=_rename).round(3),
+                    st.caption("🥈 **影子B 视角 Top 12** (量价+正交化基本面)")
+                    _rank_b = _rank.sort_values('shadow_score_b', ascending=False).reset_index(drop=True)
+                    st.dataframe(_rank_b[_show_cols].head(12).rename(columns=_rename).round(3),
                                  use_container_width=True, hide_index=True)
-                _overlap = len(set(_rank.head(12)['symbol']) & set(_rank_a.head(12)['symbol']))
-                st.caption(f"两榜 Top12 重合 {_overlap} 只 — 重合度越低说明两个模型看到的机会越不同。"
-                           "「在旧模型清单」= 该标的也在现行生产清单中 (旧模型 = 待退役模型, 仅对照)。"
+                _overlap = len(set(_rank.head(12)['symbol']) & set(_rank_b.head(12)['symbol']))
+                st.caption(f"C/B 两榜 Top12 重合 {_overlap} 只。三赛道同一起跑线记分 (A 纯量价 / B 40日+正交F / "
+                           "C 40日+正交F+预告)。「在旧模型清单」= 也在现行生产清单中 (旧模型待退役, 仅对照)。"
                            "本榜为观察期研究展示, 不构成投资建议, 禁止用于实盘下单。")
         except Exception as _re:
             st.caption(f"影子推荐榜暂不可用: {_re}")
