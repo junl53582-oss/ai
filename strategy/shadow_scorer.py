@@ -11,7 +11,6 @@ pred_score 仍在官方清单中展示, 但其科学性已被今日研究推翻�
 - 标签 = label_up_down_20d (LabelRegistry v2), 与官方体系一致
 - Fail-Closed: 任何一步失败即返回空影子分与原因, 绝不编造分数
 """
-import io
 import json
 import logging
 import sys
@@ -20,8 +19,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+# NOTE (2026-09-14): 禁止在 import 期替换 sys.stdout 对象。
+# 旧写法 `sys.stdout = io.TextIOWrapper(sys.stdout.buffer, ...)` 会让旧包装器在被
+# GC 时关闭共享底层 buffer, pytest 持有的流随之失效 → 全量测试报
+# "ValueError: I/O operation on closed file" (曾打红 CI integrity-audit-certification)。
+# reconfigure() 原地修改现有包装器, 不新建对象, 对 pytest capture 安全。
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:

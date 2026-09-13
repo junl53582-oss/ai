@@ -8,15 +8,19 @@
      (G2 期中考的原始数据源: 20-30 天后按此裁决 A/B 晋级)
 幂等: 已对账的日期自动跳过。
 """
-import io
 import json
 import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+# NOTE (2026-09-14): 禁止在 import 期替换 sys.stdout 对象 (GC 会关掉共享底层 buffer,
+# 打红 pytest 全量套件 "I/O operation on closed file")。reconfigure 原地改编码, 安全。
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))

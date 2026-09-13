@@ -11,7 +11,6 @@
   淘汰:     平均IC <= 0
 每晚由 daily_reconciliation 自动调用; 幂等 (每次重算并覆盖最新裁决书)。
 """
-import io
 import json
 import logging
 import sys
@@ -19,8 +18,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-if hasattr(sys.stdout, 'buffer'):
-    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+# NOTE (2026-09-14): 禁止在 import 期替换 sys.stdout 对象 (GC 会关掉共享底层 buffer,
+# 打红 pytest 全量套件 "I/O operation on closed file")。reconfigure 原地改编码, 安全。
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
