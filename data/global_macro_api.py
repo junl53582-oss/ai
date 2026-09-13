@@ -92,16 +92,17 @@ class GlobalMacroAPI:
                         "price": price,
                         "pre_close": pre_close,
                         "pct_change": pct_chg,
-                        "update_time": parts[29] if len(parts) > 29 else ""
+                        "update_time": parts[29] if len(parts) > 29 else "",
+                        "status": "SUCCESS"
                     }
         except Exception as e:
             logger.warning(f"获取美股科技巨头行情失败: {e}")
             
         if not result:
             result = {
-                "NVDA": {"name": "英伟达", "price": 230.36, "pre_close": 228.45, "pct_change": 0.84, "update_time": "2026-09-04"},
-                "TSLA": {"name": "特斯拉", "price": 354.08, "pre_close": 376.37, "pct_change": -5.92, "update_time": "2026-09-04"},
-                "AAPL": {"name": "苹果", "price": 319.97, "pre_close": 328.21, "pct_change": -2.51, "update_time": "2026-09-04"}
+                "NVDA": {"name": "英伟达", "price": 230.36, "pre_close": 228.45, "pct_change": 0.84, "update_time": "2026-09-04", "status": "FALLBACK"},
+                "TSLA": {"name": "特斯拉", "price": 354.08, "pre_close": 376.37, "pct_change": -5.92, "update_time": "2026-09-04", "status": "FALLBACK"},
+                "AAPL": {"name": "苹果", "price": 319.97, "pre_close": 328.21, "pct_change": -2.51, "update_time": "2026-09-04", "status": "FALLBACK"}
             }
         return result
 
@@ -128,15 +129,16 @@ class GlobalMacroAPI:
                             "name": fields[13],
                             "price": float(fields[0]),
                             "pct_change": float(fields[1]),
-                            "date": fields[12]
+                            "date": fields[12],
+                            "status": "SUCCESS"
                         }
         except Exception as e:
             logger.warning(f"获取国际大宗商品失败: {e}")
 
         if not result:
             result = {
-                "GOLD": {"name": "纽约黄金", "price": 4482.05, "pct_change": -1.27, "date": "2026-09-05"},
-                "OIL": {"name": "纽约原油", "price": 91.31, "pct_change": 0.02, "date": "2026-09-05"}
+                "GOLD": {"name": "纽约黄金", "price": 4482.05, "pct_change": -1.27, "date": "2026-09-05", "status": "FALLBACK"},
+                "OIL": {"name": "纽约原油", "price": 91.31, "pct_change": 0.02, "date": "2026-09-05", "status": "FALLBACK"}
             }
         return result
 
@@ -185,7 +187,8 @@ class GlobalMacroAPI:
                     "spread_us_cn": round(us_10y - cn_10y, 4),
                     "us_10y_2y_term_spread": round(us_spread, 4),
                     "date": str(last_r.iloc[0])[:10],
-                    "us_10y_as_of": us_10y_as_of
+                    "us_10y_as_of": us_10y_as_of,
+                    "status": "SUCCESS"
                 }
         except Exception as e:
             logger.warning(f"获取中美利差数据异常: {e}")
@@ -195,7 +198,8 @@ class GlobalMacroAPI:
             "us_10y": 4.7800,
             "spread_us_cn": 3.0996,
             "us_10y_2y_term_spread": 0.4100,
-            "date": "2026-09-04"
+            "date": "2026-09-04",
+            "status": "FALLBACK"
         }
 
     @classmethod
@@ -239,10 +243,21 @@ class GlobalMacroAPI:
             suggested_total_pos = 0.80
             regime_summary = "全球宏观处于震荡平衡期，多空博弈势均力敌，聚焦业绩与资金面共振的确定性龙头，保持波段纪律。"
 
+        # 数据质量溯源: 逐组件标记实时/降级 (is_authentic 必须诚实, 禁止降级时谎称实时)
+        _quality = {
+            "usdcnh": "REAL" if usdcnh.get("status") == "SUCCESS" else "FALLBACK",
+            "tech_giants": "REAL" if any(t.get("status") == "SUCCESS" for t in tech_giants.values()) else "FALLBACK",
+            "commodities": "REAL" if any(c.get("status") == "SUCCESS" for c in commodities.values()) else "FALLBACK",
+            "us_china_bonds": "REAL" if bonds.get("status") == "SUCCESS" else "FALLBACK",
+        }
+        _degraded = [k for k, v in _quality.items() if v == "FALLBACK"]
+
         snapshot = {
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
             "audit_source": "OFFICIAL_REALTIME_GLOBAL_MACRO_FEED",
-            "is_authentic": True,
+            "is_authentic": len(_degraded) == 0,
+            "data_quality": _quality,
+            "degraded_components": _degraded,
             "macro_regime_index": macro_regime_index,
             "regime_state": regime_state,
             "suggested_total_position": suggested_total_pos,

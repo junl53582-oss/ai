@@ -91,6 +91,67 @@ class FundamentalsProvider:
     def _cache_path(self, date_str: str) -> Path:
         return self.cache_dir / f"yjbb_{date_str}.parquet"
 
+    @staticmethod
+    def _fetch_report_direct_em(date_str: str, max_pages: int = 60) -> Optional[pd.DataFrame]:
+        """东财 datacenter 直连: 业绩报表分页拉取 (绕过损坏的 akshare 解析层)。
+
+        字段映射 (RPT_LICO_FN_CPD -> akshare 业绩报表中文列), 保持下游 PIT 逻辑零改动。
+        失败返回 None (Fail-Closed)。
+        """
+        import requests
+
+        col_map = {
+            "SECURITY_CODE": "股票代码",
+            "SECURITY_NAME_ABBR": "股票简称",
+            "WEIGHTAVG_ROE": "净资产收益率",
+            "XSMLL": "销售毛利率",
+            "YSTZ": "营业总收入-同比增长",
+            "SJLTZ": "净利润-同比增长",
+            "BASIC_EPS": "每股收益",
+            "PARENT_NETPROFIT": "净利润-净利润",
+            "BPS": "每股净资产",
+            "MGJYXJJE": "每股经营现金流量",
+            "NOTICE_DATE": "最新公告日期",
+        }
+        rows: list = []
+        page = 1
+        while page <= max_pages:
+            try:
+                r = requests.get(
+                    "https://datacenter-web.eastmoney.com/api/data/v1/get",
+                    params={
+                        "reportName": "RPT_LICO_FN_CPD", "columns": "ALL",
+                        "filter": f"(REPORTDATE='{date_str}')",
+                        "pageSize": 500, "pageNumber": page,
+                        "sortColumns": "UPDATE_DATE", "sortTypes": "-1",
+                        "source": "WEB", "client": "WEB",
+                    },
+                    timeout=10, headers={"User-Agent": "Mozilla/5.0"},
+                )
+                res = r.json()
+                d = (res.get("result") or {})
+                data = d.get("data") or []
+                if not data:
+                    # 显式记录空结果原因 (限流/参数问题), 禁止静默失败
+                    logger.warning(f"[EM] 业绩报表 {date_str} 第 {page} 页无数据 "
+                                   f"(success={res.get('success')}, msg={res.get('message')})")
+                    break
+                rows.extend(data)
+                total = int(d.get("count") or 0)
+                if page * 500 >= total:
+                    break
+                page += 1
+                time.sleep(2.5)  # 限速纪律 (东财 IP 级封禁教训, 页间加严)
+            except Exception as e:
+                logger.warning(f"[EM] 业绩报表 {date_str} 第 {page} 页失败: {e}")
+                return None
+        if not rows:
+            return None
+        df = pd.DataFrame(rows)
+        df = df.rename(columns=col_map)
+        keep = [c for c in df.columns if c in set(col_map.values())]
+        return df[keep] if keep else None
+
     def _fetch_report(self, date_str: str, max_retries: int = 3) -> Optional[pd.DataFrame]:
         cp = self._cache_path(date_str)
         if cp.exists():
@@ -101,23 +162,28 @@ class FundamentalsProvider:
             except Exception as e:
                 logger.warning(f"读取缓存 {cp.name} 损坏: {e}, 重新拉取")
 
-        if ak is None:
-            logger.warning("未安装 akshare，无法拉取基本面数据")
-            self.source_counts["failed"] += 1
-            return None
+        # 直连东财 datacenter (首选; akshare 解析层 2026-09 已损坏)
+        df = self._fetch_report_direct_em(date_str)
+        if df is not None and not df.empty:
+            df.to_parquet(cp, index=False)
+            self.source_counts["akshare"] += 1  # 沿用计数键 (下游统计兼容)
+            logger.info(f"成功拉取并缓存业绩报表 {date_str} ({len(df)} 条, EM 直连)")
+            return df
 
-        for attempt in range(1, max_retries + 1):
-            try:
-                time.sleep(0.3)
-                df = ak.stock_yjbb_em(date=date_str)
-                if df is not None and not df.empty:
-                    df.to_parquet(cp, index=False)
-                    self.source_counts["akshare"] += 1
-                    logger.info(f"成功拉取并缓存业绩报表 {date_str} ({len(df)} 条)")
-                    return df
-            except Exception as e:
-                logger.warning(f"拉取业绩报表 {date_str} 第 {attempt}/{max_retries} 次失败: {e}")
-                time.sleep(1.0)
+        # 兜底: akshare (若其解析层未来修复)
+        if ak is not None:
+            for attempt in range(1, max_retries + 1):
+                try:
+                    time.sleep(0.3)
+                    df = ak.stock_yjbb_em(date=date_str)
+                    if df is not None and not df.empty:
+                        df.to_parquet(cp, index=False)
+                        self.source_counts["akshare"] += 1
+                        logger.info(f"成功拉取并缓存业绩报表 {date_str} ({len(df)} 条, akshare)")
+                        return df
+                except Exception as e:
+                    logger.warning(f"akshare 拉取业绩报表 {date_str} 第 {attempt}/{max_retries} 次失败: {e}")
+                    time.sleep(1.0)
 
         self.source_counts["failed"] += 1
         return None

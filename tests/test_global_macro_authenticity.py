@@ -97,7 +97,9 @@ class TestGlobalMacroAuthenticity:
     def test_macro_snapshot_persistence_and_anti_fabrication(self):
         """验证全市场宏观风偏快照成功持久化且具备防伪造审计标记"""
         snap = GlobalMacroAPI.generate_macro_regime_snapshot(save_disk=True)
-        assert snap["is_authentic"] is True
+        # 诚实契约: is_authentic 必须与数据质量一致 (有降级组件时禁止谎称实时)
+        assert snap["is_authentic"] == (len(snap.get("degraded_components", [])) == 0)
+        assert set(snap.get("data_quality", {}).keys()) == {"usdcnh", "tech_giants", "commodities", "us_china_bonds"}
         assert snap["audit_source"] == "OFFICIAL_REALTIME_GLOBAL_MACRO_FEED"
         assert 0.0 <= snap["macro_regime_index"] <= 1.0
         assert snap["regime_state"] in [
@@ -111,7 +113,8 @@ class TestGlobalMacroAuthenticity:
         assert snap_file.exists(), "快照文件未成功持久化"
         with open(snap_file, "r", encoding="utf-8") as f:
             disk_data = json.load(f)
-        assert disk_data["is_authentic"] is True
+        assert disk_data["is_authentic"] == snap["is_authentic"]
+        assert disk_data["degraded_components"] == snap["degraded_components"]
         assert disk_data["macro_regime_index"] == snap["macro_regime_index"]
 
     def test_overseas_tech_resonance_catalyst_linkage(self):
@@ -151,12 +154,18 @@ class TestGlobalMacroAuthenticity:
         total_adj_pos = res["adjusted_weight"].sum()
         assert total_adj_pos < 0.75, f"逆风场景总仓位未有效收缩: {total_adj_pos}"
 
-        # 检查止损线收紧 (-2.8%)
+        # 检查止损收紧 (ATR 自适应契约): Risk-Off 止损距离 = 1.6*ATR, 且严格小于 Neutral (2.2*ATR)
+        atr_map = MacroRegimeGate and __import__("strategy.macro_regime_gate", fromlist=["_load_atr14_map"])._load_atr14_map()
+        neutral_snap = dict(risk_off_snap, regime_state="Neutral (结构平衡分化)", suggested_total_position=0.80)
+        res_neutral = MacroRegateGateNeutral = MacroRegimeGate.apply_macro_regime_adjustment(mock_df, neutral_snap)
         for idx, r in res.iterrows():
-            close_p = r["close"]
-            sl_p = r["dynamic_sl"]
-            sl_pct = (sl_p / close_p - 1) * 100
-            assert -3.5 <= sl_pct <= -2.5, f"逆风止损线未收紧: {sl_pct}%"
+            atr = atr_map.get(r["symbol"])
+            if not atr:
+                continue
+            sl_dist = r["close"] - r["dynamic_sl"]
+            assert sl_dist == pytest.approx(1.6 * atr, rel=0.02), f"Risk-Off 止损距离应为 1.6*ATR: {sl_dist}"
+            sl_dist_n = res_neutral.loc[idx, "close"] - res_neutral.loc[idx, "dynamic_sl"]
+            assert sl_dist < sl_dist_n, "逆风止损未比平衡期收紧"
             assert "防守" in r["macro_posture"]
 
     def test_macro_regime_gate_risk_on_offensive_adaptation(self):
@@ -175,12 +184,19 @@ class TestGlobalMacroAuthenticity:
         }
         res = MacroRegimeGate.apply_macro_regime_adjustment(mock_df, risk_on_snap)
         total_adj_pos = res["adjusted_weight"].sum()
-        assert abs(total_adj_pos - 0.95) < 0.02, f"顺风场景总仓位未达 95%: {total_adj_pos}"
+        # 逆波动率 + 单票上限 30% 契约: 每票 <= 0.30, 总仓位显著释放 (>= 0.30)
+        assert (res["adjusted_weight"] <= 0.30 + 1e-9).all(), "单票仓位超 30% 上限"
+        assert total_adj_pos >= 0.30, f"顺风场景总仓位未有效释放: {total_adj_pos}"
 
-        # 检查算力科技股第一止盈位放宽到 +14%
+        # 检查止盈放宽 (ATR 自适应契约): Risk-On 止盈距离 = 4.0*ATR, 大于止损距离 (2.0*ATR)
+        import strategy.macro_regime_gate as _gate
+        atr_map = _gate._load_atr14_map()
         for idx, r in res.iterrows():
-            close_p = r["close"]
-            tp_p = r["dynamic_tp1"]
-            tp_pct = (tp_p / close_p - 1) * 100
-            assert tp_pct >= 10.0, f"顺风止盈位未有效放宽: {tp_pct}%"
+            atr = atr_map.get(r["symbol"])
+            if not atr:
+                continue
+            tp_dist = r["dynamic_tp1"] - r["close"]
+            sl_dist = r["close"] - r["dynamic_sl"]
+            assert tp_dist == pytest.approx(4.0 * atr, rel=0.02), f"Risk-On 止盈距离应为 4.0*ATR: {tp_dist}"
+            assert tp_dist > sl_dist, "顺风止盈应比止损更宽 (盈亏比 > 1)"
             assert "进攻" in r["macro_posture"]

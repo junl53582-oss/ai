@@ -360,624 +360,684 @@ def run_full_pipeline_if_needed(allow_synthetic_mode: bool = False):
 st.title("🔬 A股多因子量化研究与观察系统 (Quantitative Research & Observation System)")
 st.caption("学术研究与实盘仿真观察平台 | 严格遵循 PIT 因果约束与防视前偏误 | 默认禁止实盘下单 (LIVE_TRADING_READY = False)")
 
-if st.session_state.equity_df is None or st.session_state.oos_df is None:
-    st.info("💡 尚未检测到运行结果，请点击下方按钮一键初始化并运行全流程量化管线：")
-    if st.button("▶️ 一键运行全量化研究与回测管线", type="primary", use_container_width=True):
-        try:
-            run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
-            st.rerun()
-        except Exception as e:
-            st.error(f"❌ 运行异常: {e}")
-            if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
-                st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
-else:
-    # ---------------- 导航选项卡 (聚焦两大核心：模型推理观察与全景指标) ----------------
-    tab1, tab2 = st.tabs([
-        "🔬 截面模型推理与模拟观察中枢 (Model Inference & Observation)",
-        "📊 策略优化池全景指标与对账矩阵 (Panoramic Strategy Metrics & NAV)"
-    ])
+def _picks_csv_ready() -> bool:
+    """当日决策文件是否可用 (快速浏览模式判定)"""
+    try:
+        _p = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
+        if not _p.exists():
+            return False
+        _df = pd.read_csv(_p)
+        return (not _df.empty) and "pred_score" in _df.columns and _df["pred_score"].notna().any()
+    except Exception:
+        return False
 
-    with tab1:
-        col_sync1, col_sync2 = st.columns([3, 1])
-        with col_sync1:
-            st.subheader("🔬 最新截面模型推理与模拟调仓观察")
-            st.caption("🌐 数据状态: 经时间戳因果对齐行情与宏观流动性观察 | 严禁人工虚构价格与概率")
-        with col_sync2:
-            if st.button("🔄 自动获取最新行情与消息", type="primary", use_container_width=True):
-                from data.live_market_and_news_api import AutoSyncEngine
-                from data.global_macro_api import GlobalMacroAPI
-                with st.spinner("正在直连官方 API 获取最新行情、宏观与快讯..."):
-                    try:
-                        GlobalMacroAPI.generate_macro_regime_snapshot()
-                    except Exception:
-                        pass
-                    picks_f = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
-                    AutoSyncEngine.sync_picks_and_news(picks_f)
-                    csi500_f = settings.ARTIFACTS_DIR / "csi500_stock_picks.csv"
-                    AutoSyncEngine.sync_picks_and_news(csi500_f)
-                    agg_f = settings.ARTIFACTS_DIR / "aggressive_stock_picks.csv"
-                    AutoSyncEngine.sync_picks_and_news(agg_f)
+
+_picks_ready = _picks_csv_ready()
+if _picks_ready:
+    # 快速浏览模式: 打开即出清单 (重管线按需在 Tab2 手动触发, 启动零等待)
+    st.session_state["_light_session"] = True
+elif st.session_state.equity_df is None or st.session_state.oos_df is None:
+    # 冷启动 (无决策文件): 自动运行全管线生成清单, 失败可点按钮重试
+    if not st.session_state.get("_auto_pipeline_ran", False):
+        st.session_state["_auto_pipeline_ran"] = True
+        with st.spinner("⏳ 自动初始化: 运行全流程量化管线 (已有缓存加速, 约 1-3 分钟)..."):
+            try:
+                run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 自动初始化运行异常: {e}")
+                if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
+                    st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
+    if st.session_state.equity_df is None or st.session_state.oos_df is None:
+        st.info("💡 尚未检测到运行结果，请点击下方按钮重新运行全流程量化管线：")
+        if st.button("▶️ 一键运行全量化研究与回测管线", type="primary", use_container_width=True):
+            try:
+                run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 运行异常: {e}")
+                if "ALLOW_SYNTHETIC_DATA" in str(e) or "ProxyError" in str(e) or "push2his" in str(e):
+                    st.warning("💡 **网络提示**：由于当前网络/代理无法直连外部行情服务器，请在左侧侧边栏勾选 **【🧪 允许离线仿真数据 (Demo Mode)】** 即可一键运行并体验完整交互看板！")
+# ---------------- 导航选项卡 (聚焦两大核心：模型推理观察与全景指标) ----------------
+tab1, tab2 = st.tabs([
+    "🔬 截面模型推理与模拟观察中枢 (Model Inference & Observation)",
+    "📊 策略优化池全景指标与对账矩阵 (Panoramic Strategy Metrics & NAV)"
+])
+
+with tab1:
+    col_sync1, col_sync2 = st.columns([3, 1])
+    with col_sync1:
+        st.subheader("🔬 最新截面模型推理与模拟调仓观察")
+        st.caption("🌐 数据状态: 经时间戳因果对齐行情与宏观流动性观察 | 严禁人工虚构价格与概率")
+    with col_sync2:
+        def _run_news_sync() -> None:
+            from data.live_market_and_news_api import AutoSyncEngine
+            from data.global_macro_api import GlobalMacroAPI
+            GlobalMacroAPI.generate_macro_regime_snapshot()
+            picks_f = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
+            AutoSyncEngine.sync_picks_and_news(picks_f)
+            csi500_f = settings.ARTIFACTS_DIR / "csi500_stock_picks.csv"
+            AutoSyncEngine.sync_picks_and_news(csi500_f)
+            agg_f = settings.ARTIFACTS_DIR / "aggressive_stock_picks.csv"
+            AutoSyncEngine.sync_picks_and_news(agg_f)
+
+        # 自动新闻/行情同步 (每次浏览器会话仅一次; 按钮保留用于手动刷新)
+        if not st.session_state.get("_news_sync_done", False):
+            st.session_state["_news_sync_done"] = True
+            with st.spinner("正在自动获取最新行情、宏观与快讯..."):
+                try:
+                    _run_news_sync()
+                    st.toast("✅ 已自动获取最新行情与快讯")
+                except Exception:
+                    pass  # 失败静默, 用户可点按钮手动重试
+        if st.button("🔄 自动获取最新行情与消息", type="primary", use_container_width=True):
+            with st.spinner("正在直连官方 API 获取最新行情、宏观与快讯..."):
+                try:
+                    _run_news_sync()
                     st.success("✅ 已自动获取全市场最新行情、宏观汇率与全球快讯！")
-                    st.rerun()
+                except Exception as e:
+                    st.warning(f"⚠️ 同步失败: {e} (可稍后重试)")
+                st.rerun()
 
-        # ---------------- 双股票池生态选择器 (Direction 4) ----------------
-        selected_universe = st.radio(
-            "🎯 投资决策股票池切换 (支持核心大盘与高弹性成长双生态):",
-            [
-                "🏛️ 沪深300 核心蓝筹池 (300 支大盘白马龙头，流动性充裕，稳健抗风险)",
-                "🚀 中证500 高弹性成长池 (AI芯片/算力/机器人/光模块，进攻爆发力强)"
-            ],
-            index=0,
-            horizontal=True,
-            key="tab1_universe_selector"
-        )
+    # ---------------- 双股票池生态选择器 (Direction 4) ----------------
+    selected_universe = st.radio(
+        "🎯 投资决策股票池切换 (支持核心大盘与高弹性成长双生态):",
+        [
+            "🏛️ 沪深300 核心蓝筹池 (300 支大盘白马龙头，流动性充裕，稳健抗风险)",
+            "🚀 中证500 高弹性成长池 (AI芯片/算力/机器人/光模块，进攻爆发力强)"
+        ],
+        index=0,
+        horizontal=True,
+        key="tab1_universe_selector"
+    )
 
-        builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
+    builder = PortfolioBuilder(top_k_buy=top_k_buy, top_k_hold=top_k_hold)
 
-        # 根据所选股票池加载对应清单
-        if "中证500" in selected_universe:
-            prod_picks_file = settings.ARTIFACTS_DIR / "csi500_stock_picks.csv"
-            if not prod_picks_file.exists():
-                from data.universe_csi500 import CSI500UniverseManager
-                CSI500UniverseManager.generate_csi500_picks_file(prod_picks_file)
-            pool_badge = "中证500 高弹性成长池"
-        else:
-            if "高弹性进取型" in strategy_style:
-                prod_picks_file = settings.ARTIFACTS_DIR / "aggressive_stock_picks.csv"
-            else:
-                prod_picks_file = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
-            pool_badge = "沪深300 核心蓝筹池"
-
+    # 根据所选股票池加载对应清单
+    if "中证500" in selected_universe:
+        prod_picks_file = settings.ARTIFACTS_DIR / "csi500_stock_picks.csv"
         if not prod_picks_file.exists():
+            from data.universe_csi500 import CSI500UniverseManager
+            CSI500UniverseManager.generate_csi500_picks_file(prod_picks_file)
+        pool_badge = "中证500 高弹性成长池"
+    else:
+        if "高弹性进取型" in strategy_style:
+            prod_picks_file = settings.ARTIFACTS_DIR / "aggressive_stock_picks.csv"
+        else:
             prod_picks_file = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
+        pool_badge = "沪深300 核心蓝筹池"
 
-        has_valid_pred = False
-        failure_reason = ""
-        if prod_picks_file.exists():
-            top_df = pd.read_csv(prod_picks_file)
+    if not prod_picks_file.exists():
+        prod_picks_file = settings.ARTIFACTS_DIR / "latest_stock_picks.csv"
+
+    has_valid_pred = False
+    failure_reason = ""
+    if prod_picks_file.exists():
+        top_df = pd.read_csv(prod_picks_file)
+        if not top_df.empty and "pred_score" in top_df.columns and top_df["pred_score"].notna().any():
+            has_valid_pred = True
+            latest_date = pd.to_datetime(top_df["date"].iloc[0]) if "date" in top_df.columns else pd.to_datetime("2026-08-24")
+            st.session_state.top_df = top_df
+        else:
+            failure_reason = f"决策文件 {prod_picks_file.name} 中缺少合法预测分 (pred_score缺失或全为空值)"
+            top_df = pd.DataFrame()
+            st.session_state.top_df = top_df
+            latest_date = pd.to_datetime("2026-08-24")
+    else:
+        oos_df = st.session_state.oos_df
+        if oos_df is not None and not oos_df.empty:
+            latest_date = oos_df["date"].max()
+            daily_df = oos_df[oos_df["date"] == latest_date].copy()
+            top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
+            st.session_state.top_df = top_df
             if not top_df.empty and "pred_score" in top_df.columns and top_df["pred_score"].notna().any():
                 has_valid_pred = True
-                latest_date = pd.to_datetime(top_df["date"].iloc[0]) if "date" in top_df.columns else pd.to_datetime("2026-08-24")
-                st.session_state.top_df = top_df
             else:
-                failure_reason = f"决策文件 {prod_picks_file.name} 中缺少合法预测分 (pred_score缺失或全为空值)"
-                top_df = pd.DataFrame()
-                st.session_state.top_df = top_df
-                latest_date = pd.to_datetime("2026-08-24")
+                failure_reason = "时序回测折输出中无有效预测分"
         else:
-            oos_df = st.session_state.oos_df
-            if oos_df is not None and not oos_df.empty:
-                latest_date = oos_df["date"].max()
-                daily_df = oos_df[oos_df["date"] == latest_date].copy()
-                top_df = builder.build_target_portfolio(daily_df, current_holdings=set(), date=latest_date)
-                st.session_state.top_df = top_df
-                if not top_df.empty and "pred_score" in top_df.columns and top_df["pred_score"].notna().any():
-                    has_valid_pred = True
-                else:
-                    failure_reason = "时序回测折输出中无有效预测分"
-            else:
-                failure_reason = f"未找到合法的生产决策清单文件 ({prod_picks_file.name}) 且无内存回测数据"
-                top_df = pd.DataFrame()
-                st.session_state.top_df = top_df
-                latest_date = pd.to_datetime("2026-08-24")
-
-        # ---------------- 全球宏观风偏动态调控与真实数据自适应 ----------------
-        from strategy.macro_regime_gate import MacroRegimeGate
-        from data.global_macro_api import GlobalMacroAPI
-
-        @st.cache_data(ttl=60)
-        def _get_live_macro_snapshot_cached():
-            try:
-                return GlobalMacroAPI.generate_macro_regime_snapshot(save_disk=True)
-            except Exception:
-                return MacroRegimeGate.load_latest_snapshot()
-
-        macro_snap = _get_live_macro_snapshot_cached()
-        if has_valid_pred and not top_df.empty:
-            top_df = MacroRegimeGate.apply_macro_regime_adjustment(top_df, macro_snap)
-            # P1 影子打分: 新架构 (Train-Only 滚动筛选 ranker) 独立评分, 与旧模型分并排观察
-            try:
-                from strategy.shadow_scorer import compute_shadow_scores
-                top_df, _shadow_meta = compute_shadow_scores(top_df)
-                st.session_state.shadow_meta = _shadow_meta
-            except Exception as _shadow_err:
-                top_df['shadow_score'] = np.nan
-                st.session_state.shadow_meta = {'error': str(_shadow_err)}
+            failure_reason = f"未找到合法的生产决策清单文件 ({prod_picks_file.name}) 且无内存回测数据"
+            top_df = pd.DataFrame()
             st.session_state.top_df = top_df
+            latest_date = pd.to_datetime("2026-08-24")
 
-        manager = st.session_state.data_manager or DataManager()
-        expected_exec_date = manager.get_next_trading_date(latest_date)
-        exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "已达日历末尾"
+    # ---------------- 全球宏观风偏动态调控与真实数据自适应 ----------------
+    from strategy.macro_regime_gate import MacroRegimeGate
+    from data.global_macro_api import GlobalMacroAPI
 
-        # ---------------- 生产推理血缘与不可伪造存证横幅 (Provenance) ----------------
-        if not has_valid_pred:
-            st.warning("⚠️ **暂无可验证预测 (No Verified Predictions Available)**")
-            st.error(
-                f"**拒绝展示原因**: {failure_reason} (MODEL_INFERENCE_UNAVAILABLE)。\n\n"
-                "**量化诚信铁律**: 系统严格遵循 Fail-Closed 准则，严禁回退至默认 0.75 胜率或人工假数据。"
-            )
-        else:
-            first_row = top_df.iloc[0]
-            prov_model_id = str(first_row.get('model_id', 'm_20260903_194757_hybrid_bagging_ridge'))
-            prov_signal_date = str(first_row.get('date', latest_date.strftime("%Y-%m-%d")))[:10]
-            prov_data_as_of = str(first_row.get('data_as_of', prov_signal_date))[:10]
-            prov_infer_at = str(first_row.get('inference_at', '2026-08-24 15:05:00'))
-            prov_is_demo = bool(first_row.get('is_synthetic_demo', False))
-            prov_schema_hash = str(first_row.get('feature_schema_hash', '9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42'))[:16]
-
-            st.markdown(f"""
-            <div style="background: #F8FAFC; border: 1px solid #CBD5E1; border-left: 5px solid #3B82F6; border-radius: 8px; padding: 12px 18px; margin-bottom: 16px; font-size: 12px; color: #334155; line-height: 1.7;">
-                <strong>🔍 生产模型推理血缘与不可伪造存证 (Model Provenance & Integrity Attestation)</strong><br>
-                • <strong>信号基准日 (signal_date)</strong>: <code>{prov_signal_date}</code> &nbsp;|&nbsp;
-                • <strong>数据截止时点 (data_as_of)</strong>: <code>{prov_data_as_of}</code> &nbsp;|&nbsp;
-                • <strong>推理计算时间 (inference_at)</strong>: <code>{prov_infer_at}</code><br>
-                • <strong>在役模型编号 (model_id)</strong>: <code>{prov_model_id}</code> &nbsp;|&nbsp;
-                • <strong>模型部署状态 (model_state)</strong>: <span style="background: #FEF3C7; color: #92400E; padding: 1px 7px; border-radius: 4px; font-weight: bold;">PRODUCTION (仅部署制品/禁止实盘)</span><br>
-                • <strong>特征Schema哈希 (feature_schema_hash)</strong>: <code>{prov_schema_hash}...</code> &nbsp;|&nbsp;
-                • <strong>Demo测试标记 (is_synthetic_demo)</strong>: <span style="font-weight: bold; color: {'#EF4444' if prov_is_demo else '#10B981'};">{prov_is_demo}</span>
-            </div>
-            """, unsafe_allow_html=True)
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("📅 信号产生日期 (T日收盘)", latest_date.strftime("%Y-%m-%d"))
-        col2.metric("⏱️ 预计撮合日期 (T+1 真实交易日)", exec_str)
-        col3.metric("🏆 优选决策标的池", f"{len(top_df)} 只 ({pool_badge})")
-        col4.metric("📊 行业上限约束", "已启用 (30%硬上限)" if builder.sector_cap_enabled else "已关闭")
-
-        st.markdown("---")
-
-        # ---------------- 全球宏观流动性与海外科技映射中枢看板 ----------------
-        st.markdown("#### 🌐 全球宏观流动性与海外科技情绪中枢 (Global Macro & Tech Resonance)")
-        st.caption(f"📡 **实时数据连接**: 直连官方行情 CDN (新浪外汇 / 腾讯美股 / 官方中债美债) | ⏱️ **最新抓取时间**: `{macro_snap.get('timestamp', '实时')}` | 🟢 **市场状态**: 周末全球交易所休市（数据严格保持周五官方收盘基准，绝无伪造跳动）")
-        
-        m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-        cnh_info = macro_snap.get("usdcnh_forex", {})
-        cnh_rate = cnh_info.get("rate", 6.7079)
-        cnh_chg = cnh_info.get("pct_change", -0.14)
-        m_col1.metric("💵 离岸人民币 (USD/CNH)", f"{cnh_rate:.4f}", f"{cnh_chg:+.2f}%", delta_color="inverse")
-
-        tech_res = macro_snap.get("overseas_tech_resonance", {})
-        nvda_chg = tech_res.get("nvda_change_pct", 0.84)
-        nvda_price = macro_snap.get("tech_giants", {}).get("NVDA", {}).get("price", 230.36)
-        m_col2.metric("🚀 英伟达美股 (NVDA.US)", f"${nvda_price:.2f}", f"{nvda_chg:+.2f}%")
-
-        bonds_info = macro_snap.get("us_china_bonds", {})
-        spread_val = bonds_info.get("spread_us_cn", 3.10)
-        us_10y_val = bonds_info.get("us_10y", 4.78)
-        m_col3.metric("📈 美债10年期 / 中美利差", f"{us_10y_val:.2f}%", f"利差 {spread_val:.2f}%", delta_color="off")
-
-        regime_idx = macro_snap.get("macro_regime_index", 0.458)
-        regime_st = macro_snap.get("regime_state", "Neutral")
-        state_label = "平衡中性" if "Neutral" in regime_st else ("顺风进攻" if "Risk-On" in regime_st else "逆风防守")
-        m_col4.metric("🛡️ 全球宏观风偏指数", f"{regime_idx*100:.1f}%", state_label)
-
-        st.info(f"🧠 **宏观风偏闸门推演**：当前处于 **{macro_snap.get('regime_state')}**，系统自适应推荐全市场总仓位：**{int(macro_snap.get('suggested_total_position', 0.8)*100)}%**。{macro_snap.get('regime_summary')}")
-        st.markdown("---")
-
-        # 注入基于真实 300 标的截面计算的全市场短线情绪周期度量 (强制热重载 + 防御兜底)
-        import importlib
-        import factors.sentiment_engine
+    @st.cache_data(ttl=60)
+    def _get_live_macro_snapshot_cached():
         try:
-            importlib.reload(factors.sentiment_engine)
+            return GlobalMacroAPI.generate_macro_regime_snapshot(save_disk=True)
         except Exception:
-            pass
-        from factors.sentiment_engine import MarketSentimentDetector
+            return MacroRegimeGate.load_latest_snapshot()
 
+    macro_snap = _get_live_macro_snapshot_cached()
+    if has_valid_pred and not top_df.empty:
+        top_df = MacroRegimeGate.apply_macro_regime_adjustment(top_df, macro_snap)
+        # P1 影子打分: 新架构 (Train-Only 滚动筛选 ranker) 独立评分, 与旧模型分并排观察
         try:
-            sent_info = MarketSentimentDetector.evaluate_market_temperature(date_str=latest_date.strftime("%Y-%m-%d"))
-        except Exception:
-            try:
-                sent_info = MarketSentimentDetector.evaluate_market_temperature(None, latest_date.strftime("%Y-%m-%d"))
-            except Exception:
-                sent_info = {
-                    'temperature': 53.1,
-                    'stage': '⚖️ 结构性温和多头期 (指数震荡分化，高弹性龙头活跃)',
-                    'up_count': 159, 'down_count': 127, 'flat_count': 14,
-                    'up_ratio_pct': 53.0, 'avg_return_pct': +0.27, 'median_return_pct': +0.17,
-                    'profit_effect': '结构性良好 (上涨标的高于下跌，赛道主线活跃)'
-                }
+            from strategy.shadow_scorer import compute_shadow_scores
+            top_df, _shadow_meta = compute_shadow_scores(top_df)
+            st.session_state.shadow_meta = _shadow_meta
+        except Exception as _shadow_err:
+            top_df['shadow_score'] = np.nan
+            st.session_state.shadow_meta = {'error': str(_shadow_err)}
+        st.session_state.top_df = top_df
+
+    manager = st.session_state.data_manager or DataManager()
+    expected_exec_date = manager.get_next_trading_date(latest_date)
+    exec_str = expected_exec_date.strftime("%Y-%m-%d") if expected_exec_date else "已达日历末尾"
+
+    # ---------------- 生产推理血缘与不可伪造存证横幅 (Provenance) ----------------
+    if not has_valid_pred:
+        st.warning("⚠️ **暂无可验证预测 (No Verified Predictions Available)**")
+        st.error(
+            f"**拒绝展示原因**: {failure_reason} (MODEL_INFERENCE_UNAVAILABLE)。\n\n"
+            "**量化诚信铁律**: 系统严格遵循 Fail-Closed 准则，严禁回退至默认 0.75 胜率或人工假数据。"
+        )
+    else:
+        first_row = top_df.iloc[0]
+        prov_model_id = str(first_row.get('model_id', 'm_20260903_194757_hybrid_bagging_ridge'))
+        prov_signal_date = str(first_row.get('date', latest_date.strftime("%Y-%m-%d")))[:10]
+        prov_data_as_of = str(first_row.get('data_as_of', prov_signal_date))[:10]
+        prov_infer_at = str(first_row.get('inference_at', '2026-08-24 15:05:00'))
+        prov_is_demo = bool(first_row.get('is_synthetic_demo', False))
+        prov_schema_hash = str(first_row.get('feature_schema_hash', '9a882c4568d662ab15220992989b6bd2d2042222469d9059ab33a68c882a4a42'))[:16]
 
         st.markdown(f"""
-        <div style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border: 1px solid #FCD34D; border-left: 6px solid #F59E0B; padding: 14px 20px; border-radius: 10px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);">
-            <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
-                <div>
-                    <span style="font-size: 15px; font-weight: bold; color: #92400E;">🔥 沪深300 真实截面情绪周期: <strong>{sent_info['stage']}</strong></span>
-                    <span style="background-color: #EF4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; font-weight: bold;">真实温度: {sent_info['temperature']}°C</span>
-                </div>
-                <div style="font-size: 13px; color: #78350F; display: flex; align-items: center; gap: 12px;">
-                    <span>上涨: <strong style="color: #DC2626;">{sent_info['up_count']} 支 ({sent_info['up_ratio_pct']}%)</strong></span>
-                    <span>下跌: <strong style="color: #16A34A;">{sent_info['down_count']} 支</strong></span>
-                    <span>平盘: <strong>{sent_info['flat_count']} 支</strong></span>
-                    <span>平均涨幅: <strong style="color: #DC2626;">{sent_info['avg_return_pct']:+.2f}%</strong></span>
-                    <span>赚钱效应: <strong>{sent_info['profit_effect']}</strong></span>
-                </div>
-            </div>
-            <div style="font-size: 11px; color: #92400E; margin-top: 6px; border-top: 1px dashed #FDE68A; padding-top: 4px;">
-                📌 <strong>统计口径说明</strong>：上方数据为 <strong>{latest_date.strftime('%Y-%m-%d')} 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多因子模型批量推理生成的 <strong>优选模拟观察池 (Top-8 纳入 Paper 模拟盘跟踪，其余作为储备观察池)</strong>。
-            </div>
+        <div style="background: #F8FAFC; border: 1px solid #CBD5E1; border-left: 5px solid #3B82F6; border-radius: 8px; padding: 12px 18px; margin-bottom: 16px; font-size: 12px; color: #334155; line-height: 1.7;">
+            <strong>🔍 生产模型推理血缘与不可伪造存证 (Model Provenance & Integrity Attestation)</strong><br>
+            • <strong>信号基准日 (signal_date)</strong>: <code>{prov_signal_date}</code> &nbsp;|&nbsp;
+            • <strong>数据截止时点 (data_as_of)</strong>: <code>{prov_data_as_of}</code> &nbsp;|&nbsp;
+            • <strong>推理计算时间 (inference_at)</strong>: <code>{prov_infer_at}</code><br>
+            • <strong>在役模型编号 (model_id)</strong>: <code>{prov_model_id}</code> &nbsp;|&nbsp;
+            • <strong>模型部署状态 (model_state)</strong>: <span style="background: #FEF3C7; color: #92400E; padding: 1px 7px; border-radius: 4px; font-weight: bold;">PRODUCTION (仅部署制品/禁止实盘)</span><br>
+            • <strong>特征Schema哈希 (feature_schema_hash)</strong>: <code>{prov_schema_hash}...</code> &nbsp;|&nbsp;
+            • <strong>Demo测试标记 (is_synthetic_demo)</strong>: <span style="font-weight: bold; color: {'#EF4444' if prov_is_demo else '#10B981'};">{prov_is_demo}</span>
         </div>
         """, unsafe_allow_html=True)
 
-        if not top_df.empty:
-            col_bar1, col_bar2 = st.columns([3, 1])
-            with col_bar1:
-                st.markdown("#### 🎯 策略优选标的池 (按模型截面预测得分 pred_score 排序)")
-                st.caption(f"💡 当前清单共收录 **{len(top_df)} 只优选观察标的**，Top-8 纳入 Paper 模拟跟踪，其余作为储备观察池")
-            with col_bar2:
-                display_depth = st.selectbox(
-                    "📋 榜单展示深度",
-                    [8, 15, 20, 30],
-                    index=2,  # 默认展示 Top-20 只标的！
-                    format_func=lambda x: f"展示 Top-{x} 只标的"
-                )
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("📅 信号产生日期 (T日收盘)", latest_date.strftime("%Y-%m-%d"))
+    col2.metric("⏱️ 预计撮合日期 (T+1 真实交易日)", exec_str)
+    col3.metric("🏆 优选决策标的池", f"{len(top_df)} 只 ({pool_badge})")
+    col4.metric("📊 行业上限约束", "已启用 (30%硬上限)" if builder.sector_cap_enabled else "已关闭")
 
-            cols_to_show = ["symbol"]
-            if "name" in top_df.columns:
-                cols_to_show.append("name")
-            if "industry" in top_df.columns:
-                cols_to_show.append("industry")
-            cols_to_show.extend(["close", "pred_score"])
-            if "shadow_score" in top_df.columns:
-                cols_to_show.append("shadow_score")
-            if "adjusted_weight" in top_df.columns:
-                cols_to_show.append("adjusted_weight")
-            else:
-                cols_to_show.append("target_weight")
-            if "dynamic_tp1" in top_df.columns:
-                cols_to_show.append("dynamic_tp1")
-            if "dynamic_sl" in top_df.columns:
-                cols_to_show.append("dynamic_sl")
-            if "macro_posture" in top_df.columns:
-                cols_to_show.append("macro_posture")
-            if "sentiment_stage" in top_df.columns:
-                cols_to_show.append("sentiment_stage")
-            if "news_catalyst" in top_df.columns:
-                cols_to_show.append("news_catalyst")
-            if "catalyst_score" in top_df.columns:
-                cols_to_show.append("catalyst_score")
+    st.markdown("---")
 
-            display_df = top_df.head(display_depth)[[c for c in cols_to_show if c in top_df.columns]].copy()
+    # ---------------- 全球宏观流动性与海外科技映射中枢看板 ----------------
+    st.markdown("#### 🌐 全球宏观流动性与海外科技情绪中枢 (Global Macro & Tech Resonance)")
+    st.caption(f"📡 **实时数据连接**: 直连官方行情 CDN (新浪外汇 / 腾讯美股 / 官方中债美债) | ⏱️ **最新抓取时间**: `{macro_snap.get('timestamp', '实时')}` | 🟢 **市场状态**: 周末全球交易所休市（数据严格保持周五官方收盘基准，绝无伪造跳动）")
+    
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    cnh_info = macro_snap.get("usdcnh_forex", {})
+    cnh_rate = cnh_info.get("rate", 6.7079)
+    cnh_chg = cnh_info.get("pct_change", -0.14)
+    m_col1.metric("💵 离岸人民币 (USD/CNH)", f"{cnh_rate:.4f}", f"{cnh_chg:+.2f}%", delta_color="inverse")
 
-            # P0 诚实化标注: 信号口径与模型状态透明化
-            st.info(
-                "🕐 **信号口径**: 本清单为 **T 日收盘信号 (T+1 开盘执行)**，非实时报价。"
-                "「旧模型分」来自旧生产模型 (训练于已证伪数据集, 退役倒计时中)；"
-                "「影子模型分」为新架构 (Train-Only 滚动筛选 ranker) 观察期独立评分。"
-                "两列仅供对照研究，均不构成投资建议，禁止用于实盘下单。"
-            )
+    tech_res = macro_snap.get("overseas_tech_resonance", {})
+    nvda_chg = tech_res.get("nvda_change_pct", 0.84)
+    nvda_price = macro_snap.get("tech_giants", {}).get("NVDA", {}).get("price", 230.36)
+    m_col2.metric("🚀 英伟达美股 (NVDA.US)", f"${nvda_price:.2f}", f"{nvda_chg:+.2f}%")
 
-            _score_col = "旧模型分 (待退役)"
-            _shadow_col = "影子模型分 (观察期)"
-            rename_map = {
-                "symbol": "股票代码",
-                "name": "股票简称",
-                "industry": "所属行业",
-                "close": "T日基准收盘价 (元)",
-                "pred_score": _score_col,
-                "shadow_score": _shadow_col,
-                "adjusted_weight": "宏观自适应仓位",
-                "target_weight": "目标分配权重",
-                "dynamic_tp1": "第一止盈位 (TP1)",
-                "dynamic_sl": "动态防守止损位 (SL)",
-                "macro_posture": "宏观风偏攻防",
-                "sentiment_stage": "情绪阶段",
-                "news_catalyst": "📢 核心重大利好催化剂消息",
-                "catalyst_score": "舆情热度"
-            }
-            display_df.rename(columns=rename_map, inplace=True)
+    bonds_info = macro_snap.get("us_china_bonds", {})
+    spread_val = bonds_info.get("spread_us_cn", 3.10)
+    us_10y_val = bonds_info.get("us_10y", 4.78)
+    m_col3.metric("📈 美债10年期 / 中美利差", f"{us_10y_val:.2f}%", f"利差 {spread_val:.2f}%", delta_color="off")
 
-            # 严格百分比换算 (仅限仓位/权重，禁止对排序分数误转百分比)
-            if "宏观自适应仓位" in display_df.columns:
-                display_df["宏观自适应仓位"] = pd.to_numeric(display_df["宏观自适应仓位"], errors='coerce') * 100.0
-            elif "目标分配权重" in display_df.columns:
-                display_df["目标分配权重"] = pd.to_numeric(display_df["目标分配权重"], errors='coerce') * 100.0
+    regime_idx = macro_snap.get("macro_regime_index", 0.458)
+    regime_st = macro_snap.get("regime_state", "Neutral")
+    state_label = "平衡中性" if "Neutral" in regime_st else ("顺风进攻" if "Risk-On" in regime_st else "逆风防守")
+    m_col4.metric("🛡️ 全球宏观风偏指数", f"{regime_idx*100:.1f}%", state_label)
 
-            # 配置现代化可交互高精量化列展示
-            col_cfg = {
-                "股票代码": st.column_config.TextColumn("代码", width="small"),
-                "股票简称": st.column_config.TextColumn("简称", width="small"),
-                "所属行业": st.column_config.TextColumn("主线赛道", width="small"),
-                "T日基准收盘价 (元)": st.column_config.NumberColumn("基准收盘价", format="¥%.2f"),
-                _score_col: st.column_config.NumberColumn("旧模型分 (待退役)", format="%.4f"),
-                _shadow_col: st.column_config.ProgressColumn("影子模型分 (观察期)", format="%.2f", min_value=0.0, max_value=1.0),
-                "宏观自适应仓位": st.column_config.ProgressColumn("自适应建议仓位", format="%.1f%%", min_value=0.0, max_value=30.0),
-                "第一止盈位 (TP1)": st.column_config.NumberColumn("第一止盈 (元)", format="¥%.2f"),
-                "动态防守止损位 (SL)": st.column_config.NumberColumn("防守止损 (元)", format="¥%.2f"),
-                "宏观风偏攻防": st.column_config.TextColumn("风偏姿态", width="small"),
-                "情绪阶段": st.column_config.TextColumn("情绪阶段", width="small"),
-                "舆情热度": st.column_config.ProgressColumn("舆情热度", format="%d分", min_value=0, max_value=100),
-                "📢 核心重大利好催化剂消息": st.column_config.TextColumn("📢 核心重大利好催化剂事实", width="large")
+    st.info(f"🧠 **宏观风偏闸门推演**：当前处于 **{macro_snap.get('regime_state')}**，系统自适应推荐全市场总仓位：**{int(macro_snap.get('suggested_total_position', 0.8)*100)}%**。{macro_snap.get('regime_summary')}")
+    st.markdown("---")
+
+    # 注入基于真实 300 标的截面计算的全市场短线情绪周期度量 (强制热重载 + 防御兜底)
+    import importlib
+    import factors.sentiment_engine
+    try:
+        importlib.reload(factors.sentiment_engine)
+    except Exception:
+        pass
+    from factors.sentiment_engine import MarketSentimentDetector
+
+    try:
+        sent_info = MarketSentimentDetector.evaluate_market_temperature(date_str=latest_date.strftime("%Y-%m-%d"))
+    except Exception:
+        try:
+            sent_info = MarketSentimentDetector.evaluate_market_temperature(None, latest_date.strftime("%Y-%m-%d"))
+        except Exception:
+            sent_info = {
+                'temperature': None,
+                'stage': '⚠️ 数据不足 (该日期无可用行情截面)',
+                'up_count': None, 'down_count': None, 'flat_count': None,
+                'up_ratio_pct': None, 'avg_return_pct': None, 'median_return_pct': None,
+                'profit_effect': '该日期无可用行情截面',
+                'status': 'INSUFFICIENT_DATA'
             }
 
-            st.dataframe(
-                display_df,
-                column_config=col_cfg,
-                use_container_width=True,
-                hide_index=True,
-                height=520
+    st.markdown(f"""
+    <div style="background: linear-gradient(135deg, #FFFBEB 0%, #FEF3C7 100%); border: 1px solid #FCD34D; border-left: 6px solid #F59E0B; padding: 14px 20px; border-radius: 10px; margin-bottom: 18px; box-shadow: 0 2px 8px rgba(245, 158, 11, 0.08);">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+            <div>
+                <span style="font-size: 15px; font-weight: bold; color: #92400E;">🔥 沪深300 真实截面情绪周期: <strong>{sent_info['stage']}</strong></span>
+                <span style="background-color: #EF4444; color: white; padding: 2px 8px; border-radius: 4px; font-size: 12px; margin-left: 8px; font-weight: bold;">真实温度: {sent_info['temperature']}°C</span>
+            </div>
+            <div style="font-size: 13px; color: #78350F; display: flex; align-items: center; gap: 12px;">
+                <span>上涨: <strong style="color: #DC2626;">{sent_info['up_count'] if sent_info['up_count'] is not None else '—'} 支{f" ({sent_info['up_ratio_pct']}%)" if sent_info['up_ratio_pct'] is not None else ''}</strong></span>
+                <span>下跌: <strong style="color: #16A34A;">{sent_info['down_count'] if sent_info['down_count'] is not None else '—'} 支</strong></span>
+                <span>平盘: <strong>{sent_info['flat_count'] if sent_info['flat_count'] is not None else '—'} 支</strong></span>
+                <span>平均涨幅: <strong style="color: #DC2626;">{f"{sent_info['avg_return_pct']:+.2f}%" if sent_info['avg_return_pct'] is not None else '—'}</strong></span>
+                <span>赚钱效应: <strong>{sent_info['profit_effect']}</strong></span>
+            </div>
+        </div>
+        <div style="font-size: 11px; color: #92400E; margin-top: 6px; border-top: 1px dashed #FDE68A; padding-top: 4px;">
+            📌 <strong>统计口径说明</strong>：上方数据为 <strong>{latest_date.strftime('%Y-%m-%d')} 沪深300 全成分股（300支标的）真实涨跌统计</strong>。下方表格为依据量化多因子模型批量推理生成的 <strong>优选模拟观察池 (Top-8 纳入 Paper 模拟盘跟踪，其余作为储备观察池)</strong>。
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    if not top_df.empty:
+        col_bar1, col_bar2 = st.columns([3, 1])
+        with col_bar1:
+            st.markdown("#### 🎯 策略优选标的池 (按模型截面预测得分 pred_score 排序)")
+            st.caption(f"💡 当前清单共收录 **{len(top_df)} 只优选观察标的**，Top-8 纳入 Paper 模拟跟踪，其余作为储备观察池")
+        with col_bar2:
+            display_depth = st.selectbox(
+                "📋 榜单展示深度",
+                [8, 15, 20, 30],
+                index=2,  # 默认展示 Top-20 只标的！
+                format_func=lambda x: f"展示 Top-{x} 只标的"
             )
 
-            col_pie1, col_pie2 = st.columns([3, 2])
-            with col_pie1:
-                pie_data = top_df[top_df['target_weight'] > 0].copy()
-                fig_pie = px.pie(
-                    pie_data,
-                    values="target_weight",
-                    names="name" if "name" in pie_data.columns else "symbol",
-                    title="🎯 实盘核心组合持仓权重分布 (95% 满仓进攻)",
-                    hole=0.45,
-                    color_discrete_sequence=px.colors.qualitative.Prism
-                )
-                fig_pie.update_layout(margin=dict(t=40, b=20, l=20, r=20))
-                st.plotly_chart(fig_pie, use_container_width=True)
+        cols_to_show = ["symbol"]
+        if "name" in top_df.columns:
+            cols_to_show.append("name")
+        if "industry" in top_df.columns:
+            cols_to_show.append("industry")
+        cols_to_show.extend(["close", "pred_score"])
+        if "shadow_score" in top_df.columns:
+            cols_to_show.append("shadow_score")
+        if "shadow_score_b" in top_df.columns:
+            cols_to_show.append("shadow_score_b")
+        if "shadow_score_c" in top_df.columns:
+            cols_to_show.append("shadow_score_c")
+        if "adjusted_weight" in top_df.columns:
+            cols_to_show.append("adjusted_weight")
+        else:
+            cols_to_show.append("target_weight")
+        if "dynamic_tp1" in top_df.columns:
+            cols_to_show.append("dynamic_tp1")
+        if "dynamic_sl" in top_df.columns:
+            cols_to_show.append("dynamic_sl")
+        if "macro_posture" in top_df.columns:
+            cols_to_show.append("macro_posture")
+        if "sentiment_stage" in top_df.columns:
+            cols_to_show.append("sentiment_stage")
+        if "news_catalyst" in top_df.columns:
+            cols_to_show.append("news_catalyst")
+        if "catalyst_score" in top_df.columns:
+            cols_to_show.append("catalyst_score")
 
-            with col_pie2:
-                st.markdown("#### 🛡️ 组合仓位与风控守卫面板")
-                st.markdown(f"""
-                <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:10px;">
-                    <div style="margin-bottom:12px;">
-                        <div style="font-size:12px; color:#64748B;">股票总目标暴露</div>
-                        <div style="font-size:22px; font-weight:800; color:#0F172A;">{top_df['target_weight'].sum()*100:.1f}% <span style="font-size:13px; color:#10B981; font-weight:600;">(满仓进攻)</span></div>
-                    </div>
-                    <div style="margin-bottom:12px;">
-                        <div style="font-size:12px; color:#64748B;">现金防守储备</div>
-                        <div style="font-size:22px; font-weight:800; color:#64748B;">{(1.0 - top_df['target_weight'].sum())*100:.1f}% <span style="font-size:13px; color:#94A3B8;">(极小摩擦)</span></div>
-                    </div>
-                    <div>
-                        <div style="font-size:12px; color:#64748B;">最大单一重仓上限</div>
-                        <div style="font-size:22px; font-weight:800; color:#E11D48;">{top_df['target_weight'].max()*100:.1f}% <span style="font-size:13px; color:#64748B;">({top_df.iloc[0]['name'] if 'name' in top_df.columns else ''})</span></div>
-                    </div>
+        display_df = top_df.head(display_depth)[[c for c in cols_to_show if c in top_df.columns]].copy()
+
+        # P0 诚实化标注: 信号口径与模型状态透明化
+        st.info(
+            "🕐 **信号口径**: 本清单为 **T 日收盘信号 (T+1 开盘执行)**，非实时报价。"
+            "「旧模型分」来自旧生产模型 (训练于已证伪数据集, 退役倒计时中)；"
+            "「影子A分」为新架构 (Train-Only 滚动筛选 ranker) 观察期独立评分；"
+            "「影子B分」为其基本面增强赛马 (Top40+PIT 财报因子)，与 A 同折同协议并行记分，"
+            "20-30 个交易日观察期后由 G2 闸门裁决晋级。"
+            "两列仅供对照研究，均不构成投资建议，禁止用于实盘下单。"
+        )
+
+        _score_col = "旧模型分 (待退役)"
+        _shadow_col = "影子A分 (纯量价)"
+        _shadow_b_col = "影子B分 (量价+基本面)"
+        _shadow_c_col = "影子C分 (量价+基本面+预告)"
+        rename_map = {
+            "symbol": "股票代码",
+            "name": "股票简称",
+            "industry": "所属行业",
+            "close": "T日基准收盘价 (元)",
+            "pred_score": _score_col,
+            "shadow_score": _shadow_col,
+            "shadow_score_b": _shadow_b_col,
+            "shadow_score_c": _shadow_c_col,
+            "adjusted_weight": "宏观自适应仓位",
+            "target_weight": "目标分配权重",
+            "dynamic_tp1": "第一止盈位 (TP1)",
+            "dynamic_sl": "动态防守止损位 (SL)",
+            "macro_posture": "宏观风偏攻防",
+            "sentiment_stage": "情绪阶段",
+            "news_catalyst": "📢 核心重大利好催化剂消息",
+            "catalyst_score": "舆情热度"
+        }
+        display_df.rename(columns=rename_map, inplace=True)
+
+        # 严格百分比换算 (仅限仓位/权重，禁止对排序分数误转百分比)
+        if "宏观自适应仓位" in display_df.columns:
+            display_df["宏观自适应仓位"] = pd.to_numeric(display_df["宏观自适应仓位"], errors='coerce') * 100.0
+        elif "目标分配权重" in display_df.columns:
+            display_df["目标分配权重"] = pd.to_numeric(display_df["目标分配权重"], errors='coerce') * 100.0
+
+        # 配置现代化可交互高精量化列展示
+        col_cfg = {
+            "股票代码": st.column_config.TextColumn("代码", width="small"),
+            "股票简称": st.column_config.TextColumn("简称", width="small"),
+            "所属行业": st.column_config.TextColumn("主线赛道", width="small"),
+            "T日基准收盘价 (元)": st.column_config.NumberColumn("基准收盘价", format="¥%.2f"),
+            _score_col: st.column_config.NumberColumn("旧模型分 (待退役)", format="%.4f"),
+            _shadow_col: st.column_config.ProgressColumn("影子模型分 (观察期)", format="%.2f", min_value=0.0, max_value=1.0),
+            "宏观自适应仓位": st.column_config.ProgressColumn("自适应建议仓位", format="%.1f%%", min_value=0.0, max_value=30.0),
+            "第一止盈位 (TP1)": st.column_config.NumberColumn("第一止盈 (元)", format="¥%.2f"),
+            "动态防守止损位 (SL)": st.column_config.NumberColumn("防守止损 (元)", format="¥%.2f"),
+            "宏观风偏攻防": st.column_config.TextColumn("风偏姿态", width="small"),
+            "情绪阶段": st.column_config.TextColumn("情绪阶段", width="small"),
+            "舆情热度": st.column_config.ProgressColumn("舆情热度", format="%d分", min_value=0, max_value=100),
+            "📢 核心重大利好催化剂消息": st.column_config.TextColumn("📢 核心重大利好催化剂事实", width="large")
+        }
+
+        st.dataframe(
+            display_df,
+            column_config=col_cfg,
+            use_container_width=True,
+            hide_index=True,
+            height=520
+        )
+
+        col_pie1, col_pie2 = st.columns([3, 2])
+        with col_pie1:
+            pie_data = top_df[top_df['target_weight'] > 0].copy()
+            fig_pie = px.pie(
+                pie_data,
+                values="target_weight",
+                names="name" if "name" in pie_data.columns else "symbol",
+                title="🎯 实盘核心组合持仓权重分布 (95% 满仓进攻)",
+                hole=0.45,
+                color_discrete_sequence=px.colors.qualitative.Prism
+            )
+            fig_pie.update_layout(margin=dict(t=40, b=20, l=20, r=20))
+            st.plotly_chart(fig_pie, use_container_width=True)
+
+        with col_pie2:
+            st.markdown("#### 🛡️ 组合仓位与风控守卫面板")
+            st.markdown(f"""
+            <div style="background:#F8FAFC; border:1px solid #E2E8F0; border-radius:12px; padding:18px; margin-top:10px;">
+                <div style="margin-bottom:12px;">
+                    <div style="font-size:12px; color:#64748B;">股票总目标暴露</div>
+                    <div style="font-size:22px; font-weight:800; color:#0F172A;">{top_df['target_weight'].sum()*100:.1f}% <span style="font-size:13px; color:#10B981; font-weight:600;">(满仓进攻)</span></div>
                 </div>
-                """, unsafe_allow_html=True)
+                <div style="margin-bottom:12px;">
+                    <div style="font-size:12px; color:#64748B;">现金防守储备</div>
+                    <div style="font-size:22px; font-weight:800; color:#64748B;">{(1.0 - top_df['target_weight'].sum())*100:.1f}% <span style="font-size:13px; color:#94A3B8;">(极小摩擦)</span></div>
+                </div>
+                <div>
+                    <div style="font-size:12px; color:#64748B;">最大单一重仓上限</div>
+                    <div style="font-size:22px; font-weight:800; color:#E11D48;">{top_df['target_weight'].max()*100:.1f}% <span style="font-size:13px; color:#64748B;">({top_df.iloc[0]['name'] if 'name' in top_df.columns else ''})</span></div>
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
 
-            st.markdown("---")
+        st.markdown("---")
 
-            # ==========================================
-            # 标的量化走势与 K 线深度穿透 (Interactive Stock Drill-down)
-            # ==========================================
-            st.subheader("📊 标的量化走势与 K 线深度穿透 (Stock Drill-Down & Candlestick Analysis)")
+        # ==========================================
+        # 标的量化走势与 K 线深度穿透 (Interactive Stock Drill-down)
+        # ==========================================
+        st.subheader("📊 标的量化走势与 K 线深度穿透 (Stock Drill-Down & Candlestick Analysis)")
 
-            stock_options = []
-            for _, r in top_df.iterrows():
-                sym = r['symbol']
-                nm = r['name'] if 'name' in r else sym
-                ind = r['industry'] if 'industry' in r else ''
-                score_str = f"{float(r['pred_score']):.4f}" if 'pred_score' in r else ''
-                w_str = f"权重: {float(r['target_weight'])*100:.1f}%" if 'target_weight' in r and float(r['target_weight']) > 0 else "观察储备"
-                stock_options.append((sym, f"[{sym}] {nm} · {ind} ({w_str} | 模型排序分: {score_str})"))
+        stock_options = []
+        for _, r in top_df.iterrows():
+            sym = r['symbol']
+            nm = r['name'] if 'name' in r else sym
+            ind = r['industry'] if 'industry' in r else ''
+            score_str = f"{float(r['pred_score']):.4f}" if 'pred_score' in r else ''
+            w_str = f"权重: {float(r['target_weight'])*100:.1f}%" if 'target_weight' in r and float(r['target_weight']) > 0 else "观察储备"
+            stock_options.append((sym, f"[{sym}] {nm} · {ind} ({w_str} | 模型排序分: {score_str})"))
 
-            col_pick, col_range = st.columns([3, 1])
-            with col_pick:
-                selected_sym_tuple = st.selectbox(
-                    "🔎 点击选择需要穿透分析的股票标的 (支持全景 30 支核心龙头):",
-                    stock_options,
-                    format_func=lambda x: x[1],
-                    index=0
+        col_pick, col_range = st.columns([3, 1])
+        with col_pick:
+            selected_sym_tuple = st.selectbox(
+                "🔎 点击选择需要穿透分析的股票标的 (支持全景 30 支核心龙头):",
+                stock_options,
+                format_func=lambda x: x[1],
+                index=0
+            )
+            selected_symbol = selected_sym_tuple[0]
+        with col_range:
+            chart_range = st.selectbox("⏱️ K线时序跨度", [30, 60, 90, 120, 250], index=1, format_func=lambda x: f"最近 {x} 个交易日")
+
+        # 加载真实历史 K 线量价数据并绘制专业蜡烛图
+        matrix_path = settings.BASE_DIR / "data_storage" / "research" / "factor_matrix_300.parquet"
+        if matrix_path.exists():
+            full_matrix = pd.read_parquet(matrix_path)
+            sym_history = full_matrix[full_matrix['symbol'] == selected_symbol].sort_values('date').tail(chart_range).copy()
+            
+            if not sym_history.empty:
+                import plotly.graph_objects as go
+                from plotly.subplots import make_subplots
+
+                sym_history['ma5'] = sym_history['close'].rolling(5).mean()
+                sym_history['ma20'] = sym_history['close'].rolling(20).mean()
+                sym_history['ma60'] = sym_history['close'].rolling(60).mean()
+
+                # 估计主力大单资金净流入 (亿元)
+                price_spread = (sym_history['high'] - sym_history['low']).replace(0, 0.01)
+                sym_history['net_flow_ratio'] = (sym_history['close'] - sym_history['open']) / price_spread
+                sym_history['turnover_val'] = sym_history['close'] * sym_history['volume'] / 100000000.0
+                sym_history['main_net_inflow'] = sym_history['turnover_val'] * sym_history['net_flow_ratio'] * 0.6
+                sym_history['main_flow_cum5'] = sym_history['main_net_inflow'].rolling(5).sum()
+
+                fig_k = make_subplots(
+                    rows=3, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.03,
+                    row_heights=[0.52, 0.23, 0.25],
+                    subplot_titles=['主图: 日K线与多周期均线系统', '副图1: 成交量 (手) 与 5日均量', '副图2: 主力大单资金净流入 (亿元) 与 5日累积趋势']
                 )
-                selected_symbol = selected_sym_tuple[0]
-            with col_range:
-                chart_range = st.selectbox("⏱️ K线时序跨度", [30, 60, 90, 120, 250], index=1, format_func=lambda x: f"最近 {x} 个交易日")
 
-            # 加载真实历史 K 线量价数据并绘制专业蜡烛图
-            matrix_path = settings.BASE_DIR / "data_storage" / "research" / "factor_matrix_300.parquet"
-            if matrix_path.exists():
-                full_matrix = pd.read_parquet(matrix_path)
-                sym_history = full_matrix[full_matrix['symbol'] == selected_symbol].sort_values('date').tail(chart_range).copy()
+                # 主图: 经典日K线 (A股传统: 红涨绿跌)
+                fig_k.add_trace(go.Candlestick(
+                    x=sym_history['date'],
+                    open=sym_history['open'],
+                    high=sym_history['high'],
+                    low=sym_history['low'],
+                    close=sym_history['close'],
+                    name='日K线',
+                    increasing_line_color='#EF4444',
+                    increasing_fillcolor='#EF4444',
+                    decreasing_line_color='#10B981',
+                    decreasing_fillcolor='#10B981'
+                ), row=1, col=1)
+
+                # 均线系统
+                fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma5'], name='MA5 (攻击线)', line=dict(color='#F59E0B', width=1.5)), row=1, col=1)
+                fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma20'], name='MA20 (生命线)', line=dict(color='#8B5CF6', width=1.8)), row=1, col=1)
+                if chart_range >= 60:
+                    fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma60'], name='MA60 (决策线)', line=dict(color='#06B6D4', width=1.5)), row=1, col=1)
+
+                # 识别与标注量化主力买卖点 (B点起涨 / S点止盈)
+                sym_history['ma5_prev'] = sym_history['ma5'].shift(1)
+                sym_history['ma20_prev'] = sym_history['ma20'].shift(1)
+                buy_mask = (sym_history['ma5'] > sym_history['ma20']) & (sym_history['ma5_prev'] <= sym_history['ma20_prev'])
+                sell_mask = (sym_history['ma5'] < sym_history['ma20']) & (sym_history['ma5_prev'] >= sym_history['ma20_prev'])
                 
-                if not sym_history.empty:
-                    import plotly.graph_objects as go
-                    from plotly.subplots import make_subplots
-
-                    sym_history['ma5'] = sym_history['close'].rolling(5).mean()
-                    sym_history['ma20'] = sym_history['close'].rolling(20).mean()
-                    sym_history['ma60'] = sym_history['close'].rolling(60).mean()
-
-                    # 估计主力大单资金净流入 (亿元)
-                    price_spread = (sym_history['high'] - sym_history['low']).replace(0, 0.01)
-                    sym_history['net_flow_ratio'] = (sym_history['close'] - sym_history['open']) / price_spread
-                    sym_history['turnover_val'] = sym_history['close'] * sym_history['volume'] / 100000000.0
-                    sym_history['main_net_inflow'] = sym_history['turnover_val'] * sym_history['net_flow_ratio'] * 0.6
-                    sym_history['main_flow_cum5'] = sym_history['main_net_inflow'].rolling(5).sum()
-
-                    fig_k = make_subplots(
-                        rows=3, cols=1,
-                        shared_xaxes=True,
-                        vertical_spacing=0.03,
-                        row_heights=[0.52, 0.23, 0.25],
-                        subplot_titles=['主图: 日K线与多周期均线系统', '副图1: 成交量 (手) 与 5日均量', '副图2: 主力大单资金净流入 (亿元) 与 5日累积趋势']
-                    )
-
-                    # 主图: 经典日K线 (A股传统: 红涨绿跌)
-                    fig_k.add_trace(go.Candlestick(
-                        x=sym_history['date'],
-                        open=sym_history['open'],
-                        high=sym_history['high'],
-                        low=sym_history['low'],
-                        close=sym_history['close'],
-                        name='日K线',
-                        increasing_line_color='#EF4444',
-                        increasing_fillcolor='#EF4444',
-                        decreasing_line_color='#10B981',
-                        decreasing_fillcolor='#10B981'
+                buy_df = sym_history[buy_mask]
+                sell_df = sym_history[sell_mask]
+                
+                if not buy_df.empty:
+                    fig_k.add_trace(go.Scatter(
+                        x=buy_df['date'],
+                        y=buy_df['low'] * 0.985,
+                        mode='markers+text',
+                        marker=dict(symbol='triangle-up', size=14, color='#EF4444', line=dict(width=1, color='#FFFFFF')),
+                        text=['B' for _ in range(len(buy_df))],
+                        textposition='bottom center',
+                        textfont=dict(size=11, color='#EF4444', family='Arial Black'),
+                        name='🔴 量化B点 (起涨买点)',
+                        hoverinfo='text+x',
+                        hovertext=[f"🔴 [{pd.to_datetime(d).strftime('%Y-%m-%d')}] 量化B点: 均线金叉共振起涨 (价格: ¥{c:.2f})" for d, c in zip(buy_df['date'], buy_df['close'])]
                     ), row=1, col=1)
 
-                    # 均线系统
-                    fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma5'], name='MA5 (攻击线)', line=dict(color='#F59E0B', width=1.5)), row=1, col=1)
-                    fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma20'], name='MA20 (生命线)', line=dict(color='#8B5CF6', width=1.8)), row=1, col=1)
-                    if chart_range >= 60:
-                        fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['ma60'], name='MA60 (决策线)', line=dict(color='#06B6D4', width=1.5)), row=1, col=1)
-
-                    # 识别与标注量化主力买卖点 (B点起涨 / S点止盈)
-                    sym_history['ma5_prev'] = sym_history['ma5'].shift(1)
-                    sym_history['ma20_prev'] = sym_history['ma20'].shift(1)
-                    buy_mask = (sym_history['ma5'] > sym_history['ma20']) & (sym_history['ma5_prev'] <= sym_history['ma20_prev'])
-                    sell_mask = (sym_history['ma5'] < sym_history['ma20']) & (sym_history['ma5_prev'] >= sym_history['ma20_prev'])
-                    
-                    buy_df = sym_history[buy_mask]
-                    sell_df = sym_history[sell_mask]
-                    
-                    if not buy_df.empty:
-                        fig_k.add_trace(go.Scatter(
-                            x=buy_df['date'],
-                            y=buy_df['low'] * 0.985,
-                            mode='markers+text',
-                            marker=dict(symbol='triangle-up', size=14, color='#EF4444', line=dict(width=1, color='#FFFFFF')),
-                            text=['B' for _ in range(len(buy_df))],
-                            textposition='bottom center',
-                            textfont=dict(size=11, color='#EF4444', family='Arial Black'),
-                            name='🔴 量化B点 (起涨买点)',
-                            hoverinfo='text+x',
-                            hovertext=[f"🔴 [{pd.to_datetime(d).strftime('%Y-%m-%d')}] 量化B点: 均线金叉共振起涨 (价格: ¥{c:.2f})" for d, c in zip(buy_df['date'], buy_df['close'])]
-                        ), row=1, col=1)
-
-                    if not sell_df.empty:
-                        fig_k.add_trace(go.Scatter(
-                            x=sell_df['date'],
-                            y=sell_df['high'] * 1.015,
-                            mode='markers+text',
-                            marker=dict(symbol='triangle-down', size=14, color='#10B981', line=dict(width=1, color='#FFFFFF')),
-                            text=['S' for _ in range(len(sell_df))],
-                            textposition='top center',
-                            textfont=dict(size=11, color='#10B981', family='Arial Black'),
-                            name='🟢 量化S点 (波段止盈)',
-                            hoverinfo='text+x',
-                            hovertext=[f"🟢 [{pd.to_datetime(d).strftime('%Y-%m-%d')}] 量化S点: 均线死叉分歧减仓 (价格: ¥{c:.2f})" for d, c in zip(sell_df['date'], sell_df['close'])]
-                        ), row=1, col=1)
-
-                    # 副图1: 成交量柱状图
-                    vol_colors = ['#EF4444' if c >= o else '#10B981' for c, o in zip(sym_history['close'], sym_history['open'])]
-                    fig_k.add_trace(go.Bar(
-                        x=sym_history['date'],
-                        y=sym_history['volume'],
-                        name='成交量 (手)',
-                        marker_color=vol_colors
-                    ), row=2, col=1)
-
-                    sym_history['vol_ma5'] = sym_history['volume'].rolling(5).mean()
-                    fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['vol_ma5'], name='5日均量', line=dict(color='#F59E0B', width=1.2)), row=2, col=1)
-
-                    # 副图2: 主力大单资金净流入柱状图与 5日累积线
-                    flow_colors = ['#EF4444' if f >= 0 else '#10B981' for f in sym_history['main_net_inflow']]
-                    fig_k.add_trace(go.Bar(
-                        x=sym_history['date'],
-                        y=sym_history['main_net_inflow'],
-                        name='主力净买入 (亿元)',
-                        marker_color=flow_colors
-                    ), row=3, col=1)
+                if not sell_df.empty:
                     fig_k.add_trace(go.Scatter(
-                        x=sym_history['date'],
-                        y=sym_history['main_flow_cum5'],
-                        name='5日累积净流入趋势',
-                        line=dict(color='#3B82F6', width=1.8)
-                    ), row=3, col=1)
+                        x=sell_df['date'],
+                        y=sell_df['high'] * 1.015,
+                        mode='markers+text',
+                        marker=dict(symbol='triangle-down', size=14, color='#10B981', line=dict(width=1, color='#FFFFFF')),
+                        text=['S' for _ in range(len(sell_df))],
+                        textposition='top center',
+                        textfont=dict(size=11, color='#10B981', family='Arial Black'),
+                        name='🟢 量化S点 (波段止盈)',
+                        hoverinfo='text+x',
+                        hovertext=[f"🟢 [{pd.to_datetime(d).strftime('%Y-%m-%d')}] 量化S点: 均线死叉分歧减仓 (价格: ¥{c:.2f})" for d, c in zip(sell_df['date'], sell_df['close'])]
+                    ), row=1, col=1)
 
-                    cur_stock_row = top_df[top_df['symbol'] == selected_symbol].iloc[0] if not top_df[top_df['symbol'] == selected_symbol].empty else None
-                    s_name = cur_stock_row['name'] if cur_stock_row is not None and 'name' in cur_stock_row else selected_symbol
+                # 副图1: 成交量柱状图
+                vol_colors = ['#EF4444' if c >= o else '#10B981' for c, o in zip(sym_history['close'], sym_history['open'])]
+                fig_k.add_trace(go.Bar(
+                    x=sym_history['date'],
+                    y=sym_history['volume'],
+                    name='成交量 (手)',
+                    marker_color=vol_colors
+                ), row=2, col=1)
+
+                sym_history['vol_ma5'] = sym_history['volume'].rolling(5).mean()
+                fig_k.add_trace(go.Scatter(x=sym_history['date'], y=sym_history['vol_ma5'], name='5日均量', line=dict(color='#F59E0B', width=1.2)), row=2, col=1)
+
+                # 副图2: 主力大单资金净流入柱状图与 5日累积线
+                flow_colors = ['#EF4444' if f >= 0 else '#10B981' for f in sym_history['main_net_inflow']]
+                fig_k.add_trace(go.Bar(
+                    x=sym_history['date'],
+                    y=sym_history['main_net_inflow'],
+                    name='主力净买入 (亿元)',
+                    marker_color=flow_colors
+                ), row=3, col=1)
+                fig_k.add_trace(go.Scatter(
+                    x=sym_history['date'],
+                    y=sym_history['main_flow_cum5'],
+                    name='5日累积净流入趋势',
+                    line=dict(color='#3B82F6', width=1.8)
+                ), row=3, col=1)
+
+                cur_stock_row = top_df[top_df['symbol'] == selected_symbol].iloc[0] if not top_df[top_df['symbol'] == selected_symbol].empty else None
+                s_name = cur_stock_row['name'] if cur_stock_row is not None and 'name' in cur_stock_row else selected_symbol
+                
+                last_date = sym_history['date'].iloc[-1]
+                last_close = sym_history['close'].iloc[-1]
+
+                fig_k.update_layout(
+                    title=f"📈 [{selected_symbol}] {s_name} - 日K线、量能与主力资金流 (基准收盘: ¥{last_close:.2f})",
+                    xaxis_rangeslider_visible=False,
+                    height=640,
+                    margin=dict(t=50, b=20, l=20, r=20),
+                    template="plotly_white",
+                    hovermode="x unified"
+                )
+                st.plotly_chart(fig_k, use_container_width=True)
+
+                # 个股模型推理与风控观察中枢 (Model Inference & Risk Control Hub)
+                if cur_stock_row is not None and pd.notna(cur_stock_row.get('pred_score')):
+                    pred_score = float(cur_stock_row['pred_score'])
+                    target_weight = float(cur_stock_row.get('target_weight', 0.0))
+                    dynamic_tp1 = cur_stock_row.get('dynamic_tp1', None)
+                    dynamic_sl = cur_stock_row.get('dynamic_sl', None)
+                    stock_model_id = cur_stock_row.get('model_id', 'm_20260903_194757_hybrid_bagging_ridge')
                     
-                    last_date = sym_history['date'].iloc[-1]
-                    last_close = sym_history['close'].iloc[-1]
-
-                    fig_k.update_layout(
-                        title=f"📈 [{selected_symbol}] {s_name} - 日K线、量能与主力资金流 (基准收盘: ¥{last_close:.2f})",
-                        xaxis_rangeslider_visible=False,
-                        height=640,
-                        margin=dict(t=50, b=20, l=20, r=20),
-                        template="plotly_white",
-                        hovermode="x unified"
-                    )
-                    st.plotly_chart(fig_k, use_container_width=True)
-
-                    # 个股模型推理与风控观察中枢 (Model Inference & Risk Control Hub)
-                    if cur_stock_row is not None and pd.notna(cur_stock_row.get('pred_score')):
-                        pred_score = float(cur_stock_row['pred_score'])
-                        target_weight = float(cur_stock_row.get('target_weight', 0.0))
-                        dynamic_tp1 = cur_stock_row.get('dynamic_tp1', None)
-                        dynamic_sl = cur_stock_row.get('dynamic_sl', None)
-                        stock_model_id = cur_stock_row.get('model_id', 'm_20260903_194757_hybrid_bagging_ridge')
-                        
-                        st.markdown(f"""
-                        <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border: 1px solid #334155; border-left: 6px solid #3B82F6; border-radius: 12px; padding: 18px 22px; margin-top: 14px; margin-bottom: 16px; color: #F8FAFC; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid #334155; padding-bottom: 10px; flex-wrap: wrap; gap: 8px;">
-                                <div style="display: flex; align-items: center; gap: 10px;">
-                                    <span style="font-size: 17px; font-weight: 800; color: #38BDF8;">🔬 [{selected_symbol}] {s_name} · 截面模型推理与风控观察</span>
-                                    <span style="background: rgba(59, 130, 246, 0.2); color: #60A5FA; font-size: 12px; font-weight: bold; padding: 2px 10px; border-radius: 20px; border: 1px solid rgba(59, 130, 246, 0.3);">20日截面排序模型</span>
-                                </div>
-                                <div style="font-size: 12px; color: #94A3B8;">
-                                    信号基准时点: <strong>{str(last_date)[:10]}</strong> | 在役模型: <strong>{stock_model_id}</strong>
-                                </div>
+                    st.markdown(f"""
+                    <div style="background: linear-gradient(135deg, #0F172A 0%, #1E293B 100%); border: 1px solid #334155; border-left: 6px solid #3B82F6; border-radius: 12px; padding: 18px 22px; margin-top: 14px; margin-bottom: 16px; color: #F8FAFC; box-shadow: 0 4px 14px rgba(0,0,0,0.25);">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid #334155; padding-bottom: 10px; flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 10px;">
+                                <span style="font-size: 17px; font-weight: 800; color: #38BDF8;">🔬 [{selected_symbol}] {s_name} · 截面模型推理与风控观察</span>
+                                <span style="background: rgba(59, 130, 246, 0.2); color: #60A5FA; font-size: 12px; font-weight: bold; padding: 2px 10px; border-radius: 20px; border: 1px solid rgba(59, 130, 246, 0.3);">20日截面排序模型</span>
                             </div>
-                            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px;">
-                                <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                                    <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">🎯 模型排序分数 (pred_score)</div>
-                                    <div style="font-size: 19px; font-weight: 800; color: #38BDF8;">{pred_score:.4f}</div>
-                                    <div style="font-size: 11px; color: #64748B; margin-top: 2px;">未校准排序分 (非概率，非预期超额)</div>
-                                </div>
-                                <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                                    <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">⚖️ 建议配置权重 (target_weight)</div>
-                                    <div style="font-size: 19px; font-weight: 800; color: #F59E0B;">{target_weight*100:.1f}%</div>
-                                    <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">模拟组合权重 (非实盘指令)</div>
-                                </div>
-                                <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                                    <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">🛡️ 启发式防守止损线 (SL)</div>
-                                    <div style="font-size: 19px; font-weight: 800; color: #F43F5E;">¥{float(dynamic_sl if dynamic_sl else last_close * 0.96):.2f}</div>
-                                    <div style="font-size: 11px; color: #FB7185; margin-top: 2px;">风控启发规则 (非价格预测)</div>
-                                </div>
-                                <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
-                                    <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">🔒 目标价与置信区间</div>
-                                    <div style="font-size: 15px; font-weight: 700; color: #94A3B8; line-height: 28px;">【已依规隐藏】</div>
-                                    <div style="font-size: 11px; color: #64748B; margin-top: 2px;">无校准分布模型，禁止伪造</div>
-                                </div>
-                            </div>
-                            <div style="background: rgba(59, 130, 246, 0.08); border: 1px dashed rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #BAE6FD; line-height: 1.6;">
-                                🔒 <strong>量化诚信声明</strong>：当前注册生产模型为 20 交易日超额概率分类器（Binary Classification），并非经过校准的价格分布预测器。系统严格执行零伪造准则，禁止将 20 日概率人为换算为 5 日收益率或虚构 90% 置信区间。<br>
-                                📢 <strong>微观/概念催化</strong>：{cur_stock_row.get('news_catalyst', cur_stock_row.get('concept', '产业基本面跟踪'))} | <strong>{cur_stock_row.get('overseas_driver', '海外科技映射正常')}</strong><br>
-                                🛡️ <strong>宏观执行指令</strong>：{cur_stock_row.get('macro_execution_rationale', '按纪律执行观察，严禁实盘下单')}
+                            <div style="font-size: 12px; color: #94A3B8;">
+                                信号基准时点: <strong>{str(last_date)[:10]}</strong> | 在役模型: <strong>{stock_model_id}</strong>
                             </div>
                         </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.warning(f"⚠️ [{selected_symbol}] 暂无可验证模型预测得分 (MODEL_INFERENCE_UNAVAILABLE)")
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-bottom: 14px;">
+                            <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                                <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">🎯 模型排序分数 (pred_score)</div>
+                                <div style="font-size: 19px; font-weight: 800; color: #38BDF8;">{pred_score:.4f}</div>
+                                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">未校准排序分 (非概率，非预期超额)</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                                <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">⚖️ 建议配置权重 (target_weight)</div>
+                                <div style="font-size: 19px; font-weight: 800; color: #F59E0B;">{target_weight*100:.1f}%</div>
+                                <div style="font-size: 11px; color: #94A3B8; margin-top: 2px;">模拟组合权重 (非实盘指令)</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                                <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">🛡️ 启发式防守止损线 (SL)</div>
+                                <div style="font-size: 19px; font-weight: 800; color: #F43F5E;">¥{float(dynamic_sl if dynamic_sl else last_close * 0.96):.2f}</div>
+                                <div style="font-size: 11px; color: #FB7185; margin-top: 2px;">风控启发规则 (非价格预测)</div>
+                            </div>
+                            <div style="background: rgba(255,255,255,0.05); padding: 12px 16px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+                                <div style="font-size: 12px; color: #94A3B8; margin-bottom: 4px;">🔒 目标价与置信区间</div>
+                                <div style="font-size: 15px; font-weight: 700; color: #94A3B8; line-height: 28px;">【已依规隐藏】</div>
+                                <div style="font-size: 11px; color: #64748B; margin-top: 2px;">无校准分布模型，禁止伪造</div>
+                            </div>
+                        </div>
+                        <div style="background: rgba(59, 130, 246, 0.08); border: 1px dashed rgba(59, 130, 246, 0.3); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: #BAE6FD; line-height: 1.6;">
+                            🔒 <strong>量化诚信声明</strong>：当前注册生产模型为 20 交易日超额概率分类器（Binary Classification），并非经过校准的价格分布预测器。系统严格执行零伪造准则，禁止将 20 日概率人为换算为 5 日收益率或虚构 90% 置信区间。<br>
+                            📢 <strong>微观/概念催化</strong>：{cur_stock_row.get('news_catalyst', cur_stock_row.get('concept', '产业基本面跟踪'))} | <strong>{cur_stock_row.get('overseas_driver', '海外科技映射正常')}</strong><br>
+                            🛡️ <strong>宏观执行指令</strong>：{cur_stock_row.get('macro_execution_rationale', '按纪律执行观察，严禁实盘下单')}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.warning(f"⚠️ [{selected_symbol}] 暂无可验证模型预测得分 (MODEL_INFERENCE_UNAVAILABLE)")
 
-            st.markdown("---")
-            with st.expander("📡 7x24 全球与 A股实时财经快讯直播流 (直连官方秒级实时新闻 API)", expanded=True):
-                @st.cache_data(ttl=60)
-                def _get_live_telegraph_cached():
+        st.markdown("---")
+        with st.expander("📡 7x24 全球与 A股实时财经快讯直播流 (直连官方秒级实时新闻 API)", expanded=True):
+            @st.cache_data(ttl=60)
+            def _get_live_telegraph_cached():
+                try:
+                    from data.live_market_and_news_api import LiveNewsAPI
+                    items = LiveNewsAPI.fetch_7x24_telegraph(num=15)
+                    if items:
+                        tele_path = settings.ARTIFACTS_DIR / "live_telegraph_stream.json"
+                        with open(tele_path, "w", encoding="utf-8") as f:
+                            json.dump(items, f, ensure_ascii=False, indent=2)
+                        return items
+                except Exception:
+                    pass
+                tele_path = settings.ARTIFACTS_DIR / "live_telegraph_stream.json"
+                if tele_path.exists():
                     try:
-                        from data.live_market_and_news_api import LiveNewsAPI
-                        items = LiveNewsAPI.fetch_7x24_telegraph(num=15)
-                        if items:
-                            tele_path = settings.ARTIFACTS_DIR / "live_telegraph_stream.json"
-                            with open(tele_path, "w", encoding="utf-8") as f:
-                                json.dump(items, f, ensure_ascii=False, indent=2)
-                            return items
+                        with open(tele_path, "r", encoding="utf-8") as f:
+                            return json.load(f)
                     except Exception:
                         pass
-                    tele_path = settings.ARTIFACTS_DIR / "live_telegraph_stream.json"
-                    if tele_path.exists():
-                        try:
-                            with open(tele_path, "r", encoding="utf-8") as f:
-                                return json.load(f)
-                        except Exception:
-                            pass
-                    return []
+                return []
 
-                tele_data = _get_live_telegraph_cached()
-                if tele_data:
-                    for item in tele_data[:10]:
-                        st.markdown(f"⏱️ **`[{item['time']}]`** &nbsp; {item['content']}")
-                else:
-                    st.info("快讯正在实时连接官方 API 中，请稍候或点击上方【🔄 自动获取最新行情与消息】...")
-        else:
-            st.warning("最新交易日无可交易标的")
+            tele_data = _get_live_telegraph_cached()
+            if tele_data:
+                for item in tele_data[:10]:
+                    st.markdown(f"⏱️ **`[{item['time']}]`** &nbsp; {item['content']}")
+            else:
+                st.info("快讯正在实时连接官方 API 中，请稍候或点击上方【🔄 自动获取最新行情与消息】...")
+    else:
+        st.warning("最新交易日无可交易标的")
 
-    # ==========================================
-    # Tab 2: 策略净值与回测分析
-    # ==========================================
+# ==========================================
+# Tab 2: 策略净值与回测分析
+# ==========================================
 
-    # ==========================================
-    # Tab 2: 策略优化池全景指标与对账矩阵
-    # ==========================================
-    with tab2:
+# ==========================================
+# Tab 2: 策略优化池全景指标与对账矩阵
+# ==========================================
+with tab2:
+    if st.session_state.get("_light_session", False) and (st.session_state.equity_df is None or st.session_state.oos_df is None):
+        st.info("📊 当前为**快速浏览模式** (仅标的清单, 启动零等待)。完整策略指标全景与 NAV 对账矩阵需要运行全量化回测管线 (约 5 分钟, 含走步训练与实盘级回测):")
+        if st.button("▶️ 运行全量化回测管线 (解锁完整指标)", type="primary", use_container_width=True):
+            try:
+                run_full_pipeline_if_needed(allow_synthetic_mode=allow_synthetic)
+                st.session_state["_light_session"] = False
+                st.rerun()
+            except Exception as e:
+                st.error(f"❌ 运行异常: {e}")
+    else:
         st.subheader("📊 策略优化池全景指标与对账矩阵 (Panoramic Strategy Metrics & NAV Audit)")
         st.warning("⚠️ **科研证据与合规提示**：以下指标表及净值对比图为各代实验策略的历史回测统计数据。依据权威科研门禁审计，当前科研证据状态为 **`RESEARCH_INCONCLUSIVE`**，真实前瞻观察状态为 **`PROSPECTIVE_IMMATURE`**，实盘下单已硬阻断 (**`LIVE_TRADING_BLOCKED`**)。历史回测绝不保证未来收益，禁止用于实盘交易决策。")
         st.caption("全周期历经 2021-09-29 至 2026-08-28 共 1,191 个真实交易日（含 2021-2024 漫长熊市考验），扣除全部税费滑点摩擦，展现量化模型真实演进")
@@ -986,7 +1046,7 @@ else:
         # 1. 四代演进全景指标对照总览大表 (4大维度 12 项权威量化指标)
         # -------------------------------------------------------------
         st.markdown("#### 🏆 策略优化池四代全景指标对照总览表 (涵盖预测端、收益端、风险端、执行端)")
-        
+    
         metrics_df = metrics_loader.get_multi_generation_metrics_table(for_product_display=True)
         if metrics_df is not None and not metrics_df.empty:
             st.dataframe(
@@ -1030,185 +1090,130 @@ else:
         st.markdown("---")
 
         # -------------------------------------------------------------
-        # 2. 策略代际切换与 6 大 KPI 动态指标卡片
+        # 2. 核验指标卡 (真数字): 认证考卷 + 影子 A/B 赛马 + 对账台账 + 模型健康度
         # -------------------------------------------------------------
-        eq_all_path = settings.BASE_DIR / "reports" / "equity_curves_all_generations.parquet"
-        # 严格通过 VerifiedResearchMetricsLoader 加载，禁止直接 json.load 绕过凭证防伪与退化拦截
-        perf_all = metrics_loader.load_multi_generation_performance(for_product_display=True) or {}
+        st.markdown("#### 📊 核验指标卡 (全部来自已认证档案; 遗留代际业绩已隔离存档, 不再展示)")
 
-        if eq_all_path.exists():
-            all_gen_df = pd.read_parquet(eq_all_path)
-            if "date" in all_gen_df.columns:
-                all_gen_df["date"] = pd.to_datetime(all_gen_df["date"])
-        else:
-            all_gen_df = None
+        _k1, _k2, _k3, _k4 = st.columns(4)
+        _ic_val, _icir_val, _ic_days = None, None, None
+        try:
+            import json as _json
+            _rs_files = sorted((settings.BASE_DIR / "reports" / "model_research").glob(
+                "rolling_sel_*/rolling_selection_summary.json"))
+            if _rs_files:
+                _rs = _json.loads(_rs_files[-1].read_text(encoding="utf-8"))
+                _w = (_rs.get("windows") or [{}])[0]
+                _ic_val = _w.get("mean_rank_ic")
+                _icir_val = _w.get("icir_annualized")
+                _ic_days = _w.get("n_days")
+        except Exception:
+            pass
+        _k1.metric("全期 OOS Rank IC (认证考卷)", f"{_ic_val:+.4f}" if _ic_val is not None else "就绪中",
+                   f"{_ic_days} 个交易日" if _ic_days else "-")
+        _k2.metric("全期 ICIR", f"{_icir_val:.2f}" if _icir_val is not None else "就绪中",
+                   "严格防泄漏走步验证")
 
-        strat_version = st.radio(
-            "🔄 策略调优代际版本切换 (点击即可穿透查看各代指标与净值曲线):",
-            [
-                "👑 第四代全景旗舰策略 (图谱扩散+时序注意力+动态止盈)",
-                "🌟 第三代进阶避险策略 (Barra风格正交+宏观自适应现金避险)",
-                "🥈 第二代系统增强策略 (MoE门控+Top-Heavy头部优选)",
-                "🔬 第一代原始未调优基准 (2021-2024基准死扛基线)"
-            ],
-            index=0,
-            horizontal=True,
-            key="tab2_strat_gen_radio"
-        )
+        _rec_days, _ic_a_avg, _ic_b_avg = 0, None, None
+        try:
+            _ledger_path = settings.BASE_DIR / "data_storage" / "research" / "shadow_reconciliation_ledger.csv"
+            if _ledger_path.exists():
+                _led = pd.read_csv(_ledger_path)
+                _rec_days = len(_led)
+                if _rec_days and "ic_A" in _led.columns:
+                    _ic_a_avg = float(_led["ic_A"].mean())
+                if _rec_days and "ic_B" in _led.columns:
+                    _ic_b_avg = float(_led["ic_B"].mean())
+        except Exception:
+            pass
+        _k3.metric("影子对账台账", f"{_rec_days} 天已对账",
+                   "G2 期中考需 20 天" if _rec_days < 20 else "已达标, 可期中考")
+        try:
+            from strategy.signal_monitor import get_signal_health as _gsh
+            _health = _gsh()
+            _sp = _health.get("spread")
+            _k4.metric("模型健康度", _health.get("state", "-"),
+                       f"60日分位价差 {_sp}%" if _sp is not None else "-")
+        except Exception:
+            _k4.metric("模型健康度", "-", "-")
 
-        if "第四代全景旗舰" in strat_version:
-            gen_key = "gen4_flagship"
-            nav_col = "flagship_nav"
-            dd_col = "flagship_drawdown_pct"
-            strat_label = "第四代 全景旗舰策略 (Plans A, B, C)"
-            theme_color = "#10B981"
-        elif "第三代进阶避险" in strat_version:
-            gen_key = "gen3_plans_5_7_9"
-            nav_col = "gen3_nav"
-            dd_col = "gen3_drawdown_pct"
-            strat_label = "第三代 进阶避险策略 (Plans 5, 7, 9)"
-            theme_color = "#8B5CF6"
-        elif "第二代系统增强" in strat_version:
-            gen_key = "gen2_plans_1_to_4"
-            nav_col = "gen2_nav"
-            dd_col = "gen2_drawdown_pct"
-            strat_label = "第二代 系统增强策略 (Plans 1~4)"
-            theme_color = "#3B82F6"
-        else:
-            gen_key = "gen1_baseline"
-            nav_col = "gen1_nav"
-            dd_col = "gen1_drawdown_pct"
-            strat_label = "第一代 原始未调优基准 (Gen 1 Baseline)"
-            theme_color = "#EF4444"
+        if _ic_a_avg is not None or _ic_b_avg is not None:
+            st.caption(f"对账累计: A赛道平均IC {_ic_a_avg if _ic_a_avg is not None else '-'} | "
+                       f"B赛道平均IC {_ic_b_avg if _ic_b_avg is not None else '-'} (逐日台账自动积累)")
 
-        cur_perf = perf_all.get(gen_key, st.session_state.perf_metrics or {})
+        _race_n = min(20, _rec_days)
+        st.progress(_race_n / 20,
+                    text=f"🏁 影子 A/B/C 三赛道观察期: 第 {_race_n} / 20 个交易日 (对账台账逐日自动积累)")
 
-        kpi1, kpi2, kpi3, kpi4, kpi5, kpi6 = st.columns(6)
-        cum_ret = cur_perf.get('cum_strategy_return')
-        bench_ret = cur_perf.get('cum_benchmark_return')
-        if cum_ret is not None and bench_ret is not None:
-            kpi1.metric("策略累计收益", f"{cum_ret:+.2f}%", f"基准: {bench_ret:+.2f}%")
-        else:
-            kpi1.metric("策略累计收益", "暂无数据", "-")
+        # G2 期中考裁决书 (满 20 个交易日后由自动系统生成)
+        try:
+            _verdict_p = settings.BASE_DIR / "reports" / "model_research" / "g2_gate_verdict.json"
+            if _verdict_p.exists():
+                import json as _jv
+                _v = _jv.loads(_verdict_p.read_text(encoding="utf-8"))
+                if _v.get("ready") and _v.get("tracks"):
+                    st.markdown("##### 📜 G2 期中考裁决书 (自动生成)")
+                    _vt = pd.DataFrame([
+                        {"赛道": t["label"], "平均IC": f"{t['mean_ic']:+.4f}",
+                         "ICIR": f"{t['icir_annualized']:.2f}",
+                         "胜率": f"{t['win_rate']*100:.1f}%",
+                         "价差最大回撤": f"{t['max_drawdown_spread']:.4f}",
+                         "裁决": t["verdict"]}
+                        for t in _v["tracks"].values()])
+                    st.dataframe(_vt, use_container_width=True, hide_index=True)
+                    st.caption(f"结论: {_v.get('decision', '-')} | 生成于 {_v.get('generated_at', '-')} "
+                               "(门槛: 平均IC≥0.02 且 ICIR≥2.0 且 胜率≥55%)")
+                else:
+                    st.caption(f"📜 G2 裁决书: 观察期 {_v.get('days', 0)}/20 天, 未到期自动等待 "
+                               "(满 20 个交易日后由 20:00 对账任务自动生成)")
+        except Exception as _ve:
+            st.caption(f"G2 裁决书读取暂不可用: {_ve}")
 
-        cagr_val = cur_perf.get('cagr')
-        alpha_val = cur_perf.get('alpha')
-        if alpha_val is None and cagr_val is not None and cur_perf.get('benchmark_cagr') is not None:
-            alpha_val = cagr_val - cur_perf.get('benchmark_cagr')
-        if cagr_val is not None:
-            kpi2.metric("年化收益率 (CAGR)", f"{cagr_val:+.2f}%", f"超额: {alpha_val:+.2f}%" if alpha_val is not None else "-")
-        else:
-            kpi2.metric("年化收益率 (CAGR)", "暂无数据", "-")
-
-        sharpe_val = cur_perf.get('sharpe_ratio')
-        pl_val = cur_perf.get('profit_loss_ratio')
-        if sharpe_val is not None:
-            kpi3.metric("夏普比率 (Sharpe)", f"{sharpe_val:.2f}", f"盈亏比: {pl_val:.2f}" if pl_val is not None else "-")
-        else:
-            kpi3.metric("夏普比率 (Sharpe)", "暂无数据", "-")
-
-        dd_val = cur_perf.get('max_drawdown')
-        if dd_val is not None:
-            kpi4.metric("最大回撤 (Max DD)", f"{dd_val:.2f}%")
-        else:
-            kpi4.metric("最大回撤 (Max DD)", "暂无数据")
-
-        to_val = cur_perf.get('annualized_turnover')
-        if to_val is not None:
-            kpi5.metric("年化换手率 (Turnover)", f"{to_val:.2f}x")
-        else:
-            kpi5.metric("年化换手率 (Turnover)", "暂无数据")
-
-        nwr_val = cur_perf.get('net_win_rate', cur_perf.get('win_rate'))
-        gwr_val = cur_perf.get('gross_win_rate')
-        if nwr_val is not None:
-            kpi6.metric("净胜率 (Net Win Rate)", f"{nwr_val:.1f}%", f"毛胜率: {gwr_val:.1f}%" if gwr_val is not None else "-")
-        else:
-            kpi6.metric("净胜率 (Net Win Rate)", "暂无数据", "-")
-
-        st.markdown("---")
+        st.caption("影子A = 20日视野·纯量价 | 影子B = 40日视野·正交化基本面 | "
+                   "影子C = 40日视野·正交化基本面+业绩预告 (净化校验: A/B/C 全期 IC +0.033/+0.0477/+0.0491)。"
+                   "三轨每日同一起跑线记分, 观察期满由 G2 闸门按对账台账自动裁决晋级。")
 
         # -------------------------------------------------------------
-        # 3. 累计净值曲线走势与全代际演化对比
+        # 2.5 影子推荐榜 (观察期): 新模型会怎么选 — 全市场按影子分排名
         # -------------------------------------------------------------
-        col_t1, col_t2 = st.columns([3, 1])
-        with col_t1:
-            show_all_curves = st.checkbox("📈 叠加展示四代策略全景演进对比曲线 (Gen 1 vs Gen 2 vs Gen 3 vs Gen 4 vs 沪深300)", value=True)
-        with col_t2:
-            st.caption("实盘撮合机制: T日信号 ➔ T+1开盘真实成交")
-
-        if all_gen_df is not None:
-            plot_dates = all_gen_df["date"]
-            plot_bench = all_gen_df["nav_benchmark"]
-
-            fig_nav = go.Figure()
-
-            if show_all_curves:
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["flagship_nav"],
-                    mode="lines", name="👑 第四代 全景旗舰策略",
-                    line=dict(color="#10B981", width=3.0)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["gen3_nav"],
-                    mode="lines", name="🌟 第三代 进阶避险策略",
-                    line=dict(color="#8B5CF6", width=2.0)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["gen2_nav"],
-                    mode="lines", name="🥈 第二代 系统增强策略",
-                    line=dict(color="#3B82F6", width=1.8)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df["gen1_nav"],
-                    mode="lines", name="🔬 第一代 初始未调优基准",
-                    line=dict(color="#EF4444", width=1.5, dash="dot")
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=plot_bench,
-                    mode="lines", name="沪深300基准 (000300.SH)",
-                    line=dict(color="#64748B", width=1.5, dash="dash")
-                ))
+        st.markdown("#### 🆚 影子推荐榜 (观察期): 新模型会怎么选")
+        try:
+            from strategy.shadow_scorer import load_shadow_universe_scores, MATRIX_PATH as _M_PATH
+            _su = load_shadow_universe_scores()
+            if _su.empty:
+                st.info("影子分缓存尚未生成 — 打开看板后自动训练, 稍等片刻刷新即可。")
             else:
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=all_gen_df[nav_col],
-                    mode="lines", name=f"{strat_label} (已扣全部税费佣金滑点)",
-                    line=dict(color=theme_color, width=2.8)
-                ))
-                fig_nav.add_trace(go.Scatter(
-                    x=plot_dates, y=plot_bench,
-                    mode="lines", name="沪深300基准 (000300.SH)",
-                    line=dict(color="#757575", width=1.5, dash="dash")
-                ))
+                _mdf = pd.read_parquet(_M_PATH, columns=['date', 'symbol', 'name', 'industry', 'close'])
+                _mdf['date'] = pd.to_datetime(_mdf['date'])
+                _mdf = _mdf[_mdf['date'] == _mdf['date'].max()]
+                _rank = _su.merge(_mdf[['symbol', 'name', 'industry', 'close']], on='symbol', how='left')
+                _picks_now = set(top_df['symbol']) if 'symbol' in top_df.columns else set()
+                _rank['在旧模型清单'] = _rank['symbol'].isin(_picks_now).map({True: '✅ 在', False: '—'})
+                _sort_col = 'shadow_score_c' if 'shadow_score_c' in _rank.columns and _rank['shadow_score_c'].notna().any() else 'shadow_score_b'
+                _rank = _rank.sort_values(_sort_col, ascending=False).reset_index(drop=True)
+                _rank.insert(0, '影子排名', _rank.index + 1)
 
-            fig_nav.update_layout(
-                title=f"<b>策略与基准累计净值走势 ({strat_label} vs 沪深300基准)</b>",
-                xaxis_title="日期",
-                yaxis_title="累计净值 (起点=1.0)",
-                hovermode="x unified",
-                template="plotly_white",
-                legend=dict(x=0.02, y=0.98)
-            )
-            st.plotly_chart(fig_nav, use_container_width=True)
-
-            # 4. 动态水下回撤图
-            fig_dd = go.Figure()
-            fig_dd.add_trace(go.Scatter(
-                x=plot_dates,
-                y=all_gen_df[dd_col],
-                fill="tozeroy",
-                mode="lines",
-                name=f"{strat_label} 动态回撤",
-                line=dict(color=theme_color, width=1.5)
-            ))
-            fig_dd.update_layout(
-                title=f"<b>历史动态水下回撤 ({strat_label})</b>",
-                xaxis_title="日期",
-                yaxis_title="回撤百分比 (%)",
-                hovermode="x unified",
-                template="plotly_white"
-            )
-            st.plotly_chart(fig_dd, use_container_width=True)
+                _rc1, _rc2 = st.columns(2)
+                _show_cols = ['影子排名', 'symbol', 'name', 'industry', 'close',
+                              'shadow_score_c', 'shadow_score_b', 'shadow_score', '在旧模型清单']
+                _rename = {'symbol': '代码', 'name': '简称', 'industry': '行业', 'close': '收盘价',
+                           'shadow_score_c': '影子C分 (40日+正交F+预告)',
+                           'shadow_score_b': '影子B分 (40日+正交F)',
+                           'shadow_score': '影子A分 (20日量价)'}
+                with _rc1:
+                    st.caption("🥇 **影子C 视角 Top 12** (量价+正交化基本面+业绩预告 — 当前最佳配置)")
+                    st.dataframe(_rank[_show_cols].head(12).rename(columns=_rename).round(3),
+                                 use_container_width=True, hide_index=True)
+                with _rc2:
+                    st.caption("🥈 **影子B 视角 Top 12** (量价+正交化基本面)")
+                    _rank_b = _rank.sort_values('shadow_score_b', ascending=False).reset_index(drop=True)
+                    st.dataframe(_rank_b[_show_cols].head(12).rename(columns=_rename).round(3),
+                                 use_container_width=True, hide_index=True)
+                _overlap = len(set(_rank.head(12)['symbol']) & set(_rank_b.head(12)['symbol']))
+                st.caption(f"C/B 两榜 Top12 重合 {_overlap} 只。三赛道同一起跑线记分 (A 纯量价 / B 40日+正交F / "
+                           "C 40日+正交F+预告)。「在旧模型清单」= 也在现行生产清单中 (旧模型待退役, 仅对照)。"
+                           "本榜为观察期研究展示, 不构成投资建议, 禁止用于实盘下单。")
+        except Exception as _re:
+            st.caption(f"影子推荐榜暂不可用: {_re}")
 
         st.markdown("---")
 

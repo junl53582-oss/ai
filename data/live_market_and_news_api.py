@@ -121,6 +121,30 @@ class LiveNewsAPI:
             return []
 
     @staticmethod
+    def fetch_stock_news_page(symbol: str, num: int = 3, timeout: int = 8) -> List[Dict[str, str]]:
+        """抓取新浪个股新闻页 (vCB_AllNewsStock) 的该股票专属真实新闻标题+日期。
+        个股精准 (页面按代码隔离), 失败返回空列表, 绝不编造。"""
+        assert_network_allowed("LiveNewsAPI.fetch_stock_news_page")
+        code = symbol.replace(".SH", "").replace(".SZ", "")
+        prefix = "sh" if symbol.endswith(".SH") else "sz"
+        url = f"https://vip.stock.finance.sina.com.cn/corp/go.php/vCB_AllNewsStock/symbol/{prefix}{code}.phtml"
+        try:
+            r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=timeout)
+            r.encoding = "gbk"
+            titles = re.findall(r"target='_blank'[^>]*>([^<]{8,80})</a>", r.text)
+            dates = re.findall(r"(\d{4}-\d{2}-\d{2})", r.text)
+            as_of = max(dates) if dates else ""
+            out = []
+            for t in titles[:num]:
+                t = t.strip()
+                if len(t) >= 8:
+                    out.append({"title": t, "date": as_of})
+            return out
+        except Exception as e:
+            logger.error(f"个股新闻页拉取异常 {symbol}: {e}")
+            return []
+
+    @staticmethod
     def fetch_stock_latest_news(keyword: str, num: int = 3, timeout: int = 5) -> List[str]:
         """抓取指定股票/行业的最新重要财经消息"""
         assert_network_allowed("LiveNewsAPI.fetch_stock_latest_news")
@@ -191,6 +215,25 @@ class AutoSyncEngine:
             df.at[idx, 'catalyst_score'] = cat['sentiment_score']
             df.at[idx, 'sentiment_stage'] = cat['sentiment_stage']
                 
+        # 3.5 真实个股新闻补充: 无验证事件的标的, 从新浪个股新闻页抓取该股专属真实快讯。
+        #     只陈述事实标题 (标注日期与来源), 情绪阶段标"有真实报道", 绝不编造情绪评分;
+        #     抓不到保持"数据不足"。历史方案教训: 新浪 roll 忽略关键词、东财接口损坏, 均已弃用。
+
+        for idx, r in df.iterrows():
+            cur = r.get('news_catalyst')
+            if isinstance(cur, str) and cur.strip():
+                continue
+            sym = r.get('symbol')
+            if not isinstance(sym, str) or not sym:
+                continue
+            try:
+                news = LiveNewsAPI.fetch_stock_news_page(sym, num=1)
+                if news:
+                    df.at[idx, 'news_catalyst'] = f"📰 真实快讯({news[0]['date']}): {news[0]['title']}"
+                    df.at[idx, 'sentiment_stage'] = '有真实报道'
+            except Exception as e:
+                logger.debug(f'个股新闻抓取失败 {sym}: {e}')
+
         # 4. 重新落盘
         df.to_csv(picks_file, index=False, encoding='utf-8-sig')
         logger.info(f'[+] 最新行情与消息已成功自动同步落盘至: {picks_file.name}')

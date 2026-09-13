@@ -90,6 +90,8 @@ def sync_latest_quotes_from_live():
             print(f"分块拉取异常: {e}")
         time.sleep(0.1)
 
+    if records:
+        trade_date = max(r["date"] for r in records)
     print(f"[+] 成功同步获取 {len(records)} 支标的在 {trade_date} 的最新真实官方行情！")
 
     df_latest = pd.DataFrame(records)
@@ -100,7 +102,7 @@ def sync_latest_quotes_from_live():
         print(f"\n[+] 官方核验: 兆易创新 (603986.SH):")
         print(f"   - 官方名称:   {r['name']}")
         print(f"   - 基准日期:   {r['date']}")
-        print(f"   - 最新收盘价: {r['close']:.2f} 元  <=== (完全契合用户 383.20 元！)")
+        print(f"   - 最新收盘价: {r['close']:.2f} 元")
         print(f"   - 昨日收盘价: {r['pre_close']:.2f} 元")
         print(f"   - 当日涨跌幅: {r['pct_change']*100:+.2f}%")
         print(f"   - 成交量(手): {int(r['volume']/100):,} 手")
