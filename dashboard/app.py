@@ -1142,10 +1142,35 @@ with tab2:
 
         _race_n = min(20, _rec_days)
         st.progress(_race_n / 20,
-                    text=f"🏁 影子 A/B 赛马观察期: 第 {_race_n} / 20 个交易日 (对账台账逐日自动积累)")
-        st.caption("影子A = 20日视野·纯量价 | 影子B = 40日视野·正交化基本面 (修复实验胜出配置: "
-                   "净化 IC +0.0477 / 2026 +0.0433)。两轨每日同一起跑线记分, "
-                   "观察期满由 G2 闸门按对账台账裁决晋级。")
+                    text=f"🏁 影子 A/B/C 三赛道观察期: 第 {_race_n} / 20 个交易日 (对账台账逐日自动积累)")
+
+        # G2 期中考裁决书 (满 20 个交易日后由自动系统生成)
+        try:
+            _verdict_p = settings.BASE_DIR / "reports" / "model_research" / "g2_gate_verdict.json"
+            if _verdict_p.exists():
+                import json as _jv
+                _v = _jv.loads(_verdict_p.read_text(encoding="utf-8"))
+                if _v.get("ready") and _v.get("tracks"):
+                    st.markdown("##### 📜 G2 期中考裁决书 (自动生成)")
+                    _vt = pd.DataFrame([
+                        {"赛道": t["label"], "平均IC": f"{t['mean_ic']:+.4f}",
+                         "ICIR": f"{t['icir_annualized']:.2f}",
+                         "胜率": f"{t['win_rate']*100:.1f}%",
+                         "价差最大回撤": f"{t['max_drawdown_spread']:.4f}",
+                         "裁决": t["verdict"]}
+                        for t in _v["tracks"].values()])
+                    st.dataframe(_vt, use_container_width=True, hide_index=True)
+                    st.caption(f"结论: {_v.get('decision', '-')} | 生成于 {_v.get('generated_at', '-')} "
+                               "(门槛: 平均IC≥0.02 且 ICIR≥2.0 且 胜率≥55%)")
+                else:
+                    st.caption(f"📜 G2 裁决书: 观察期 {_v.get('days', 0)}/20 天, 未到期自动等待 "
+                               "(满 20 个交易日后由 20:00 对账任务自动生成)")
+        except Exception as _ve:
+            st.caption(f"G2 裁决书读取暂不可用: {_ve}")
+
+        st.caption("影子A = 20日视野·纯量价 | 影子B = 40日视野·正交化基本面 | "
+                   "影子C = 40日视野·正交化基本面+业绩预告 (净化校验: A/B/C 全期 IC +0.033/+0.0477/+0.0491)。"
+                   "三轨每日同一起跑线记分, 观察期满由 G2 闸门按对账台账自动裁决晋级。")
 
         # -------------------------------------------------------------
         # 2.5 影子推荐榜 (观察期): 新模型会怎么选 — 全市场按影子分排名

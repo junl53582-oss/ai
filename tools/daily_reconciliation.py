@@ -122,6 +122,18 @@ def main() -> int:
             print(f"  C赛道 平均IC: {ledger['ic_C'].mean():+.4f} | 正向天数占比: "
                   f"{(ledger['ic_C'] > 0).mean()*100:.0f}%", flush=True)
     print(f"\n[+] 台账已更新: {LEDGER}", flush=True)
+
+    # 5. G2 期中考自动裁决 (满 20 个交易日后自动出裁决书; Fail-Open)
+    try:
+        from tools.g2_gate_verdict import run_verdict
+        v = run_verdict(write=True)
+        if v.get('ready'):
+            print(f"[G2] 裁决书已生成: " + " | ".join(
+                f"{t['label'].split(' ')[0]} {t['verdict']}" for t in v['tracks'].values()), flush=True)
+        else:
+            print(f"[G2] 观察期 {v.get('days')}/{v.get('min_days')} 天, 未到期", flush=True)
+    except Exception as e:
+        print(f"[G2] 裁决器 Fail-Open: {type(e).__name__}: {e}", flush=True)
     return 0
 
 
